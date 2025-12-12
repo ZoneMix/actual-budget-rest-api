@@ -1,0 +1,23 @@
+services:
+  actual-api-wrapper:
+    build: .  # Builds Dockerfile (copies from ./src)
+    image: actual-api-wrapper  # Tagged for reuse
+    container_name: actual-api-wrapper
+    ports:
+      - "3000:3000"
+    volumes:
+      - auth-data:/app/.actual-cache  # Persistent encrypted DB
+    working_dir: /app
+    command: >
+      sh -c "dotenvx run -- npm start"
+    environment:
+      DOTENV_PRIVATE_KEY: ${DOTENV_PRIVATE_KEY}  # Master key from host .env or secrets
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  auth-data:
