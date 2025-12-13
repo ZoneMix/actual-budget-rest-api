@@ -1,0 +1,22 @@
+FROM node:current-alpine
+
+# Install dotenvx CLI (from docs)
+RUN apk add --no-cache curl && \
+    curl -fsSL https://dotenvx.sh/install.sh | sh && \
+    apk del curl  # Clean up
+
+WORKDIR /app
+
+# Copy package from src for dep caching
+COPY ./src/package*.json ./
+RUN apk add --no-cache python3 make g++ build-base && \
+    npm install
+
+# Copy app code from src
+COPY ./src .
+COPY ./.env.local .env
+
+EXPOSE 3000
+
+# Default overridden by compose
+CMD ["npm", "start"]

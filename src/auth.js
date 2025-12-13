@@ -1,4 +1,4 @@
-// Complete auth.js (Extensive comments added; migration unchanged)
+// Complete auth.js (Added OAuth2 server support: clients/codes tables, validation, scope enforcement; full merged code)
 import bcrypt from 'bcrypt'; // For secure password hashing
 import jwt from 'jsonwebtoken'; // For JWT signing/verification
 import crypto from 'crypto'; // For UUIDs and random tokens
@@ -8,11 +8,35 @@ import Database from 'better-sqlite3'; // Lightweight, synchronous SQLite wrappe
  * Constants for auth system.
  * DATA_DIR: Matches server.js for shared .actual-cache volume.
  * AUTH_DB_PATH: SQLite file for users/tokens (encrypted if DB_MASTER_KEY set).
- * ACCESS_TTL: Default JWT access token lifetime (1h in ms).
  */
 const DATA_DIR = '/app/.actual-cache';
 const AUTH_DB_PATH = `${DATA_DIR}/auth.db`;
-const ACCESS_TTL = parseInt(process.env.JWT_ACCESS_TTL) || 3600 * 1000; // 1 hour default
+
+// Helper to parse expiresIn strings/numbers into seconds (aligns with jwt.sign format)
+const parseExpiresInToSeconds = (expiresInStr) => {
+  if (!expiresInStr) return 3600; // Default 1h in seconds
+
+  // First, try unit-based parsing (e.g., '1h', '30m')
+  const unitMatch = expiresInStr.toLowerCase().match(/^(\d+)([smhd])$/);
+  if (unitMatch) {
+    const value = parseInt(unitMatch[1], 10);
+    const unit = unitMatch[2];
+    const multipliers = { s: 1, m: 60, h: 3600, d: 86400 };
+    if (multipliers[unit]) {
+      return value * multipliers[unit];
+    }
+  }
+
+  // Fallback: plain number (assumed seconds, e.g., '3600')
+  const num = parseInt(expiresInStr, 10);
+  if (!isNaN(num)) return num;
+
+  throw new Error(`Invalid JWT_ACCESS_TTL: "${expiresInStr}". Use e.g., '1h', '3600', or '30m'.`);
+};
+
+const ACCESS_TTL_SECONDS = parseExpiresInToSeconds(process.env.JWT_ACCESS_TTL || '1h');
+console.log(`Parsed TTL: ${ACCESS_TTL_SECONDS}s from "${process.env.JWT_ACCESS_TTL || 'default'}"`);
+
 let authDB; // Singleton DB instance (lazy-init)
 
 /**
@@ -50,6 +74,30 @@ const initAuthDB = () => {
     );
   `);
 
+  // NEW: Clients table for OAuth2 clients (e.g., n8n)
+  authDB.exec(`
+    CREATE TABLE IF NOT EXISTS clients (
+      client_id TEXT PRIMARY KEY,
+      client_secret TEXT NOT NULL,
+      allowed_scopes TEXT DEFAULT 'api',  -- Comma-separated scopes
+      redirect_uris TEXT,  -- Comma-separated allowed URIs
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // NEW: Auth codes table (short-lived for Authorization Code Grant)
+  authDB.exec(`
+    CREATE TABLE IF NOT EXISTS auth_codes (
+      code TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      redirect_uri TEXT NOT NULL,
+      scope TEXT,  -- Requested scopes
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Migration: Safely add oauth_provider column to existing tables (SQLite ALTER is limited)
   try {
     // Test query: If column missing, this fails with SQLITE_ERROR
@@ -69,16 +117,27 @@ const initAuthDB = () => {
 /**
  * Prune expired tokens from the tokens table.
  * Called before auth operations to keep DB clean.
- * Uses ACCESS_TTL env for expiration calc.
+ * Uses ACCESS_TTL_SECONDS for expiration calc.
  */
 const pruneExpiredTokens = () => {
   const db = initAuthDB();
-  const ttlSeconds = ACCESS_TTL / 1000;
-  db.prepare(`
+  const stmt = db.prepare(`
     DELETE FROM tokens
-    WHERE datetime(issued_at, '+${ttlSeconds} seconds') < datetime('now')
+    WHERE datetime(issued_at, '+${ACCESS_TTL_SECONDS} seconds') < datetime('now')
+  `);
+  const deletedCount = stmt.run().changes; // Track deletions
+  if (deletedCount > 0) {
+    console.log(`Pruned ${deletedCount} expired tokens.`);
+  }
+};
+
+// NEW: Prune expired auth codes (10min TTL)
+const pruneExpiredCodes = () => {
+  const db = initAuthDB();
+  db.prepare(`
+    DELETE FROM auth_codes
+    WHERE datetime(expires_at) < datetime('now')
   `).run();
-  // Optional: Log prune count if needed
 };
 
 /**
@@ -136,7 +195,7 @@ const authenticateUser = async (username, password) => {
   const accessToken = jwt.sign(
     { user_id: user.id, username, iss: 'actual-wrapper', aud: 'n8n' }, // Claims
     process.env.JWT_SECRET, // Signing key from env
-    { expiresIn: process.env.JWT_ACCESS_TTL || '1h', jwtid: jti } // TTL and ID
+    { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: jti } // TTL and ID (seconds string)
   );
   const refreshToken = jwt.sign(
     { user_id: user.id, username, iss: 'actual-wrapper', aud: 'n8n' },
@@ -149,8 +208,63 @@ const authenticateUser = async (username, password) => {
   return { 
     access_token: accessToken, 
     refresh_token: refreshToken, 
-    expires_in: ACCESS_TTL / 1000 // Seconds for client
+    expires_in: ACCESS_TTL_SECONDS // Seconds for client
   };
+};
+
+// NEW: Validate client (by id/secret)
+const validateClient = (clientId, clientSecret) => {
+  pruneExpiredCodes();
+  const db = initAuthDB();
+  const client = db.prepare('SELECT * FROM clients WHERE client_id = ?').get(clientId);
+  if (!client || client.client_secret !== clientSecret) {
+    throw new Error('Invalid client credentials');
+  }
+  return client;
+};
+
+// NEW: Generate and store auth code
+const generateAuthCode = (clientId, userId, redirectUri, scope = 'api') => {
+  pruneExpiredCodes();
+  const code = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10min
+  const db = initAuthDB();
+  db.prepare(`
+    INSERT INTO auth_codes (code, client_id, user_id, redirect_uri, scope, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(code, clientId, userId, redirectUri, scope, expiresAt);
+  return code;
+};
+
+// NEW: Validate and consume auth code
+const validateAuthCode = (code, clientId, redirectUri) => {
+  pruneExpiredCodes();
+  const db = initAuthDB();
+  const row = db.prepare(`
+    SELECT user_id, scope FROM auth_codes 
+    WHERE code = ? AND client_id = ? AND redirect_uri = ?
+  `).get(code, clientId, redirectUri);
+  if (!row) {
+    throw new Error('Invalid or expired authorization code');
+  }
+  // Consume (delete) code
+  db.prepare('DELETE FROM auth_codes WHERE code = ?').run(code);
+  return { userId: row.user_id, scope: row.scope };
+};
+
+// NEW: Register default n8n client on init (if not exists)
+const ensureN8nClient = () => {
+  const db = initAuthDB();
+  const n8nClientId = process.env.N8N_CLIENT_ID || 'n8n';
+  const n8nSecret = process.env.N8N_CLIENT_SECRET || 'n8n_secret';
+  const existing = db.prepare('SELECT client_id FROM clients WHERE client_id = ?').get(n8nClientId);
+  if (!existing) {
+    db.prepare(`
+      INSERT INTO clients (client_id, client_secret, allowed_scopes, redirect_uris)
+      VALUES (?, ?, 'api', 'http://localhost:5678/rest/oauth2-credential/callback')
+    `).run(n8nClientId, n8nSecret);
+    console.log(`Registered default n8n client: ${n8nClientId}`);
+  }
 };
 
 /**
@@ -196,6 +310,14 @@ const authenticateJWT = async (req, res, next) => {
     // Full verify with secret
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload; // Attach to request (e.g., { user_id, username })
+
+    // Scope enforcement (e.g., for /accounts require 'api')
+    const requiredScope = req.path.startsWith('/accounts') ? 'api' : '*'; // Expand as needed
+    const tokenScopes = payload.scope || 'api'; // Add scope to JWT on issue
+    if (requiredScope !== '*' && !tokenScopes.includes(requiredScope)) {
+      return res.status(403).json({ error: 'Insufficient scopes' });
+    }
+
     next(); // Proceed to route handler
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -206,6 +328,35 @@ const authenticateJWT = async (req, res, next) => {
   }
 };
 
+// NEW: Issue tokens from OAuth flow (reuse authenticateUser logic, but add scope to payload)
+const issueTokensFromOAuth = async (userId, username, scope) => {
+  pruneExpiredTokens();
+  const db = initAuthDB();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  if (!user) throw new Error('User not found');
+
+  const jti = crypto.randomUUID();
+  const accessToken = jwt.sign(
+    { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n', scope }, // Add scope
+    process.env.JWT_SECRET,
+    { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: jti }
+  );
+  const refreshToken = jwt.sign(
+    { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n' },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: process.env.JWT_REFRESH_TTL || '24h', jwtid: `${jti}-refresh` }
+  );
+  db.prepare('INSERT INTO tokens (jti) VALUES (?)').run(jti);
+  db.prepare('INSERT INTO tokens (jti) VALUES (?)').run(`${jti}-refresh`);
+  return { 
+    access_token: accessToken, 
+    refresh_token: refreshToken, 
+    expires_in: ACCESS_TTL_SECONDS,
+    token_type: 'Bearer',
+    scope
+  };
+};
+
 // Exports: All functions for use in server.js
 export { 
   authenticateUser, 
@@ -214,5 +365,12 @@ export {
   ensureAdminUserHash, 
   initAuthDB, 
   pruneExpiredTokens, 
-  isRevoked 
+  isRevoked,
+  // NEW
+  ensureN8nClient,
+  validateClient,
+  generateAuthCode,
+  validateAuthCode,
+  issueTokensFromOAuth,
+  pruneExpiredCodes
 };

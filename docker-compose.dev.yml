@@ -1,0 +1,35 @@
+services:
+  actual-api-wrapper:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev  # Uses Dockerfile.dev for dev
+    image: actual-api-wrapper-dev  # Tagged for dev reuse
+    container_name: actual-api-wrapper-dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local  # Load local env vars for dev
+    volumes:
+      - ./dev-cache:/app/.actual-cache  # Bind mount for dev persistence
+    working_dir: /app
+    command: >
+      sh -c "dotenvx run -- npm start"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n-dev
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
