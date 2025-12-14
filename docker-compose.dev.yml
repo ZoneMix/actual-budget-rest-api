@@ -2,15 +2,13 @@ services:
   actual-api-wrapper:
     build:
       context: .
-      dockerfile: Dockerfile.dev  # Uses Dockerfile.dev for dev
-    image: actual-api-wrapper-dev  # Tagged for dev reuse
+      dockerfile: Dockerfile.dev
+    image: actual-api-wrapper-dev
     container_name: actual-api-wrapper-dev
     ports:
       - "3000:3000"
-    env_file:
-      - .env.local  # Load local env vars for dev
     volumes:
-      - ./dev-cache:/app/.actual-cache  # Bind mount for dev persistence
+      - ./data/dev/actual-api-wrapper:/app/.actual-cache
     working_dir: /app
     command: >
       sh -c "dotenvx run -- npm start"
@@ -20,6 +18,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    depends_on:
+      actual-server:
+        condition: service_healthy
+        restart: true
 
   n8n:
     image: n8nio/n8n:latest
@@ -29,7 +31,23 @@ services:
     environment:
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     volumes:
-      - n8n_data:/home/node/.n8n
+      - ./data/dev/n8n:/home/node/.n8n
+    depends_on:
+      - actual-api-wrapper
 
-volumes:
-  n8n_data:
+  actual-server:
+    container_name: actual-server-dev
+    image: docker.io/actualbudget/actual-server:latest
+    ports:
+      - "5006:5006"
+    environment:
+      - ACTUAL_ALLOWED_LOGIN_METHODS=password,header
+    volumes:
+      - ./data/dev/actual-server:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'node src/scripts/health-check.js']
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped

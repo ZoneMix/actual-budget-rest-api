@@ -141,5 +141,5 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# dev
-dev-cache/
+# appdata
+data/

@@ -2,12 +2,8 @@
 import express from 'express';
 import session from 'express-session'; // For consent/login state
 import rateLimit from 'express-rate-limit';
-import passport from 'passport';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-// Import for OAuth2 strategy (handles CommonJS compatibility in ESM) - kept for potential client-side use
-import passportOauth2 from 'passport-oauth2';
-const { OAuth2Strategy } = passportOauth2;
 import { 
   authenticateUser, 
   authenticateJWT, 
@@ -35,30 +31,6 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = '/app/.actual-cache';
 
 /**
- * OAuth2 Configuration Object (for client-side auth, e.g., Google login - optional).
- * Pulled from environment variables (no mock fallbacks—set real values for your provider).
- * Example: Google, Auth0, GitHub. Adjust scopes/URLs per provider.
- * Requires OAUTH_CLIENT_ID set; otherwise, OAuth client routes disabled.
- */
-const OAUTH_CONFIG = {
-  clientID: process.env.OAUTH_CLIENT_ID,
-  clientSecret: process.env.OAUTH_CLIENT_SECRET,
-  authorizeURL: process.env.OAUTH_AUTHORIZE_URL,
-  tokenURL: process.env.OAUTH_TOKEN_URL,
-  callbackURL: process.env.OAUTH_CALLBACK_URL || `http://localhost:${PORT}/auth/oauth/callback`,
-  scope: (process.env.OAUTH_SCOPE || 'openid profile email').split(' '), // Space-separated; adjust per provider
-  userProfileURL: process.env.OAUTH_USER_PROFILE_URL,
-  successRedirect: process.env.OAUTH_SUCCESS_REDIRECT || `http://localhost:${PORT}/dashboard`, // Where to redirect after successful auth (e.g., your frontend/n8n UI)
-};
-
-// Validate basic OAuth config on startup (client-side)
-if (!OAUTH_CONFIG.clientID) {
-  console.warn('OAUTH_CLIENT_ID not set; OAuth client routes disabled. Use local /auth/login for testing.');
-} else {
-  console.log('OAuth2 client configured for:', OAUTH_CONFIG.clientID.substring(0, 20) + '...');
-}
-
-/**
  * Rate limiting middleware for login endpoint to prevent brute-force attacks.
  * Config: 5 attempts per 15 minutes.
  */
@@ -68,7 +40,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts. Try again later.' } 
 });
 
-// Global middleware: Sessions (dev-only; use secure/Redis in prod), JSON parsing, URL-encoded, Passport init
+// Global middleware: Sessions (dev-only; use secure/Redis in prod), JSON parsing, URL-encoded
 app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret',
   resave: false,
@@ -77,7 +49,6 @@ app.use(session({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For /oauth/token body parsing
-app.use(passport.initialize()); // Enables Passport for OAuth flows (client-side)
 
 /**
  * Enhanced /auth/login POST endpoint.
@@ -240,88 +211,6 @@ app.post('/oauth/token', async (req, res) => {
   }
 });
 
-// COMMENTED: Client-side OAuth Setup (uncomment if needed for app users logging in via external providers like Google)
-// if (OAUTH_CONFIG.clientID) {
-//   passport.use('oauth2', new OAuth2Strategy(
-//     {
-//       clientID: OAUTH_CONFIG.clientID,
-//       clientSecret: OAUTH_CONFIG.clientSecret,
-//       authorizationURL: OAUTH_CONFIG.authorizeURL,
-//       tokenURL: OAUTH_CONFIG.tokenURL,
-//       callbackURL: OAUTH_CONFIG.callbackURL,
-//       scope: OAUTH_CONFIG.scope,
-//     },
-//     async (accessToken, refreshToken, profile, done) => {
-//       try {
-//         // Fetch detailed user profile...
-//         const profileResponse = await fetch(OAUTH_CONFIG.userProfileURL, {
-//           headers: { Authorization: `Bearer ${accessToken}` }
-//         });
-//         if (!profileResponse.ok) {
-//           throw new Error(`Profile fetch failed: ${profileResponse.status}`);
-//         }
-//         const userProfile = await profileResponse.json();
-//         // Derive username...
-//         const username = userProfile.email || userProfile.sub || `oauth_${userProfile.id || userProfile.user_id}`;
-//         const db = initAuthDB();
-//         // UPSERT user...
-//         const insertStmt = db.prepare(`
-//           INSERT INTO users (username, password_hash, is_active, oauth_provider)
-//           VALUES (?, 'OAUTH', TRUE, ?)
-//           ON CONFLICT(username) DO UPDATE SET 
-//             is_active = TRUE, 
-//             oauth_provider = excluded.oauth_provider
-//         `);
-//         insertStmt.run(username, 'generic');
-//         // Retrieve user ID...
-//         const userRow = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-//         const userId = userRow.id;
-//         // Issue JWTs...
-//         const jti = crypto.randomUUID();
-//         const accessTokenJWT = jwt.sign(
-//           { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n' },
-//           process.env.JWT_SECRET,
-//           { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: jti }
-//         );
-//         const refreshTokenJWT = jwt.sign(
-//           { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n' },
-//           process.env.JWT_REFRESH_SECRET,
-//           { expiresIn: process.env.JWT_REFRESH_TTL || '24h', jwtid: `${jti}-refresh` }
-//         );
-//         // Track tokens...
-//         db.prepare('INSERT INTO tokens (jti) VALUES (?)').run(jti);
-//         db.prepare('INSERT INTO tokens (jti) VALUES (?)').run(`${jti}-refresh`);
-//         console.log(`OAuth client success: Tokens issued for user '${username}'`);
-//         return done(null, { access_token: accessTokenJWT, refresh_token: refreshTokenJWT });
-//       } catch (error) {
-//         console.error('OAuth profile processing error:', error);
-//         return done(error);
-//       }
-//     }
-//   ));
-
-//   // GET /auth/oauth: Start client-side OAuth flow
-//   app.get('/auth/oauth', passport.authenticate('oauth2'));
-
-//   // GET /auth/oauth/callback: Handle provider redirect
-//   app.get('/auth/oauth/callback',
-//     passport.authenticate('oauth2', { failureRedirect: '/auth/oauth/error' }),
-//     (req, res) => {
-//       const tokens = req.user;
-//       const redirectUrl = `${OAUTH_CONFIG.successRedirect}?access_token=${tokens.access_token}&refresh_token=${tokens.refresh_token}`;
-//       res.redirect(redirectUrl);
-//     }
-//   );
-
-//   // GET /auth/oauth/error: Handle failures
-//   app.get('/auth/oauth/error', (req, res) => {
-//     console.error('OAuth client flow failed:', req.query.error || 'Unknown error');
-//     res.status(401).json({ error: 'OAuth authentication failed. Please try again.' });
-//   });
-
-//   console.log('Real OAuth2 client integration enabled with Passport.js');
-// }
-
 // JWT-protected middleware for sensitive routes (e.g., /transactions, /accounts)
 app.use('/transactions', authenticateJWT);
 app.use('/accounts', authenticateJWT);
@@ -336,7 +225,8 @@ try {
   const { default: apiImport } = await import('@actual-app/api');
   api = apiImport;
   // Init with encrypted/persistent data dir and remote sync creds
-  const res = await api.init({ 
+  console.log('Initializing Actual Budget API client...');
+  await api.init({ 
     dataDir: DATA_DIR, 
     serverURL: process.env.ACTUAL_SERVER_URL, 
     password: process.env.ACTUAL_PASSWORD 
@@ -345,20 +235,22 @@ try {
   console.log('Actual Budget API initialized successfully from encrypted env vars.');
 } catch (error) {
   console.error('Failed to initialize Actual API:', error.message);
+  console.error('Ensure ACTUAL_SERVER_URL, ACTUAL_PASSWORD, and ACTUAL_SYNC_ID are correct.');
+  console.error('NOTE: If this is a new setup, login to http://localhost:5006 to initialize Actual Budget and re-run docker compose.');
   process.exit(1); // Hard exit on core dependency failure
 }
 
 /**
  * POST /transactions/:accountId: Add transactions to a specific account.
- * Requires JWT auth. Supports optional accountId param or fallback to STRIKE_ACCOUNT_ID env.
+ * Requires JWT auth. Supports optional accountId param or fallback to DEFAULT_ACCOUNT_ID env.
  * Syncs changes and returns updated budget snapshot.
  */
 app.post('/transactions/:accountId', async (req, res) => {
   const { accountId } = req.params;
   const { transactions } = req.body; // Array of tx objects { date, amount, payee, ... }
-  const targetAccountId = accountId || process.env.ACTUAL_STRIKE_ACCOUNT_ID;
+  const targetAccountId = accountId || process.env.ACTUAL_DEFAULT_ACCOUNT_ID;
   if (!targetAccountId) {
-    return res.status(400).json({ error: 'Account ID required (param or ACTUAL_STRIKE_ACCOUNT_ID env)' });
+    return res.status(400).json({ error: 'Account ID required (param or ACTUAL_DEFAULT_ACCOUNT_ID env)' });
   }
   console.log(`Adding ${transactions?.length || 0} transactions to account '${targetAccountId}' by user '${req.user?.username}'`);
   if (!transactions || !Array.isArray(transactions)) {
@@ -388,9 +280,9 @@ app.post('/transactions/:accountId', async (req, res) => {
  */
 app.get('/transactions/:accountId', async (req, res) => {
   const { accountId } = req.params;
-  const targetAccountId = accountId || process.env.ACTUAL_STRIKE_ACCOUNT_ID;
+  const targetAccountId = accountId || process.env.ACTUAL_DEFAULT_ACCOUNT_ID;
   if (!targetAccountId) {
-    return res.status(400).json({ error: 'Account ID required (param or ACTUAL_STRIKE_ACCOUNT_ID env)' });
+    return res.status(400).json({ error: 'Account ID required (param or ACTUAL_DEFAULT_ACCOUNT_ID env)' });
   }
   console.log(`Fetching transactions for account '${targetAccountId}' by user '${req.user?.username}'`);
   try {
@@ -436,7 +328,6 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     api_initialized: !!api,
     oauth_server_enabled: true, // NEW: For n8n integration
-    oauth_client_enabled: !!OAUTH_CONFIG.clientID, // For external providers
     active_users: activeUsers,
     data_dir: DATA_DIR
   });
@@ -493,7 +384,6 @@ app.listen(PORT, () => {
   console.log(`Health: http://localhost:${PORT}/health`);
   console.log(`Login: POST http://localhost:${PORT}/auth/login`);
   console.log(`OAuth Server: GET /oauth/authorize, POST /oauth/token (for n8n)`);
-  console.log(`OAuth Client: GET /auth/oauth (if enabled for external providers)`);
   console.log(`Protected: /accounts, /transactions/*`);
   console.log(`Data persistence: ${DATA_DIR}\n`);
 });

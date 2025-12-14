@@ -8,9 +8,8 @@ RUN apk add --no-cache curl && \
 WORKDIR /app
 
 # Copy package from src for dep caching
-COPY ./src/package*.json ./
-RUN apk add --no-cache python3 make g++ build-base && \
-    npm install
+COPY ./package.json ./
+RUN npm install
 
 # Copy app code from src
 COPY ./src .

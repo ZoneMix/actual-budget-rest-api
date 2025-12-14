@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - auth-data:/app/.actual-cache  # Persistent encrypted DB
+      - ./data/actual-api:/app/.actual-cache  # Persistent encrypted DB
     working_dir: /app
     command: >
       sh -c "dotenvx run -- npm start"
