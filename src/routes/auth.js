@@ -8,8 +8,7 @@ import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticateUser } from '../auth/user.js';
-import { issueTokens } from '../auth/jwt.js';
-import { isTokenRevoked, authenticateJWT } from '../auth/jwt.js';
+import { issueTokens, revokeToken, isTokenRevoked, authenticateJWT } from '../auth/jwt.js';
 import { getDb } from '../db/authDb.js';
 import { ACCESS_TTL_SECONDS } from '../config/index.js';
 

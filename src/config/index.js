@@ -3,8 +3,6 @@
  * All environment-dependent values and shared helpers are defined here.
  */
 
-import crypto from 'crypto';
-
 /** Persistent data directory (shared with Actual API via Docker volume) */
 export const DATA_DIR = '/app/.actual-cache';
 
