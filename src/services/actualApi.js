@@ -44,3 +44,42 @@ export const shutdownActualApi = async () => {
     api = null;
   }
 };
+
+/**
+ * Ensure latest data before reads.
+ */
+const ensureSynced = async () => {
+  const api = await getActualApi();
+  await api.sync();
+};
+
+/**
+ * Fetch transactions for an account.
+ * Syncs first for freshness.
+ */
+export const getTransactions = async (accountId) => {
+  await ensureSynced();
+  const api = await getActualApi();
+  return api.getTransactions(accountId);
+};
+
+/**
+ * Add transactions to an account.
+ * Syncs before/after for consistency.
+ */
+export const addTransactions = async (accountId, transactions) => {
+  await ensureSynced();
+  const api = await getActualApi();
+  await api.addTransactions(accountId, transactions);
+  await api.sync();  // Push changes
+};
+
+/**
+ * Get all accounts.
+ * Syncs first.
+ */
+export const getAccounts = async () => {
+  await ensureSynced();
+  const api = await getActualApi();
+  return api.getAccounts();
+};
