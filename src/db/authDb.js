@@ -1,6 +1,6 @@
 /**
  * Authentication database layer.
- * Handles SQLite connection (with optional SQLCipher encryption),
+ * Handles SQLite connection,
  * schema creation, migrations, and pruning of expired data.
  */
 
@@ -17,14 +17,6 @@ export const getDb = () => {
   if (db) return db;
 
   db = new Database(AUTH_DB_PATH);
-
-  // Optional encryption via SQLCipher
-  if (process.env.DB_MASTER_KEY) {
-    db.exec(`PRAGMA key = '${process.env.DB_MASTER_KEY}'; PRAGMA cipher_memory_security = ON;`);
-    console.log('Auth DB initialized with encryption.');
-  } else {
-    console.warn('Auth DB running unencrypted (set DB_MASTER_KEY for production).');
-  }
 
   // Schema creation
   db.exec(`
