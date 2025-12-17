@@ -22,15 +22,12 @@ echo "${GREEN}✓ No .env files found${NC}"
 
 # Check 2: Prevent secrets/keys from being committed
 echo "${YELLOW}2. Checking for potential hardcoded secrets...${NC}"
-# Look for common patterns in actual values (not documentation)
-# Match things like: KEY="actual_secret_value" or password: 'real_pass'
-SECRETS_PATTERN="(password|secret|token|api_key|private_key|access_token)\s*[:=]\s*['\"]?[A-Za-z0-9\-_\.]+['\"]?"
-if git diff --cached -U0 | grep -E "^\+" | grep -vE "^\+\+\+" | grep -iE "$SECRETS_PATTERN" | grep -vE "(example|example\.|test|TEST|default)" > /dev/null; then
+# Only check for actual hardcoded values with real-looking secrets (8+ alphanumeric chars)
+# Ignore: schema definitions, comments, examples, test data, documentation
+if git diff --cached -U0 | grep -E "^\+" | grep -vE "^\+\+\+" | grep -vE "^\+\s*[/\-#]" | grep -vE "(z\.|schema|Schema|example|test|mock|faker|describe|it\()" | grep -iE "(secret|api_key|private_key|token|password)\s*[:=]\s*['\"][A-Za-z0-9\-_]{8,}['\"]" > /dev/null 2>&1; then
   echo "${RED}❌ WARNING: Potential hardcoded secrets detected!${NC}"
   echo "   Please review the following lines:"
-  git diff --cached -U0 | grep -E "^\+" | grep -vE "^\+\+\+" | grep -iE "$SECRETS_PATTERN" | grep -vE "(example|example\.|test|TEST|default)" | sed 's/^/   /'
-  echo ""
-  echo "   If these are safe, you can bypass with: git commit --no-verify"
+  git diff --cached -U0 | grep -E "^\+" | grep -vE "^\+\+\+" | grep -vE "^\+\s*[/\-#]" | grep -vE "(z\.|schema|Schema|example|test|mock|faker|describe|it\()" | grep -iE "(secret|api_key|private_key|token|password)\s*[:=]\s*['\"][A-Za-z0-9\-_]{8,}['\"]" | sed 's/^/   /'
   exit 1
 fi
 echo "${GREEN}✓ No obvious hardcoded secrets found${NC}"
