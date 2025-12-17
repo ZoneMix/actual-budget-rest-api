@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copy package files for dependency installation
 COPY package.json package-lock.json ./
-RUN npm ci --only=production && \
+RUN npm ci --omit=dev --omit=optional --ignore-scripts && \
     npm cache clean --force
 
 # Production stage
