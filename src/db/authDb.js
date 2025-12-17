@@ -5,7 +5,8 @@
  */
 
 import Database from 'better-sqlite3';
-import { AUTH_DB_PATH, ACCESS_TTL_SECONDS } from '../config/index.js';
+import { AUTH_DB_PATH } from '../config/index.js';
+import logger from '../logging/logger.js';
 
 let db = null;
 
@@ -60,28 +61,41 @@ export const getDb = () => {
 
 /** Record a token with explicit type and expiry */
 export const insertToken = (jti, tokenType, expiresAt) => {
-  const db = getDb();
-  db.prepare(
+  const connection = getDb();
+  connection.prepare(
     'INSERT INTO tokens (jti, token_type, expires_at, revoked) VALUES (?, ?, ?, FALSE)'
   ).run(jti, tokenType, expiresAt);
 };
 
 /** Prune expired access/refresh tokens */
 export const pruneExpiredTokens = () => {
-  const db = getDb();
-  const stmt = db.prepare(`
+  const connection = getDb();
+  const now = new Date().toISOString();
+  
+  const stmt = connection.prepare(`
     DELETE FROM tokens
     WHERE expires_at IS NOT NULL
-      AND datetime(expires_at) < datetime('now')
+      AND datetime(expires_at) < datetime(?)
   `);
-  const { changes: deletedCount } = stmt.run();
-  if (deletedCount > 0) console.log(`Pruned ${deletedCount} expired tokens.`);
+  
+  const { changes: deletedCount } = stmt.run(now);
+  if (deletedCount > 0) {
+    logger.info(`Pruned ${deletedCount} expired tokens`);
+  }
 };
 
 /** Prune expired authorization codes (10-minute TTL) */
 export const pruneExpiredCodes = () => {
-  const db = getDb();
-  db.prepare(`DELETE FROM auth_codes WHERE datetime(expires_at) < datetime('now')`).run();
+  const connection = getDb();
+  const now = new Date().toISOString();
+  
+  const { changes: deletedCount } = connection.prepare(`
+    DELETE FROM auth_codes WHERE datetime(expires_at) < datetime(?)
+  `).run(now);
+  
+  if (deletedCount > 0) {
+    logger.info(`Pruned ${deletedCount} expired auth codes`);
+  }
 };
 
 /** Close the database connection (used on shutdown) */
@@ -89,6 +103,6 @@ export const closeDb = () => {
   if (db) {
     db.close();
     db = null;
-    console.log('Auth DB closed.');
+    logger.info('Auth DB closed');
   }
 };
