@@ -17,20 +17,16 @@ const loginLimiter = rateLimit({
 });
 
 router.get('/login', (req, res) => {
-  res.sendFile('./public/static/api-login.html', { root: process.cwd() });
+  res.sendFile('./src/public/static/api-login.html', { root: process.cwd() });
 });
 
 router.post('/login', loginLimiter, async (req, res) => {
   const { username, password, return_to } = req.body;
 
-  try {
-    const { userId } = await authenticateUser(username, password);
-    req.session.user = { id: userId, username };
+  const { userId } = await authenticateUser(username, password);
+  req.session.user = { id: userId, username };
 
-    res.redirect(return_to || '/');
-  } catch (err) {
-    res.redirect(`/login?error=Invalid credentials&return_to=${encodeURIComponent(return_to || '/')}`);
-  }
+  res.redirect(return_to || '/');
 });
 
 export default router;
