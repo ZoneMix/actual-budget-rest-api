@@ -4,17 +4,19 @@
 
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { getDb, pruneExpiredTokens } from '../db/authDb.js';
-import { ACCESS_TTL_SECONDS } from '../config/index.js';
+import { getDb, insertToken, pruneExpiredTokens } from '../db/authDb.js';
+import { ACCESS_TTL_SECONDS, REFRESH_TTL_SECONDS } from '../config/index.js';
 
 /**
  * Issue access and refresh tokens for a user.
  */
 export const issueTokens = (userId, username, scope = 'api') => {
   pruneExpiredTokens();
-  const db = getDb();
 
   const jti = crypto.randomUUID();
+  const now = Date.now();
+  const accessExpiresAt = new Date(now + ACCESS_TTL_SECONDS * 1000).toISOString();
+  const refreshExpiresAt = new Date(now + REFRESH_TTL_SECONDS * 1000).toISOString();
 
   const accessToken = jwt.sign(
     { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n', scope },
@@ -25,11 +27,11 @@ export const issueTokens = (userId, username, scope = 'api') => {
   const refreshToken = jwt.sign(
     { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n' },
     process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_TTL || '24h', jwtid: `${jti}-refresh` }
+    { expiresIn: `${REFRESH_TTL_SECONDS}s`, jwtid: `${jti}-refresh` }
   );
 
-  db.prepare('INSERT INTO tokens (jti) VALUES (?)').run(jti);
-  db.prepare('INSERT INTO tokens (jti) VALUES (?)').run(`${jti}-refresh`);
+  insertToken(jti, 'access', accessExpiresAt);
+  insertToken(`${jti}-refresh`, 'refresh', refreshExpiresAt);
 
   return {
     access_token: accessToken,
@@ -46,7 +48,13 @@ export const issueTokens = (userId, username, scope = 'api') => {
 export const revokeToken = (jti) => {
   pruneExpiredTokens();
   const db = getDb();
-  db.prepare('INSERT OR REPLACE INTO tokens (jti, revoked) VALUES (?, TRUE)').run(jti);
+  const { changes } = db.prepare('UPDATE tokens SET revoked = TRUE WHERE jti = ?').run(jti);
+  if (changes === 0) {
+    const placeholderExpiry = new Date(Date.now() + REFRESH_TTL_SECONDS * 1000).toISOString();
+    db.prepare(
+      "INSERT INTO tokens (jti, token_type, expires_at, revoked) VALUES (?, 'unknown', ?, TRUE)"
+    ).run(jti, placeholderExpiry);
+  }
   console.log(`Token ${jti} revoked.`);
 };
 
@@ -57,7 +65,8 @@ export const isTokenRevoked = (jti) => {
   pruneExpiredTokens();
   const db = getDb();
   const row = db.prepare('SELECT revoked FROM tokens WHERE jti = ?').get(jti);
-  return !row || row.revoked === 1;
+  if (!row) return false;
+  return row.revoked === 1;
 };
 
 export const authenticateJWT = async (req, res, next) => {

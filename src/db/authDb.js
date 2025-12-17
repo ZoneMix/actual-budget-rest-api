@@ -25,14 +25,15 @@ export const getDb = () => {
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       is_active BOOLEAN DEFAULT TRUE,
-      oauth_provider TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS tokens (
       jti TEXT PRIMARY KEY,
+      token_type TEXT NOT NULL DEFAULT 'access',
       revoked BOOLEAN DEFAULT FALSE,
-      issued_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME
     );
 
     CREATE TABLE IF NOT EXISTS clients (
@@ -54,17 +55,15 @@ export const getDb = () => {
     );
   `);
 
-  // One-time migration for oauth_provider column
-  try {
-    db.prepare('SELECT oauth_provider FROM users LIMIT 1').get();
-  } catch (e) {
-    if (e.code === 'SQLITE_ERROR' && e.message.includes('no such column: oauth_provider')) {
-      db.exec('ALTER TABLE users ADD COLUMN oauth_provider TEXT');
-      console.log('DB migration: added oauth_provider column.');
-    }
-  }
-
   return db;
+};
+
+/** Record a token with explicit type and expiry */
+export const insertToken = (jti, tokenType, expiresAt) => {
+  const db = getDb();
+  db.prepare(
+    'INSERT INTO tokens (jti, token_type, expires_at, revoked) VALUES (?, ?, ?, FALSE)'
+  ).run(jti, tokenType, expiresAt);
 };
 
 /** Prune expired access/refresh tokens */
@@ -72,7 +71,8 @@ export const pruneExpiredTokens = () => {
   const db = getDb();
   const stmt = db.prepare(`
     DELETE FROM tokens
-    WHERE datetime(issued_at, '+${ACCESS_TTL_SECONDS} seconds') < datetime('now')
+    WHERE expires_at IS NOT NULL
+      AND datetime(expires_at) < datetime('now')
   `);
   const { changes: deletedCount } = stmt.run();
   if (deletedCount > 0) console.log(`Pruned ${deletedCount} expired tokens.`);
