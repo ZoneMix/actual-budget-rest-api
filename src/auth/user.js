@@ -5,6 +5,40 @@
 import bcrypt from 'bcrypt';
 import { getDb } from '../db/authDb.js';
 import { pruneExpiredTokens } from '../db/authDb.js';
+import logger, { logAuthEvent } from '../logging/logger.js';
+
+/**
+ * Validate password complexity.
+ * Requirements:
+ * - At least 12 characters
+ * - At least one uppercase letter
+ * - At least one lowercase letter
+ * - At least one number
+ * - At least one special character
+ */
+export const validatePasswordComplexity = (password) => {
+  if (password.length < 12) {
+    return { valid: false, message: 'Password must be at least 12 characters long' };
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter' };
+  }
+
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one lowercase letter' };
+  }
+
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one number' };
+  }
+
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)' };
+  }
+
+  return { valid: true };
+};
 
 /**
  * Ensures the admin user exists and its password hash is up-to-date.
@@ -16,8 +50,15 @@ export const ensureAdminUserHash = async () => {
   const adminPW = process.env.ADMIN_PW;
 
   if (!adminPW) {
-    console.error('ADMIN_PW missing – cannot create admin user. Exiting.');
+    logger.error('ADMIN_PW missing – cannot create admin user. Exiting.');
     process.exit(1);
+  }
+
+  // Validate password complexity for new passwords
+  const passwordValidation = validatePasswordComplexity(adminPW);
+  if (!passwordValidation.valid) {
+    logger.warn(`Admin password does not meet complexity requirements: ${passwordValidation.message}`);
+    logger.warn('Consider updating ADMIN_PW to meet security standards');
   }
 
   const hash = await bcrypt.hash(adminPW, 12);
@@ -30,7 +71,7 @@ export const ensureAdminUserHash = async () => {
   `);
 
   upsert.run(adminUsername, hash);
-  console.log(`Admin user '${adminUsername}' hash created/updated.`);
+  logger.info(`Admin user '${adminUsername}' hash created/updated`);
 };
 
 /**
@@ -42,12 +83,17 @@ export const authenticateUser = async (username, password) => {
   const db = getDb();
 
   const user = db.prepare('SELECT * FROM users WHERE username = ? AND is_active = TRUE').get(username);
-  if (!user) throw new Error('User not found or inactive');
+  if (!user) {
+    logAuthEvent('LOGIN_FAILED', null, { username, reason: 'user_not_found' }, false);
+    throw new Error('User not found or inactive');
+  }
 
   if (!(await bcrypt.compare(password, user.password_hash))) {
+    logAuthEvent('LOGIN_FAILED', user.id, { username, reason: 'invalid_password' }, false);
     throw new Error('Invalid password');
   }
-  console.log(`User '${username}' authenticated successfully.`);
+
+  logAuthEvent('LOGIN_SUCCESS', user.id, { username }, true);
 
   return { userId: user.id, username: user.username };
 };
