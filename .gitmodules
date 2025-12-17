@@ -1,0 +1,4 @@
+[submodule "n8n-nodes-actual-budget-rest-api"]
+	path = n8n-nodes-actual-budget-rest-api
+	url = git@github.com:ZoneMix/n8n-nodes-actual-budget-rest-api.git
+	branch = main
