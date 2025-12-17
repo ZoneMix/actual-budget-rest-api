@@ -1,0 +1,60 @@
+#!/bin/sh
+# Commit-msg hook: Validate commit message format
+# Ensures meaningful commit messages for better history tracking
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Skip validation for merge/squash/fixup commits
+if [ "$COMMIT_SOURCE" != "" ]; then
+  exit 0
+fi
+
+# Colors
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Skip if commit message is just a wip or fixup
+if echo "$COMMIT_MSG" | grep -qiE '^(wip|fixup!|squash!)'; then
+  exit 0
+fi
+
+# Check commit message format
+# Should follow: <type>(<scope>): <subject>
+# or just: <subject> (at least 10 characters)
+
+# Detailed format check
+if echo "$COMMIT_MSG" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|security|ci)(\(.+\))?: .{10,}'; then
+  exit 0
+fi
+
+# Allow simple commits with at least 10 characters
+if echo "$COMMIT_MSG" | head -1 | grep -qE '^.{10,}'; then
+  exit 0
+fi
+
+# Message too short
+echo ""
+echo "${RED}❌ Commit message is too short or poorly formatted${NC}"
+echo ""
+echo "${YELLOW}Recommended format:${NC}"
+echo "  feat(auth): add JWT token refresh endpoint"
+echo "  fix(validation): handle empty string validation"
+echo "  docs(readme): update installation instructions"
+echo "  security: fix SQL injection in query handler"
+echo ""
+echo "${YELLOW}Minimum requirements:${NC}"
+echo "  - At least 10 characters"
+echo "  - Clear description of the change"
+echo ""
+echo "${YELLOW}Optional format:${NC}"
+echo "  <type>(<scope>): <subject>"
+echo ""
+echo "${YELLOW}Valid types:${NC}"
+echo "  feat, fix, docs, style, refactor, perf, test, chore, security, ci"
+echo ""
+exit 1

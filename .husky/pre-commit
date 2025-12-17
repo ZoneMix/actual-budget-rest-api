@@ -1,0 +1,61 @@
+#!/bin/sh
+# Pre-commit hook: Run linting and security checks on staged files
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo "${YELLOW}🔒 Running pre-commit security checks...${NC}"
+
+# Check 1: Prevent .env file commits
+echo "${YELLOW}1. Checking for .env files...${NC}"
+if git diff --cached --name-only | grep -E '\.env(\.local|\.keys)?$' > /dev/null; then
+  echo "${RED}❌ ERROR: .env files cannot be committed to git!${NC}"
+  echo "   Use dotenvx to manage secrets securely."
+  echo "   Unstage these files and try again:"
+  git diff --cached --name-only | grep -E '\.env(\.local|\.keys)?$' | sed 's/^/   - /'
+  exit 1
+fi
+echo "${GREEN}✓ No .env files found${NC}"
+
+# Check 2: Prevent secrets/keys from being committed
+echo "${YELLOW}2. Checking for potential hardcoded secrets...${NC}"
+# Look for common patterns in actual values (not documentation)
+# Match things like: KEY="actual_secret_value" or password: 'real_pass'
+SECRETS_PATTERN="(password|secret|token|api_key|private_key|access_token)\s*[:=]\s*['\"]?[A-Za-z0-9\-_\.]+['\"]?"
+if git diff --cached -U0 | grep -E "^\+" | grep -vE "^\+\+\+" | grep -iE "$SECRETS_PATTERN" | grep -vE "(example|example\.|test|TEST|default)" > /dev/null; then
+  echo "${RED}❌ WARNING: Potential hardcoded secrets detected!${NC}"
+  echo "   Please review the following lines:"
+  git diff --cached -U0 | grep -E "^\+" | grep -vE "^\+\+\+" | grep -iE "$SECRETS_PATTERN" | grep -vE "(example|example\.|test|TEST|default)" | sed 's/^/   /'
+  echo ""
+  echo "   If these are safe, you can bypass with: git commit --no-verify"
+  exit 1
+fi
+echo "${GREEN}✓ No obvious hardcoded secrets found${NC}"
+
+# Check 3: Run lint-staged (eslint + auto-fix)
+echo "${YELLOW}3. Running ESLint on staged files...${NC}"
+npx lint-staged
+if [ $? -ne 0 ]; then
+  echo "${RED}❌ ESLint checks failed${NC}"
+  exit 1
+fi
+echo "${GREEN}✓ ESLint checks passed${NC}"
+
+# Check 4: Ensure package-lock.json is in sync
+echo "${YELLOW}4. Checking package-lock.json sync...${NC}"
+if git diff --cached --name-only | grep -E 'package\.json$' > /dev/null; then
+  if ! git diff --cached --name-only | grep -E 'package-lock\.json$' > /dev/null; then
+    echo "${RED}❌ ERROR: package.json was modified but package-lock.json was not updated${NC}"
+    echo "   Run: npm install"
+    echo "   Then stage the package-lock.json changes"
+    exit 1
+  fi
+fi
+echo "${GREEN}✓ package-lock.json in sync${NC}"
+
+echo ""
+echo "${GREEN}✅ All pre-commit checks passed!${NC}"
+exit 0
