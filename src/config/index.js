@@ -3,13 +3,8 @@
  * All environment-dependent values and shared helpers are defined here.
  */
 
-/** Persistent data directory (shared with Actual API via Docker volume) */
-export const DATA_DIR = '/app/.actual-cache';
-
-/** Path to the SQLite authentication database */
+export const DATA_DIR = process.env.DATA_DIR || '/app/.actual-cache';
 export const AUTH_DB_PATH = `${DATA_DIR}/auth.db`;
-
-/** Server port */
 export const PORT = process.env.PORT || 3000;
 
 /**
@@ -33,7 +28,8 @@ export const parseExpiresInToSeconds = (expiresInStr) => {
   throw new Error(`Invalid JWT_ACCESS_TTL: "${expiresInStr}". Use e.g., '1h', '3600', or '30m'.`);
 };
 
-/** Parsed access token TTL in seconds */
 export const ACCESS_TTL_SECONDS = parseExpiresInToSeconds(process.env.JWT_ACCESS_TTL || '1h');
+export const REFRESH_TTL_SECONDS = parseExpiresInToSeconds(process.env.JWT_REFRESH_TTL || '24h');
 
 console.log(`Parsed JWT access TTL: ${ACCESS_TTL_SECONDS}s from "${process.env.JWT_ACCESS_TTL || 'default'}"`);
+console.log(`Parsed JWT refresh TTL: ${REFRESH_TTL_SECONDS}s from "${process.env.JWT_REFRESH_TTL || 'default'}"`);
