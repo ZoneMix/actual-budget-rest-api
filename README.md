@@ -1,4 +1,4 @@
-# Budget Automation API (Actual Budget wrapper)
+# Actual Budget REST API (Actual Budget API wrapper)
 
 A secure Node.js/Express REST API that wraps the Actual Budget SDK (`@actual-app/api`). It provides JWT-based auth, optional OAuth2 for n8n, Swagger documentation, and a hardened runtime (helmet, CORS, structured logging, rate limits per route).
 
