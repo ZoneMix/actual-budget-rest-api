@@ -6,6 +6,18 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getDb, insertToken, pruneExpiredTokens } from '../db/authDb.js';
 import { ACCESS_TTL_SECONDS, REFRESH_TTL_SECONDS } from '../config/index.js';
+import { logAuthEvent, logSuspiciousActivity } from '../logging/logger.js';
+
+// Verify JWT secrets are configured
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is required but not set');
+  process.exit(1);
+}
+
+if (!process.env.JWT_REFRESH_SECRET) {
+  console.error('FATAL: JWT_REFRESH_SECRET is required but not set');
+  process.exit(1);
+}
 
 /**
  * Issue access and refresh tokens for a user.
@@ -33,6 +45,8 @@ export const issueTokens = (userId, username, scope = 'api') => {
   insertToken(jti, 'access', accessExpiresAt);
   insertToken(`${jti}-refresh`, 'refresh', refreshExpiresAt);
 
+  logAuthEvent('TOKEN_ISSUED', userId, { scope }, true);
+
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
@@ -55,13 +69,13 @@ export const revokeToken = (jti) => {
       "INSERT INTO tokens (jti, token_type, expires_at, revoked) VALUES (?, 'unknown', ?, TRUE)"
     ).run(jti, placeholderExpiry);
   }
-  console.log(`Token ${jti} revoked.`);
 };
 
 /**
  * Check if a token is revoked.
  */
 export const isTokenRevoked = (jti) => {
+  if (!jti) return true;
   pruneExpiredTokens();
   const db = getDb();
   const row = db.prepare('SELECT revoked FROM tokens WHERE jti = ?').get(jti);
@@ -74,30 +88,41 @@ export const authenticateJWT = async (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
+    logAuthEvent('AUTH_FAILED', null, { reason: 'missing_token', ip: req.ip }, false);
     return res.status(401).json({ error: 'Authorization header with Bearer token required' });
   }
 
   try {
-    const decoded = jwt.decode(token);
-    if (!decoded || isTokenRevoked(decoded.jti)) {
-      return res.status(401).json({ error: 'Token revoked or malformed' });
+    // Verify signature FIRST - this prevents tampered tokens
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Then check if token is revoked
+    if (isTokenRevoked(payload.jti)) {
+      logSuspiciousActivity('REVOKED_TOKEN_USE', payload.user_id, { jti: payload.jti, ip: req.ip });
+      return res.status(401).json({ error: 'Token has been revoked' });
     }
 
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;
 
     // Basic scope enforcement (extend as needed)
     const requiredScope = req.path.startsWith('/accounts') ? 'api' : null;
     const tokenScopes = payload.scope || 'api';
     if (requiredScope && !tokenScopes.includes(requiredScope)) {
+      logAuthEvent('AUTH_FAILED', payload.user_id, { reason: 'insufficient_scope', required: requiredScope }, false);
       return res.status(403).json({ error: 'Insufficient scopes' });
     }
 
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
+      logAuthEvent('AUTH_FAILED', null, { reason: 'token_expired', ip: req.ip }, false);
       return res.status(401).json({ error: 'Access token expired' });
     }
-    return res.status(401).json({ error: 'Invalid token' });
+    if (err.name === 'JsonWebTokenError') {
+      logSuspiciousActivity('INVALID_TOKEN', null, { error: err.message, ip: req.ip });
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    logAuthEvent('AUTH_FAILED', null, { reason: 'auth_error', error: err.message }, false);
+    return res.status(401).json({ error: 'Authentication failed' });
   }
 };
