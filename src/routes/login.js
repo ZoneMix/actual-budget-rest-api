@@ -1,5 +1,5 @@
 /**
- * Login form routes for OAuth consent flow (at root level):
+ * Login form routes for session-based authentication:
  * - GET /login   (renders form)
  * - POST /login  (handles submission, sets session)
  */
@@ -16,26 +16,10 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts. Try again later.' },
 });
 
-// GET /login – Simple login form
 router.get('/login', (req, res) => {
-  const returnTo = req.query.return_to || '/';
-  const error = req.query.error ? `Error: ${req.query.error}` : '';
-  res.send(`
-    <!DOCTYPE html>
-    <html><body>
-      <h2>Login</h2>
-      ${error ? `<p style="color:red;">${error}</p>` : ''}
-      <form method="POST" action="/login">
-        <input name="username" placeholder="Username" required><br><br>
-        <input name="password" type="password" placeholder="Password" required><br><br>
-        <input type="hidden" name="return_to" value="${returnTo}">
-        <button type="submit">Login</button>
-      </form>
-    </body></html>
-  `);
+  res.sendFile('./public/static/api-login.html', { root: process.cwd() });
 });
 
-// POST /login – Authenticate and set session.user
 router.post('/login', loginLimiter, async (req, res) => {
   const { username, password, return_to } = req.body;
 
@@ -45,7 +29,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     res.redirect(return_to || '/');
   } catch (err) {
-    res.redirect(`/login?error=invalid_creds&return_to=${encodeURIComponent(return_to || '/')}`);
+    res.redirect(`/login?error=Invalid credentials&return_to=${encodeURIComponent(return_to || '/')}`);
   }
 });
 

@@ -8,11 +8,11 @@ import { generateAuthCode } from '../auth/oauth2/code.js';
 import { validateAuthCode } from '../auth/oauth2/code.js';
 import { issueTokens } from '../auth/jwt.js';
 import { getDb } from '../db/authDb.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = express.Router();
 
-// GET /oauth/authorize
-router.get('/authorize', async (req, res) => {
+router.get('/authorize', asyncHandler(async (req, res) => {
   const { client_id, redirect_uri, scope = 'api', state, response_type = 'code' } = req.query;
 
   if (response_type !== 'code') return res.status(400).json({ error: 'Unsupported response_type' });
@@ -32,33 +32,28 @@ router.get('/authorize', async (req, res) => {
     return res.redirect(`/login?${params}`);
   }
 
-  // Auto-approve (dev). In prod you would show a consent screen.
+  // Auto-approve authorization code (simplified for internal n8n integration)
   const code = generateAuthCode(client_id, req.session.user.id, redirect_uri, scope);
   const redirect = `${redirect_uri}?code=${code}${state ? `&state=${state}` : ''}`;
   res.redirect(redirect);
-});
+}));
 
-// POST /oauth/token
-router.post('/token', express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/token', express.urlencoded({ extended: true }), asyncHandler(async (req, res) => {
   const { grant_type, code, client_id, client_secret, redirect_uri } = req.body;
 
   if (grant_type !== 'authorization_code') {
     return res.status(400).json({ error: 'Unsupported grant_type' });
   }
 
-  try {
-    validateClient(client_id, client_secret);
-    const { userId, scope } = validateAuthCode(code, client_id, redirect_uri);
+  await validateClient(client_id, client_secret);
+  const { userId, scope } = validateAuthCode(code, client_id, redirect_uri);
 
-    const db = getDb();
-    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-    if (!user) throw new Error('User not found');
+  const db = getDb();
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+  if (!user) throw new Error('User not found');
 
-    const tokens = issueTokens(userId, user.username, scope);
-    res.json(tokens);
-  } catch (err) {
-    res.status(400).json({ error: 'invalid_request', error_description: err.message });
-  }
-});
+  const tokens = issueTokens(userId, user.username, scope);
+  res.json(tokens);
+}));
 
 export default router;

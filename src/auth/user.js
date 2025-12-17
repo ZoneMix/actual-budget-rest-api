@@ -23,11 +23,10 @@ export const ensureAdminUserHash = async () => {
   const hash = await bcrypt.hash(adminPW, 12);
 
   const upsert = db.prepare(`
-    INSERT INTO users (username, password_hash, is_active, oauth_provider)
-    VALUES (?, ?, TRUE, NULL)
+    INSERT INTO users (username, password_hash, is_active)
+    VALUES (?, ?, TRUE)
     ON CONFLICT(username) DO UPDATE SET
-      password_hash = excluded.password_hash,
-      oauth_provider = NULL
+      password_hash = excluded.password_hash
   `);
 
   upsert.run(adminUsername, hash);
@@ -36,7 +35,7 @@ export const ensureAdminUserHash = async () => {
 
 /**
  * Authenticate a local user with username/password.
- * Returns access + refresh tokens.
+ * Returns userId and username.
  */
 export const authenticateUser = async (username, password) => {
   pruneExpiredTokens();
@@ -45,8 +44,7 @@ export const authenticateUser = async (username, password) => {
   const user = db.prepare('SELECT * FROM users WHERE username = ? AND is_active = TRUE').get(username);
   if (!user) throw new Error('User not found or inactive');
 
-  // For future OAuth-linked users, password_hash may be 'OAUTH'
-  if (user.password_hash !== 'OAUTH' && !(await bcrypt.compare(password, user.password_hash))) {
+  if (!(await bcrypt.compare(password, user.password_hash))) {
     throw new Error('Invalid password');
   }
   console.log(`User '${username}' authenticated successfully.`);

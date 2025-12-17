@@ -9,7 +9,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticateUser } from '../auth/user.js';
 import { issueTokens, revokeToken, isTokenRevoked, authenticateJWT } from '../auth/jwt.js';
-import { getDb } from '../db/authDb.js';
+import { insertToken } from '../db/authDb.js';
 import { ACCESS_TTL_SECONDS } from '../config/index.js';
 
 const router = express.Router();
@@ -20,7 +20,6 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts. Try again later.' },
 });
 
-// POST /auth/login – password login or refresh token exchange
 router.post('/login', loginLimiter, async (req, res) => {
   const { username, password, refresh_token } = req.body;
 
@@ -33,13 +32,14 @@ router.post('/login', loginLimiter, async (req, res) => {
       }
 
       const newJti = crypto.randomUUID();
+      const accessExpiresAt = new Date(Date.now() + ACCESS_TTL_SECONDS * 1000).toISOString();
       const accessToken = jwt.sign(
         { user_id: decoded.user_id, username: decoded.username, iss: 'actual-wrapper', aud: 'n8n' },
         process.env.JWT_SECRET,
         { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: newJti }
       );
 
-      getDb().prepare('INSERT INTO tokens (jti) VALUES (?)').run(newJti);
+      insertToken(newJti, 'access', accessExpiresAt);
 
       return res.json({
         access_token: accessToken,
