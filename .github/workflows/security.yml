@@ -179,8 +179,6 @@ jobs:
           project: 'budget-automation'
           path: '.'
           format: 'JSON'
-          args: >
-            --enable-retired
 
       - name: Upload Dependency-Check results
         uses: github/codeql-action/upload-sarif@v4
