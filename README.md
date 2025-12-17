@@ -2,6 +2,39 @@
 
 A secure Node.js/Express REST API that wraps the Actual Budget SDK (`@actual-app/api`). It provides JWT-based auth, optional OAuth2 for n8n, Swagger documentation, and a hardened runtime (helmet, CORS, structured logging, rate limits per route).
 
+![Actual REST API Login](images/login.png)
+
+![Actual REST API Swagger UI](images/swaggerui.png)
+
+```
+# Create an Account
+
+## Get Token
+TOKEN=$(
+    curl http://localhost:3000/auth/login \
+    -H "Content-Type: application/json" \
+    -X POST \
+    -d '{"username":"admin","password":"admin"}' \
+    -s | jq -r '.access_token' \
+)
+
+## Get Accounts
+curl http://localhost:3000/accounts \
+-H "Authorization: Bearer $TOKEN"
+
+## Create 'test' Account
+curl http://localhost:3000/accounts \
+-H "Authorization: Bearer $TOKEN" \
+-H "Content-Type: application/json" \
+-d '{"account":{"name":"test","offbudget":true,"closed":true},"initialBalance":500}'
+
+## Get Accounts, showing 'test'
+curl http://localhost:3000/accounts \
+-H "Authorization: Bearer $TOKEN"
+```
+
+![Test Account Creation](images/test_account.png)
+
 ## Features
 - Authentication: JWT access/refresh tokens, session login for docs
 - Optional OAuth2: first-party flow for n8n (`/oauth/authorize`, `/oauth/token`)
