@@ -159,7 +159,7 @@ npm run validate:openapi
 
 ## Auth Flows
 - Local login (session for docs):
-	- GET `/login` → render form
+	- GET `/docs` → redirect to `/login`
 	- POST `/login` → create session, then access `/docs`
 - JWT login:
 	- POST `/auth/login` with `{ "username": "admin", "password": "..." }`
@@ -171,7 +171,7 @@ npm run validate:openapi
   - See [Connecting n8n](#connecting-n8n) for setup details.
 
 ## Connecting n8n
-n8n can integrate with the API via OAuth2 for secure token-based workflows. Use either built-in session/JWT auth or the OAuth2 flow.
+n8n can integrate with the API via OAuth2 for secure token-based workflows. Use either built-in session/JWT auth or the OAuth2 flow. If using in production behind a reverse-proxy like traefik, ensure to replace the `localhost` and other docker hostnames with the correct domains.
 
 ### Option 1: Basic Auth or Bearer Token (Quick Start)
 For development, you can use manual session login or JWT bearer tokens:
