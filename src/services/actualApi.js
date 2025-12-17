@@ -3,6 +3,7 @@
  */
 
 import { DATA_DIR } from '../config/index.js';
+import logger from '../logging/logger.js';
 
 let api = null;
 
@@ -15,7 +16,7 @@ export const initActualApi = async () => {
   const { default: actualApi } = await import('@actual-app/api');
   api = actualApi;
 
-  console.log('Initializing Actual Budget API client...');
+  logger.info('Initializing Actual Budget API client...');
   await api.init({
     dataDir: DATA_DIR,
     serverURL: process.env.ACTUAL_SERVER_URL,
@@ -23,7 +24,7 @@ export const initActualApi = async () => {
   });
 
   await api.downloadBudget(process.env.ACTUAL_SYNC_ID);
-  console.log('Actual API initialized and budget synced.');
+  logger.info('Actual API initialized and budget synced.');
 
   return api;
 };
@@ -42,7 +43,7 @@ export const getActualApi = async () => {
 export const shutdownActualApi = async () => {
   if (api) {
     await api.shutdown();
-    console.log('Actual API shutdown complete.');
+    logger.info('Actual API shutdown complete.');
     api = null;
   }
 };
@@ -58,7 +59,7 @@ const runWithApi = async (label, fn, { syncBefore = true, syncAfter = false } = 
   if (syncAfter) await instance.sync();
 
   const duration = Date.now() - started;
-  console.log(`[Actual] ${label} completed in ${duration}ms`);
+  logger.info('[Actual] operation completed', { label, durationMs: duration });
   return result;
 };
 
