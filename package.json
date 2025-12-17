@@ -8,17 +8,40 @@
     "@actual-app/api": "^25.12.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.5.0",
+    "cors": "^2.8.5",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "passport": "^0.7.0",
     "passport-oauth2": "^1.8.0",
     "swagger-ui-express": "^5.0.1",
     "express-session": "^1.18.2",
-    "yaml": "^2.7.0"
+    "winston": "^3.15.0",
+    "yaml": "^2.7.0",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.16.0",
+    "eslint-plugin-security": "^3.0.1",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2"
   },
   "scripts": {
-    "start": "node server.js",
-    "validate:openapi": "node scripts/validate-openapi.mjs"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "validate:openapi": "node scripts/validate-openapi.mjs",
+    "lint": "eslint src --max-warnings 0",
+    "audit": "npm audit --audit-level=moderate",
+    "prepare": "husky install"
+  },
+  "lint-staged": {
+    "src/**/*.js": [
+      "eslint --fix",
+      "eslint"
+    ],
+    ".env*": [
+      "git rm --cached"
+    ]
   }
 }
