@@ -34,7 +34,8 @@ First-run initialization (Actual Server):
 - Add the following to `.env.local` (mounted as `/app/.env` in the API container):
 
 ```
-ADMIN_PW=ChangeMe_very_strong!
+ADMIN_USER=admin
+ADMIN_PASSWORD=Password123!
 JWT_SECRET=replace-with-64b-random
 JWT_REFRESH_SECRET=replace-with-64b-random
 
@@ -67,7 +68,8 @@ docker compose -f docker-compose.dev.yml up -d actual-server
 2. Set env vars locally and run the API:
 
 ```bash
-export ADMIN_PW=ChangeMe_very_strong!
+export ADMIN_USER=admin
+export ADMIN_PASSWORD=Password123!
 export JWT_SECRET=replace-with-64b-random
 export JWT_REFRESH_SECRET=replace-with-64b-random
 export ACTUAL_SERVER_URL=http://localhost:5006
@@ -93,12 +95,16 @@ This project uses **dotenvx** to manage encrypted environment files. In producti
 
 ```bash
 # Initialize dotenvx (generates .env.keys)
-dotenvx new
+echo "ADMIN_USER=admin" > .env
+dotenvx encrypt
+dotenvx decrypt
 
 # Encrypt your production .env
-dotenvx set ADMIN_PW "your-production-password"
+dotenvx set ADMIN_PASSWORD "your-production-password"
 dotenvx set JWT_SECRET "your-production-jwt-secret"
 # ... repeat for other required vars
+
+dotenvx encrypt
 ```
 
 2. Securely store the private key:
@@ -126,7 +132,7 @@ See the [docker-compose.yml](docker-compose.yml) for how it's wired up in contai
 
 ## Environment Variables
 - `ADMIN_USER`: admin username (default `admin`)
-- `ADMIN_PW`: required; admin password (validated for complexity)
+- `ADMIN_PASSWORD`: required; admin password (validated for complexity)
 - `SESSION_SECRET`: required in production (random in dev if omitted)
 - `JWT_SECRET`: required; HMAC secret for access tokens
 - `JWT_REFRESH_SECRET`: required; HMAC secret for refresh tokens
