@@ -125,22 +125,22 @@ docker compose up -d --force-recreate --build
 See the [docker-compose.yml](docker-compose.yml) for how it's wired up in containers.
 
 ## Environment Variables
-- ADMIN_USER: admin username (default `admin`)
-- ADMIN_PW: required; admin password (validated for complexity)
-- SESSION_SECRET: required in production (random in dev if omitted)
-- JWT_SECRET: required; HMAC secret for access tokens
-- JWT_REFRESH_SECRET: required; HMAC secret for refresh tokens
-- JWT_ACCESS_TTL: optional, default `1h` (supports `30m`, `3600`, etc.)
-- JWT_REFRESH_TTL: optional, default `24h`
-- PORT: server port (default `3000`)
-- ALLOWED_ORIGINS: CSV of allowed origins for CORS
-- TRUST_PROXY: set `true` if running behind a reverse proxy
-- LOG_LEVEL: winston log level (default `info`)
-- DATA_DIR: Actual data directory (default `/app/.actual-cache`); stores `auth.db`
-- ACTUAL_SERVER_URL: Actual server URL (e.g., `http://localhost:5006`)
-- ACTUAL_PASSWORD: Actual server password
-- ACTUAL_SYNC_ID: Budget sync ID
-- N8N_CLIENT_ID / N8N_CLIENT_SECRET / N8N_OAUTH2_CALLBACK_URL: enable OAuth2 endpoints when all are present
+- `ADMIN_USER`: admin username (default `admin`)
+- `ADMIN_PW`: required; admin password (validated for complexity)
+- `SESSION_SECRET`: required in production (random in dev if omitted)
+- `JWT_SECRET`: required; HMAC secret for access tokens
+- `JWT_REFRESH_SECRET`: required; HMAC secret for refresh tokens
+- `JWT_ACCESS_TTL`: optional, default `1h` (supports `30m`, `3600`, etc.)
+- `JWT_REFRESH_TTL`: optional, default `24h`
+- `PORT`: server port (default `3000`)
+- `ALLOWED_ORIGINS`: CSV of allowed origins for CORS
+- `TRUST_PROXY`: set `true` if running behind a reverse proxy
+- `LOG_LEVEL`: winston log level (default `info`)
+- `DATA_DIR`: Actual data directory (default `/app/.actual-cache`); stores `auth.db`
+- `ACTUAL_SERVER_URL`: Actual server URL (e.g., `http://localhost:5006`)
+- `ACTUAL_PASSWORD`: Actual server password
+- `ACTUAL_SYNC_ID`: Budget sync ID
+- `N8N_CLIENT_ID` / `N8N_CLIENT_SECRET` / `N8N_OAUTH2_CALLBACK_URL`: enable OAuth2 endpoints when all are present
 
 ## API Docs & Validation
 - OpenAPI source: [src/docs/openapi.yml](src/docs/openapi.yml)
