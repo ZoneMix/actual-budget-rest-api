@@ -1,2 +1,38 @@
+# Dependencies
+node_modules
 src/node_modules
+
+# Environment and secrets
+.env
+.env.*
 .env.keys
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+SECURITY_*.md
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Build files
+npm-debug.log
+yarn-error.log
+
+# Data directories
+data/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# GitHub
+.github/

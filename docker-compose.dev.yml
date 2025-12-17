@@ -9,6 +9,7 @@ services:
       - "3000:3000"
     volumes:
       - ./data/dev/actual-api-wrapper:/app/.actual-cache
+      - ./.env.local:/app/.env:ro
     working_dir: /app
     command: >
       sh -c "dotenvx run -- npm start"
