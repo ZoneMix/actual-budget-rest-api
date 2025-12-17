@@ -63,10 +63,11 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
           tags: budget-automation:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
       - name: Test Docker image
         run: |
-          docker run --rm budget-automation:test node -c src/server.js
+          docker run --rm budget-automation:test node --check src/server.js
