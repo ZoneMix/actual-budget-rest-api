@@ -1,0 +1,229 @@
+accountTransactions:
+  parameters:
+    - in: path
+      name: accountId
+      required: true
+      schema:
+        type: string
+  get:
+    summary: List account transactions
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: end
+        schema:
+          type: string
+          format: date
+    responses:
+      200:
+        description: Transactions list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accountId:
+                  type: string
+                transactions:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Transaction'
+            examples:
+              sample:
+                value:
+                  success: true
+                  accountId: acct-123
+                  transactions:
+                    - id: tx-1
+                      amount: -4599
+                      payee: Kroger
+                      date: 2025-12-01
+                      category: cat-groceries
+                    - id: tx-2
+                      amount: 250000
+                      payee: Employer
+                      date: 2025-12-15
+                      category: cat-income
+  post:
+    summary: Add transactions
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [transactions]
+            properties:
+              transactions:
+                type: array
+                items:
+                  $ref: '../components/schemas.yml#/NewTransaction'
+              runTransfers:
+                type: boolean
+              learnCategories:
+                type: boolean
+    responses:
+      201:
+        description: Transactions added
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accountId:
+                  type: string
+                addedCount:
+                  type: integer
+                addedIds:
+                  type: array
+                  items:
+                    type: string
+            examples:
+              simple:
+                summary: Create a single transaction
+                value:
+                  success: true
+                  accountId: acct-123
+                  addedCount: 1
+                  addedIds: ["tx-abc"]
+              multiple:
+                summary: Create multiple transactions
+                value:
+                  success: true
+                  accountId: acct-123
+                  addedCount: 2
+                  addedIds: ["tx-abc","tx-def"]
+
+accountTransactionsImport:
+  post:
+    summary: Import transactions with reconciliation
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: accountId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [transactions]
+            properties:
+              transactions:
+                type: array
+                items:
+                  $ref: '../components/schemas.yml#/NewTransaction'
+    responses:
+      201:
+        description: Transactions imported
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accountId:
+                  type: string
+                result:
+                  type: object
+            examples:
+              import:
+                summary: Import with imported_id
+                value:
+                  success: true
+                  accountId: acct-123
+                  result:
+                    added: ["tx-1"]
+                    updated: []
+                    errors: []
+              mixed:
+                summary: Import with updates
+                value:
+                  success: true
+                  accountId: acct-123
+                  result:
+                    added: ["tx-3"]
+                    updated: ["tx-2"]
+                    errors: []
+
+transactionById:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update transaction by ID
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  amount:
+                    type: integer
+                  payee:
+                    type: string
+                  notes:
+                    type: string
+                  date:
+                    type: string
+                    format: date
+                  category:
+                    type: string
+    responses:
+      200:
+        description: Transaction updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true
+  delete:
+    summary: Delete transaction by ID
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Transaction deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true

@@ -1,0 +1,1301 @@
+/health:
+  get:
+    summary: Health check
+    tags: [Health]
+    responses:
+      200:
+        description: API is healthy
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: ok
+
+/auth/login:
+  post:
+    summary: Authenticate user
+    tags: [Authentication]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required: [username, password]
+                properties:
+                  username:
+                    type: string
+                    example: admin
+                  password:
+                    type: string
+                    example: password123
+              - type: object
+                required: [refresh_token]
+                properties:
+                  refresh_token:
+                    type: string
+    responses:
+      200:
+        description: Authentication successful
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/AuthTokens'
+      401:
+        description: Invalid credentials
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+/auth/logout:
+  post:
+    summary: Logout user and revoke tokens
+    tags: [Authentication]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [refresh_token]
+            properties:
+              refresh_token:
+                type: string
+    responses:
+      200:
+        description: Logout successful
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+
+/login:
+  get:
+    summary: Display login form
+    tags: [Authentication]
+    parameters:
+      - in: query
+        name: return_to
+        schema:
+          type: string
+      - in: query
+        name: error
+        schema:
+          type: string
+    responses:
+      200:
+        description: HTML login form
+        content:
+          text/html:
+            schema:
+              type: string
+  post:
+    summary: Process login form
+    tags: [Authentication]
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            required: [username, password]
+            properties:
+              username:
+                type: string
+              password:
+                type: string
+              return_to:
+                type: string
+    responses:
+      302:
+        description: Redirect after login
+
+/oauth/authorize:
+  get:
+    summary: OAuth2 authorization endpoint
+    tags: [OAuth2]
+    parameters:
+      - in: query
+        name: client_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: redirect_uri
+        required: true
+        schema:
+          type: string
+          format: uri
+      - in: query
+        name: scope
+        schema:
+          type: string
+      - in: query
+        name: state
+        schema:
+          type: string
+      - in: query
+        name: response_type
+        required: true
+        schema:
+          type: string
+          enum: [code]
+    responses:
+      302:
+        description: Redirect with authorization code
+      400:
+        description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+/oauth/token:
+  post:
+    summary: OAuth2 token endpoint
+    tags: [OAuth2]
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            required: [grant_type, code, client_id, client_secret, redirect_uri]
+            properties:
+              grant_type:
+                type: string
+                enum: [authorization_code]
+              code:
+                type: string
+              client_id:
+                type: string
+              client_secret:
+                type: string
+              redirect_uri:
+                type: string
+                format: uri
+    responses:
+      200:
+        description: Tokens issued
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/AuthTokens'
+      400:
+        description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+/accounts:
+  get:
+    summary: List accounts
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: List of accounts
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accounts:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Account'
+  post:
+    summary: Create account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas.yml#/CreateAccountRequest'
+    responses:
+      201:
+        description: Account created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+
+/accounts/{id}:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas.yml#/UpdateAccountRequest'
+    responses:
+      200:
+        description: Account updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+  delete:
+    summary: Delete account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Account deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/accounts/{id}/close:
+  post:
+    summary: Close account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas.yml#/CloseAccountRequest'
+    responses:
+      200:
+        description: Account closed
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/accounts/{id}/reopen:
+  post:
+    summary: Reopen account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Account reopened
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/accounts/{id}/balance:
+  get:
+    summary: Get account balance
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: cutoff
+        schema:
+          type: string
+          format: date
+        description: Calculate balance as of this date (YYYY-MM-DD)
+    responses:
+      200:
+        description: Account balance
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Balance'
+
+/accounts/{accountId}/transactions:
+  parameters:
+    - in: path
+      name: accountId
+      required: true
+      schema:
+        type: string
+  get:
+    summary: List account transactions
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: end
+        schema:
+          type: string
+          format: date
+    responses:
+      200:
+        description: Transactions list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accountId:
+                  type: string
+                transactions:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Transaction'
+  post:
+    summary: Add transactions
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [transactions]
+            properties:
+              transactions:
+                type: array
+                items:
+                  type: object
+                  required: [amount, date]
+                  properties:
+                    amount:
+                      type: integer
+                    payee:
+                      type: string
+                    notes:
+                      type: string
+                    date:
+                      type: string
+                      format: date
+                    category:
+                      type: string
+                    cleared:
+                      type: boolean
+              runTransfers:
+                type: boolean
+              learnCategories:
+                type: boolean
+    responses:
+      201:
+        description: Transactions added
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accountId:
+                  type: string
+                addedCount:
+                  type: integer
+                addedIds:
+                  type: array
+                  items:
+                    type: string
+
+/accounts/{accountId}/transactions/import:
+  post:
+    summary: Import transactions with reconciliation
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: accountId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [transactions]
+            properties:
+              transactions:
+                type: array
+                items:
+                  type: object
+                  required: [amount, payee, date, imported_id]
+                  properties:
+                    amount:
+                      type: integer
+                    payee:
+                      type: string
+                    date:
+                      type: string
+                      format: date
+                    imported_id:
+                      type: string
+    responses:
+      201:
+        description: Transactions imported
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accountId:
+                  type: string
+                result:
+                  type: object
+
+/transactions/{id}:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update transaction by ID
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  amount:
+                    type: integer
+                  payee:
+                    type: string
+                  notes:
+                    type: string
+                  date:
+                    type: string
+                    format: date
+                  category:
+                    type: string
+    responses:
+      200:
+        description: Transaction updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+  delete:
+    summary: Delete transaction by ID
+    tags: [Transactions]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Transaction deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/categories:
+  get:
+    summary: List categories
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Categories list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                categories:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Category'
+  post:
+    summary: Create category
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [category]
+            properties:
+              category:
+                type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+                  group_id:
+                    type: string
+    responses:
+      201:
+        description: Category created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+
+/categories/{id}:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update category
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  group_id:
+                    type: string
+    responses:
+      200:
+        description: Category updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+  delete:
+    summary: Delete category
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Category deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/category-groups:
+  get:
+    summary: List category groups
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Category groups list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                categoryGroups:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/CategoryGroup'
+  post:
+    summary: Create category group
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [group]
+            properties:
+              group:
+                type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+                  is_income:
+                    type: boolean
+    responses:
+      201:
+        description: Category group created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+
+/category-groups/{id}:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update category group
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  is_income:
+                    type: boolean
+    responses:
+      200:
+        description: Category group updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+  delete:
+    summary: Delete category group
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Category group deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/payees:
+  get:
+    summary: List payees
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Payees list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                payees:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Payee'
+  post:
+    summary: Create payee
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [payee]
+            properties:
+              payee:
+                type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+                  transfer_acct:
+                    type: string
+    responses:
+      201:
+        description: Payee created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+
+/payees/{id}:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update payee
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  transfer_acct:
+                    type: string
+    responses:
+      200:
+        description: Payee updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+  delete:
+    summary: Delete payee
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Payee deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/payees/merge:
+  post:
+    summary: Merge payees
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [targetId, mergeIds]
+            properties:
+              targetId:
+                type: string
+              mergeIds:
+                type: array
+                items:
+                  type: string
+    responses:
+      200:
+        description: Payees merged
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/budgets/months:
+  get:
+    summary: List budget months
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Budget months
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                months:
+                  type: array
+                  items:
+                    type: string
+
+/budgets/{month}:
+  parameters:
+    - in: path
+      name: month
+      required: true
+      schema:
+        type: string
+        pattern: '^\\d{4}-\\d{2}$'
+  get:
+    summary: Get budget month
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Budget month data
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                budget:
+                  type: object
+
+/budgets/{month}/categories/{categoryId}/budget:
+  post:
+    summary: Set budgeted amount
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: categoryId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount]
+            properties:
+              amount:
+                type: integer
+    responses:
+      200:
+        description: Amount set
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/budgets/{month}/categories/{categoryId}/carryover:
+  post:
+    summary: Set carryover flag
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: categoryId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [flag]
+            properties:
+              flag:
+                type: boolean
+    responses:
+      200:
+        description: Carryover updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/budgets/{month}/hold:
+  post:
+    summary: Hold amount from next month
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount]
+            properties:
+              amount:
+                type: integer
+    responses:
+      200:
+        description: Hold set
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/budgets/{month}/reset-hold:
+  post:
+    summary: Reset held amount
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+    responses:
+      200:
+        description: Hold reset
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/rules:
+  get:
+    summary: List rules
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Rules list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                rules:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Rule'
+  post:
+    summary: Create rule
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [rule]
+            properties:
+              rule:
+                $ref: '../components/schemas.yml#/Rule'
+    responses:
+      201:
+        description: Rule created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                rule:
+                  $ref: '../components/schemas.yml#/Rule'
+
+/rules/payees/{payeeId}:
+  get:
+    summary: List rules for payee
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: payeeId
+        required: true
+        schema:
+          type: string
+    responses:
+      200:
+        description: Payee rules list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                payeeId:
+                  type: string
+                rules:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Rule'
+
+/rules/{id}:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update rule
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                $ref: '../components/schemas.yml#/Rule'
+    responses:
+      200:
+        description: Rule updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+  delete:
+    summary: Delete rule
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Rule deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/schedules:
+  get:
+    summary: List schedules
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Schedules list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                schedules:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Schedule'
+  post:
+    summary: Create schedule
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [schedule]
+            properties:
+              schedule:
+                type: object
+                required: [name, amount, date, frequency]
+                properties:
+                  name:
+                    type: string
+                  amount:
+                    type: integer
+                  date:
+                    type: string
+                    format: date
+                  frequency:
+                    type: string
+                    enum: [daily, weekly, monthly, yearly]
+    responses:
+      201:
+        description: Schedule created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+
+/schedules/{id}:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update schedule
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  amount:
+                    type: integer
+                  date:
+                    type: string
+                    format: date
+                  frequency:
+                    type: string
+                    enum: [daily, weekly, monthly, yearly]
+    responses:
+      200:
+        description: Schedule updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                schedule:
+                  $ref: '../components/schemas.yml#/Schedule'
+  delete:
+    summary: Delete schedule
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Schedule deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+/query:
+  post:
+    summary: Execute ActualQL query
+    tags: [Query]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [query]
+            properties:
+              query:
+                type: string
+    responses:
+      200:
+        description: Query result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                result:
+                  type: array
+                  items:
+                    type: object

@@ -1,0 +1,30 @@
+query:
+  post:
+    summary: Execute ActualQL query
+    tags: [Query]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [query]
+            properties:
+              query:
+                type: string
+    responses:
+      200:
+        description: Query result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                result:
+                  type: array
+                  items:
+                    type: object

@@ -1,0 +1,167 @@
+rules:
+  get:
+    summary: List rules
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Rules list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                rules:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Rule'
+            examples:
+              sample:
+                value:
+                  success: true
+                  rules:
+                    - id: r-1
+                      stage: match
+                      conditions:
+                        - field: payee
+                          op: is
+                          value: Kroger
+                      actions:
+                        - type: set-category
+                          value: cat-1
+                    - id: r-2
+                      stage: default
+  post:
+    summary: Create rule
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [rule]
+            properties:
+              rule:
+                $ref: '../components/schemas.yml#/Rule'
+    responses:
+      201:
+        description: Rule created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                rule:
+                  $ref: '../components/schemas.yml#/Rule'
+            examples:
+              created:
+                value:
+                  success: true
+                  rule:
+                    id: r-abc
+                    stage: match
+                    conditions:
+                      - field: amount
+                        op: greater-than
+                        value: 10000
+                    actions:
+                      - type: set-category
+                        value: cat-groceries
+
+rulesByPayee:
+  get:
+    summary: List rules for payee
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: payeeId
+        required: true
+        schema:
+          type: string
+    responses:
+      200:
+        description: Payee rules list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                payeeId:
+                  type: string
+                rules:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Rule'
+
+ruleById:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update rule
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                $ref: '../components/schemas.yml#/Rule'
+    responses:
+      200:
+        description: Rule updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                rule:
+                  $ref: '../components/schemas.yml#/Rule'
+            examples:
+              updated:
+                value:
+                  success: true
+                  rule:
+                    id: r-abc
+                    stage: match
+                    conditions:
+                      - field: memo
+                        op: contains
+                        value: "Fuel"
+                    actions:
+                      - type: set-category
+                        value: cat-gas
+  delete:
+    summary: Delete rule
+    tags: [Rules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Rule deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'

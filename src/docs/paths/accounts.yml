@@ -1,0 +1,165 @@
+accounts:
+  get:
+    summary: List accounts
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: List of accounts
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accounts:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Account'
+            examples:
+              sample:
+                summary: Two accounts
+                value:
+                  success: true
+                  accounts:
+                    - id: acct-1
+                      name: Checking
+                      type: checking
+                      offbudget: false
+                      closed: false
+                    - id: acct-2
+                      name: Savings
+                      type: savings
+                      offbudget: true
+                      closed: false
+  post:
+    summary: Create account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas.yml#/CreateAccountRequest'
+    responses:
+      201:
+        description: Account created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+            examples:
+              created:
+                value:
+                  success: true
+                  id: acct-123
+
+accountById:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas.yml#/UpdateAccountRequest'
+    responses:
+      200:
+        description: Account updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true
+  delete:
+    summary: Delete account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Account deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+accountClose:
+  post:
+    summary: Close account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas.yml#/CloseAccountRequest'
+    responses:
+      200:
+        description: Account closed
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+accountReopen:
+  post:
+    summary: Reopen account
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Account reopened
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+accountBalance:
+  get:
+    summary: Get account balance
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: cutoff
+        schema:
+          type: string
+          format: date
+        description: Calculate balance as of this date (YYYY-MM-DD)
+    responses:
+      200:
+        description: Account balance
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Balance'
+            examples:
+              balance:
+                value:
+                  success: true
+                  balance: 12030

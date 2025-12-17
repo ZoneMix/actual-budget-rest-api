@@ -1,0 +1,178 @@
+budgetMonths:
+  get:
+    summary: List budget months
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Budget months
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                months:
+                  type: array
+                  items:
+                    type: string
+
+budgetByMonth:
+  parameters:
+    - in: path
+      name: month
+      required: true
+      schema:
+        type: string
+        pattern: '^\\d{4}-\\d{2}$'
+  get:
+    summary: Get budget month
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Budget month data
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                budget:
+                  type: object
+
+budgetCategoryBudget:
+  post:
+    summary: Set budgeted amount
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: categoryId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount]
+            properties:
+              amount:
+                type: integer
+    responses:
+      200:
+        description: Amount set
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true
+
+budgetCategoryCarryover:
+  post:
+    summary: Set carryover flag
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: categoryId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [flag]
+            properties:
+              flag:
+                type: boolean
+    responses:
+      200:
+        description: Carryover updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+budgetHold:
+  post:
+    summary: Hold amount from next month
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount]
+            properties:
+              amount:
+                type: integer
+    responses:
+      200:
+        description: Hold set
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true
+
+budgetResetHold:
+  post:
+    summary: Reset held amount
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: month
+        required: true
+        schema:
+          type: string
+    responses:
+      200:
+        description: Hold reset
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true

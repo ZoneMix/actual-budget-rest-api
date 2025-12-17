@@ -1,0 +1,125 @@
+openapi: 3.0.0
+info:
+  title: Actual Budget REST API
+  version: 1.0.0
+  description: REST API wrapper for Actual Budget with OAuth2 integration for n8n.
+servers:
+  - url: http://localhost:3000
+    description: Development server
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: OAuth2
+  - name: Accounts
+  - name: Transactions
+  - name: Categories
+  - name: Category Groups
+  - name: Payees
+  - name: Budgets
+  - name: Rules
+  - name: Schedules
+  - name: Query
+  - name: Health
+
+paths:
+  /health:
+    $ref: './paths/health.yml#/health'
+  /auth/login:
+    $ref: './paths/authentication.yml#/authLogin'
+  /auth/logout:
+    $ref: './paths/authentication.yml#/authLogout'
+  /login:
+    $ref: './paths/authentication.yml#/loginForm'
+  /oauth/authorize:
+    $ref: './paths/oauth2.yml#/oauthAuthorize'
+  /oauth/token:
+    $ref: './paths/oauth2.yml#/oauthToken'
+  /accounts:
+    $ref: './paths/accounts.yml#/accounts'
+  /accounts/{id}:
+    $ref: './paths/accounts.yml#/accountById'
+  /accounts/{id}/close:
+    $ref: './paths/accounts.yml#/accountClose'
+  /accounts/{id}/reopen:
+    $ref: './paths/accounts.yml#/accountReopen'
+  /accounts/{id}/balance:
+    $ref: './paths/accounts.yml#/accountBalance'
+  /accounts/{accountId}/transactions:
+    $ref: './paths/transactions.yml#/accountTransactions'
+  /accounts/{accountId}/transactions/import:
+    $ref: './paths/transactions.yml#/accountTransactionsImport'
+  /transactions/{id}:
+    $ref: './paths/transactions.yml#/transactionById'
+  /categories:
+    $ref: './paths/categories.yml#/categories'
+  /categories/{id}:
+    $ref: './paths/categories.yml#/categoryById'
+  /category-groups:
+    $ref: './paths/category-groups.yml#/categoryGroups'
+  /category-groups/{id}:
+    $ref: './paths/category-groups.yml#/categoryGroupById'
+  /payees:
+    $ref: './paths/payees.yml#/payees'
+  /payees/{id}:
+    $ref: './paths/payees.yml#/payeeById'
+  /payees/merge:
+    $ref: './paths/payees.yml#/payeesMerge'
+  /budgets/months:
+    $ref: './paths/budgets.yml#/budgetMonths'
+  /budgets/{month}:
+    $ref: './paths/budgets.yml#/budgetByMonth'
+  /budgets/{month}/categories/{categoryId}/budget:
+    $ref: './paths/budgets.yml#/budgetCategoryBudget'
+  /budgets/{month}/categories/{categoryId}/carryover:
+    $ref: './paths/budgets.yml#/budgetCategoryCarryover'
+  /budgets/{month}/hold:
+    $ref: './paths/budgets.yml#/budgetHold'
+  /budgets/{month}/reset-hold:
+    $ref: './paths/budgets.yml#/budgetResetHold'
+  /rules:
+    $ref: './paths/rules.yml#/rules'
+  /rules/payees/{payeeId}:
+    $ref: './paths/rules.yml#/rulesByPayee'
+  /rules/{id}:
+    $ref: './paths/rules.yml#/ruleById'
+  /schedules:
+    $ref: './paths/schedules.yml#/schedules'
+  /schedules/{id}:
+    $ref: './paths/schedules.yml#/scheduleById'
+  /query:
+    $ref: './paths/query.yml#/query'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: './components/securitySchemes.yml#/bearerAuth'
+  schemas:
+    Error:
+      $ref: './components/schemas.yml#/Error'
+    Success:
+      $ref: './components/schemas.yml#/Success'
+    Account:
+      $ref: './components/schemas.yml#/Account'
+    Transaction:
+      $ref: './components/schemas.yml#/Transaction'
+    Category:
+      $ref: './components/schemas.yml#/Category'
+    CategoryGroup:
+      $ref: './components/schemas.yml#/CategoryGroup'
+    Payee:
+      $ref: './components/schemas.yml#/Payee'
+    Schedule:
+      $ref: './components/schemas.yml#/Schedule'
+    Rule:
+      $ref: './components/schemas.yml#/Rule'
+    AuthTokens:
+      $ref: './components/schemas.yml#/AuthTokens'
+    Balance:
+      $ref: './components/schemas.yml#/Balance'
+    CreateAccountRequest:
+      $ref: './components/schemas.yml#/CreateAccountRequest'
+    UpdateAccountRequest:
+      $ref: './components/schemas.yml#/UpdateAccountRequest'
+    CloseAccountRequest:
+      $ref: './components/schemas.yml#/CloseAccountRequest'

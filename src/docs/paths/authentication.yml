@@ -1,0 +1,107 @@
+authLogin:
+  post:
+    summary: Authenticate user
+    tags: [Authentication]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required: [username, password]
+                properties:
+                  username:
+                    type: string
+                    example: admin
+                  password:
+                    type: string
+                    example: password123
+              - type: object
+                required: [refresh_token]
+                properties:
+                  refresh_token:
+                    type: string
+    responses:
+      200:
+        description: Authentication successful
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/AuthTokens'
+      401:
+        description: Invalid credentials
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+authLogout:
+  post:
+    summary: Logout user and revoke tokens
+    tags: [Authentication]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [refresh_token]
+            properties:
+              refresh_token:
+                type: string
+    responses:
+      200:
+        description: Logout successful
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+
+loginForm:
+  get:
+    summary: Display login form
+    tags: [Authentication]
+    parameters:
+      - in: query
+        name: return_to
+        schema:
+          type: string
+      - in: query
+        name: error
+        schema:
+          type: string
+    responses:
+      200:
+        description: HTML login form
+        content:
+          text/html:
+            schema:
+              type: string
+  post:
+    summary: Process login form
+    tags: [Authentication]
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            required: [username, password]
+            properties:
+              username:
+                type: string
+              password:
+                type: string
+              return_to:
+                type: string
+    responses:
+      302:
+        description: Redirect after login

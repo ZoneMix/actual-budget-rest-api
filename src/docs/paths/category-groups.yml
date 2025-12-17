@@ -1,0 +1,130 @@
+categoryGroups:
+  get:
+    summary: List category groups
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Category groups list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                categoryGroups:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/CategoryGroup'
+            examples:
+              sample:
+                value:
+                  success: true
+                  categoryGroups:
+                    - id: grp-living
+                      name: Living Expenses
+                      is_income: false
+                    - id: grp-income
+                      name: Income
+                      is_income: true
+  post:
+    summary: Create category group
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [group]
+            properties:
+              group:
+                type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+                  is_income:
+                    type: boolean
+    responses:
+      201:
+        description: Category group created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+            examples:
+              created:
+                value:
+                  success: true
+                  id: grp-new
+
+categoryGroupById:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update category group
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  is_income:
+                    type: boolean
+    responses:
+      200:
+        description: Category group updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+            examples:
+              updated:
+                value:
+                  success: true
+                  id: grp-living
+  delete:
+    summary: Delete category group
+    tags: [Category Groups]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Category group deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true

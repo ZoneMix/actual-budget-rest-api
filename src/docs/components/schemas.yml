@@ -1,0 +1,280 @@
+Error:
+  type: object
+  properties:
+    error:
+      type: string
+      description: Error message
+Success:
+  type: object
+  properties:
+    success:
+      type: boolean
+      example: true
+Account:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    type:
+      type: string
+      enum: [checking, savings, credit, investment, mortgage, debt, other]
+    offbudget:
+      type: boolean
+    closed:
+      type: boolean
+Transaction:
+  type: object
+  properties:
+    id:
+      type: string
+    amount:
+      type: integer
+      description: Amount in cents
+    payee_id:
+      type: string
+    notes:
+      type: string
+    date:
+      type: string
+      format: date
+    category:
+      type: string
+    account:
+      type: string
+    cleared:
+      type: boolean
+    subtransactions:
+      type: array
+      description: Only present in get or create for split transactions
+      items:
+        type: object
+        properties:
+          amount:
+            type: integer
+          category:
+            type: string
+          notes:
+            type: string
+    imported_id:
+      type: string
+      description: Bank-provided unique id used to avoid duplicates
+    imported_payee:
+      type: string
+      description: Raw description from import source
+    transfer_id:
+      type: string
+      description: If a transfer, id of corresponding transaction in other account
+
+NewTransaction:
+  type: object
+  properties:
+    amount:
+      type: integer
+    payee:
+      type: string
+    payee_name:
+      type: string
+      description: Only valid in create/import; creates or matches a payee
+    imported_payee:
+      type: string
+    notes:
+      type: string
+    date:
+      type: string
+      format: date
+    category:
+      type: string
+    imported_id:
+      type: string
+    transfer_id:
+      type: string
+    cleared:
+      type: boolean
+    subtransactions:
+      type: array
+      items:
+        type: object
+        properties:
+          amount:
+            type: integer
+          category:
+            type: string
+          notes:
+            type: string
+Category:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    group_id:
+      type: string
+CategoryGroup:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    is_income:
+      type: boolean
+Payee:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    transfer_acct:
+      type: string
+Schedule:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    rule:
+      type: string
+    next_date:
+      type: string
+    completed:
+      type: boolean
+    posts_transaction:
+      type: boolean
+    payee:
+      type: string
+      nullable: true
+    account:
+      type: string
+      nullable: true
+    amount:
+      type: integer
+      description: Amount in cents; see amountOp for behavior
+    amountOp:
+      type: string
+      enum: [is, isapprox, isbetween]
+    date:
+      type: string
+      format: date
+      description: Either a single date or omitted when using recurrence
+    recur:
+      $ref: '#/RecurConfig'
+Rule:
+  type: object
+  properties:
+    id:
+      type: string
+    conditions:
+      type: array
+      items:
+        type: object
+    actions:
+      type: array
+      items:
+        type: object
+    stage:
+      type: string
+      enum: [pre, default, post]
+AuthTokens:
+  type: object
+  properties:
+    access_token:
+      type: string
+    refresh_token:
+      type: string
+    expires_in:
+      type: integer
+    token_type:
+      type: string
+      example: Bearer
+    scope:
+      type: string
+Balance:
+  type: object
+  properties:
+    success:
+      type: boolean
+      example: true
+    balance:
+      type: integer
+      description: Balance in cents
+      example: 12345
+CreateAccountRequest:
+  type: object
+  required: [account]
+  properties:
+    account:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Checking Account
+        offbudget:
+          type: boolean
+          example: true
+        closed:
+          type: boolean
+          example: false
+    initialBalance:
+      type: integer
+      description: Initial balance in cents (1000 = $10.00)
+      example: 10000
+UpdateAccountRequest:
+  type: object
+  required: [fields]
+  properties:
+    fields:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Updated Account Name
+        offbudget:
+          type: boolean
+          example: false
+        closed:
+          type: boolean
+          example: false
+RecurConfig:
+  type: object
+  properties:
+    frequency:
+      type: string
+      enum: [daily, weekly, monthly, yearly]
+    interval:
+      type: integer
+    patterns:
+      type: array
+      items:
+        type: object
+    skipWeekend:
+      type: boolean
+    start:
+      type: string
+    endMode:
+      type: string
+      enum: [never, after_n_occurrences, on_date]
+    endOccurrences:
+      type: integer
+    endDate:
+      type: string
+    weekendSolveMode:
+      type: string
+      enum: [before, after]
+
+CloseAccountRequest:
+  type: object
+  properties:
+    transferAccountId:
+      type: string
+      description: Account to transfer remaining balance to
+      example: account-uuid
+    transferCategoryId:
+      type: string
+      description: Category for transfer transaction
+      example: category-uuid

@@ -1,0 +1,124 @@
+categories:
+  get:
+    summary: List categories
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Categories list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                categories:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Category'
+            examples:
+              sample:
+                value:
+                  success: true
+                  categories:
+                    - id: cat-1
+                      name: Groceries
+                      group_id: grp-living
+                    - id: cat-2
+                      name: Gas
+                      group_id: grp-transport
+  post:
+    summary: Create category
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [category]
+            properties:
+              category:
+                type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+                  group_id:
+                    type: string
+    responses:
+      201:
+        description: Category created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+            examples:
+              created:
+                value:
+                  success: true
+                  id: cat-xyz
+
+categoryById:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update category
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  group_id:
+                    type: string
+    responses:
+      200:
+        description: Category updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true
+  delete:
+    summary: Delete category
+    tags: [Categories]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Category deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true

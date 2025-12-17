@@ -1,0 +1,147 @@
+payees:
+  get:
+    summary: List payees
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Payees list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                payees:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Payee'
+            examples:
+              sample:
+                value:
+                  success: true
+                  payees:
+                    - id: p-1
+                      name: Kroger
+                    - id: p-2
+                      name: "Transfer: Checking"
+                      transfer_acct: acct-1
+  post:
+    summary: Create payee
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [payee]
+            properties:
+              payee:
+                type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+                  transfer_acct:
+                    type: string
+    responses:
+      201:
+        description: Payee created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+            examples:
+              created:
+                value:
+                  success: true
+                  id: p-abc
+
+payeeById:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update payee
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  transfer_acct:
+                    type: string
+    responses:
+      200:
+        description: Payee updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+  delete:
+    summary: Delete payee
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Payee deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+
+payeesMerge:
+  post:
+    summary: Merge payees
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [targetId, mergeIds]
+            properties:
+              targetId:
+                type: string
+              mergeIds:
+                type: array
+                items:
+                  type: string
+    responses:
+      200:
+        description: Payees merged
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true

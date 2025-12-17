@@ -1,0 +1,4 @@
+securitySchemes:
+  $ref: './securitySchemes.yml'
+schemas:
+  $ref: './schemas.yml'

@@ -1,0 +1,153 @@
+schedules:
+  get:
+    summary: List schedules
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Schedules list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                schedules:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Schedule'
+            examples:
+              sample:
+                value:
+                  success: true
+                  schedules:
+                    - id: sch-1
+                      name: Rent
+                      amount: 120000
+                      date: 2025-01-01
+                      frequency: monthly
+                    - id: sch-2
+                      name: Payday
+                      amount: 300000
+                      date: 2025-01-15
+                      frequency: monthly
+  post:
+    summary: Create schedule
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [schedule]
+            properties:
+              schedule:
+                type: object
+                required: [date]
+                properties:
+                  name:
+                    type: string
+                  amount:
+                    type: integer
+                  date:
+                    type: string
+                    format: date
+                  recur:
+                    $ref: '../components/schemas.yml#/RecurConfig'
+                  frequency:
+                    type: string
+                    enum: [daily, weekly, monthly, yearly]
+    responses:
+      201:
+        description: Schedule created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                id:
+                  type: string
+            examples:
+              created:
+                value:
+                  success: true
+                  id: sch-xyz
+
+scheduleById:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  put:
+    summary: Update schedule
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [fields]
+            properties:
+              fields:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  amount:
+                    type: integer
+                  date:
+                    type: string
+                    format: date
+                  frequency:
+                    type: string
+                    enum: [daily, weekly, monthly, yearly]
+    responses:
+      200:
+        description: Schedule updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                schedule:
+                  $ref: '../components/schemas.yml#/Schedule'
+            examples:
+              updated:
+                value:
+                  success: true
+                  schedule:
+                    id: sch-xyz
+                    name: Rent (updated)
+                    amount: 125000
+                    date: 2025-02-01
+                    frequency: monthly
+  delete:
+    summary: Delete schedule
+    tags: [Schedules]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Schedule deleted
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true

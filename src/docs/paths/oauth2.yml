@@ -1,0 +1,77 @@
+oauthAuthorize:
+  get:
+    summary: OAuth2 authorization endpoint
+    tags: [OAuth2]
+    parameters:
+      - in: query
+        name: client_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: redirect_uri
+        required: true
+        schema:
+          type: string
+          format: uri
+      - in: query
+        name: scope
+        schema:
+          type: string
+      - in: query
+        name: state
+        schema:
+          type: string
+      - in: query
+        name: response_type
+        required: true
+        schema:
+          type: string
+          enum: [code]
+    responses:
+      302:
+        description: Redirect with authorization code
+      400:
+        description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+oauthToken:
+  post:
+    summary: OAuth2 token endpoint
+    tags: [OAuth2]
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            required: [grant_type, code, client_id, client_secret, redirect_uri]
+            properties:
+              grant_type:
+                type: string
+                enum: [authorization_code]
+              code:
+                type: string
+              client_id:
+                type: string
+              client_secret:
+                type: string
+              redirect_uri:
+                type: string
+                format: uri
+    responses:
+      200:
+        description: Tokens issued
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/AuthTokens'
+      400:
+        description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
