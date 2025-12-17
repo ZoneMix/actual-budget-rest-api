@@ -47,21 +47,21 @@ export const validatePasswordComplexity = (password) => {
 export const ensureAdminUserHash = async () => {
   const db = getDb();
   const adminUsername = process.env.ADMIN_USER || 'admin';
-  const adminPW = process.env.ADMIN_PW;
+  const adminPassword = process.env.ADMIN_PASSWORD;
 
-  if (!adminPW) {
-    logger.error('ADMIN_PW missing – cannot create admin user. Exiting.');
+  if (!adminPassword) {
+    logger.error('ADMIN_PASSWORD missing – cannot create admin user. Exiting.');
     process.exit(1);
   }
 
   // Validate password complexity for new passwords
-  const passwordValidation = validatePasswordComplexity(adminPW);
+  const passwordValidation = validatePasswordComplexity(adminPassword);
   if (!passwordValidation.valid) {
     logger.warn(`Admin password does not meet complexity requirements: ${passwordValidation.message}`);
-    logger.warn('Consider updating ADMIN_PW to meet security standards');
+    logger.warn('Consider updating ADMIN_PASSWORD to meet security standards');
   }
 
-  const hash = await bcrypt.hash(adminPW, 12);
+  const hash = await bcrypt.hash(adminPassword, 12);
 
   const upsert = db.prepare(`
     INSERT INTO users (username, password_hash, is_active)
