@@ -11,6 +11,7 @@ import helmet from 'helmet';
 import crypto from 'crypto';
 import authRoutes from './routes/auth.js';
 import oauthRoutes from './routes/oauth2.js';
+import adminRoutes from './routes/admin.js';
 import accountsRoutes from './routes/accounts.js';
 import transactionsGlobalRoutes from './routes/transactions-global.js';
 import transactionsNestedRoutes from './routes/transactions-nested.js';
@@ -25,7 +26,6 @@ import healthRoutes from './routes/health.js';
 import loginRoutes from './routes/login.js';
 import { initActualApi, shutdownActualApi } from './services/actualApi.js';
 import { ensureAdminUserHash } from './auth/user.js';
-import { ensureN8NClient } from './auth/oauth2/client.js';
 import { closeDb } from './db/authDb.js';
 import { closeRedis } from './config/redis.js';
 import { PORT, NODE_ENV, TRUST_PROXY, ALLOWED_ORIGINS } from './config/index.js';
@@ -141,9 +141,10 @@ app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
 app.use('/metrics', metricsRoutes); // Metrics endpoints (protected in production)
 app.use(loginRoutes); // Root /login GET/POST
+app.use('/admin', adminRoutes); // Admin endpoints (require admin JWT)
 
-// Only mount OAuth routes if n8n is configured
-let n8nEnabled = false;
+// Mount OAuth routes (clients can be created via admin API)
+app.use('/oauth', oauthRoutes);
 
 app.use('/accounts', accountsRoutes);
 app.use('/transactions', transactionsGlobalRoutes); // Global update/delete by ID
@@ -172,21 +173,15 @@ app.use(errorHandler);
     
     await ensureAdminUserHash();
     
-    // Try to set up n8n OAuth2 if configured
-    n8nEnabled = await ensureN8NClient();
-    if (n8nEnabled) {
-      app.use('/oauth', oauthRoutes);
-      logger.info('n8n OAuth2 integration enabled');
-    } else {
-      logger.info('n8n OAuth2 integration disabled (not configured)');
-    }
+    // OAuth clients are now managed via admin API
+    // No automatic registration on startup
+    logger.info('OAuth2 clients can be managed via /admin/oauth-clients endpoints');
     
     await initActualApi();
     
     logger.info('Startup complete', {
       port: PORT,
       env: NODE_ENV,
-      n8nOAuth: n8nEnabled,
     });
   } catch (err) {
     logger.error('Critical startup failure', { error: err.message, stack: err.stack });
@@ -229,7 +224,8 @@ app.listen(PORT, () => {
     health: 'GET /health',
     login: 'GET/POST /login',
     auth: 'POST /auth/login, POST /auth/logout',
-    oauth2: n8nEnabled ? 'GET /oauth/authorize, POST /oauth/token' : 'disabled',
+    oauth2: 'GET /oauth/authorize, POST /oauth/token',
+    admin: 'GET /admin/oauth-clients (requires admin JWT)',
     docs: 'GET /docs',
     accounts: '/accounts/*',
     transactions: '/transactions/* and /accounts/:accountId/transactions/*',

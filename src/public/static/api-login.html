@@ -29,7 +29,13 @@
 
         if (error) {
             const errorDiv = document.getElementById('error');
-            errorDiv.textContent = error === 'invalid_creds' ? 'Invalid credentials' : `Error: ${error}`;
+            let errorMessage = `Error: ${error}`;
+            if (error === 'invalid_creds') {
+                errorMessage = 'Invalid credentials';
+            } else if (error === 'admin_required') {
+                errorMessage = 'Admin access required. Please log in with an admin account.';
+            }
+            errorDiv.textContent = errorMessage;
             errorDiv.classList.add('show');
         }
 

@@ -17,6 +17,8 @@
 import {
   ValidationError,
   AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
   InternalServerError,
 } from '../errors/index.js';
 
@@ -69,6 +71,12 @@ export const throwBadRequest = (message = 'Bad request', field = null, details =
 };
 export const throwUnauthorized = (message = 'Unauthorized', details = null) => {
   throw new AuthenticationError(message, details);
+};
+export const throwForbidden = (message = 'Forbidden', details = null) => {
+  throw new AuthorizationError(message, details);
+};
+export const throwNotFound = (message = 'Resource not found', details = null) => {
+  throw new NotFoundError(message, details);
 };
 export const throwInternalError = (message = 'Internal server error', details = null) => {
   throw new InternalServerError(message, details);

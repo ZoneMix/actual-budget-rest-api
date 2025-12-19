@@ -159,6 +159,19 @@ export const queryLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * Admin operation limiter (very strict for security).
+ * Used for admin endpoints: 20 requests per minute
+ */
+export const adminLimiter = rateLimit({
+  store: getStore(),
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: 'Too many admin requests. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ============================================================================
 // Authentication Limiters
 // ============================================================================

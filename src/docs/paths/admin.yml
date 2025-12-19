@@ -1,0 +1,320 @@
+adminOAuthClients:
+  get:
+    summary: List all OAuth clients
+    description: |
+      Returns a list of all OAuth clients (without secrets).
+      Requires admin authentication via JWT.
+    tags: [Admin]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: List of OAuth clients
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clients:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      client_id:
+                        type: string
+                      allowed_scopes:
+                        type: string
+                      redirect_uris:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date-time
+      401:
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      403:
+        description: Forbidden (not admin)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+  post:
+    summary: Create a new OAuth client
+    description: |
+      Creates a new OAuth client. If client_secret is not provided, a secure secret will be auto-generated.
+      The plain secret is only returned once on creation - save it immediately.
+      Requires admin authentication via JWT.
+    tags: [Admin]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [client_id]
+            properties:
+              client_id:
+                type: string
+                minLength: 1
+                maxLength: 255
+              client_secret:
+                type: string
+                minLength: 32
+                description: Optional. If not provided, a secure secret will be auto-generated.
+              allowed_scopes:
+                type: string
+                default: api
+              redirect_uris:
+                oneOf:
+                  - type: string
+                  - type: array
+                    items:
+                      type: string
+                      format: uri
+                description: Comma-separated string or array of redirect URIs
+    responses:
+      201:
+        description: OAuth client created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client:
+                  type: object
+                  properties:
+                    client_id:
+                      type: string
+                    client_secret:
+                      type: string
+                      description: Only returned on creation - save this immediately!
+                    allowed_scopes:
+                      type: string
+                    redirect_uris:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                message:
+                  type: string
+      400:
+        description: Bad request (e.g., client already exists)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      401:
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      403:
+        description: Forbidden (not admin)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+adminOAuthClientById:
+  get:
+    summary: Get a specific OAuth client
+    description: |
+      Returns information about a specific OAuth client (without secret).
+      Requires admin authentication via JWT.
+    tags: [Admin]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+    responses:
+      200:
+        description: OAuth client information
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client:
+                  type: object
+                  properties:
+                    client_id:
+                      type: string
+                    allowed_scopes:
+                      type: string
+                    redirect_uris:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+      404:
+        description: Client not found
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      401:
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      403:
+        description: Forbidden (not admin)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+  put:
+    summary: Update an OAuth client
+    description: |
+      Updates an existing OAuth client. If client_secret is provided, it will be hashed and stored.
+      Requires admin authentication via JWT.
+    tags: [Admin]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              client_secret:
+                type: string
+                minLength: 32
+                description: New client secret (will be hashed)
+              allowed_scopes:
+                type: string
+              redirect_uris:
+                oneOf:
+                  - type: string
+                  - type: array
+                    items:
+                      type: string
+                      format: uri
+            description: At least one field must be provided
+    responses:
+      200:
+        description: OAuth client updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client:
+                  type: object
+                  properties:
+                    client_id:
+                      type: string
+                    allowed_scopes:
+                      type: string
+                    redirect_uris:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                message:
+                  type: string
+      400:
+        description: Bad request
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      404:
+        description: Client not found
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      401:
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      403:
+        description: Forbidden (not admin)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+  delete:
+    summary: Delete an OAuth client
+    description: |
+      Deletes an OAuth client. This action cannot be undone.
+      Requires admin authentication via JWT.
+    tags: [Admin]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: clientId
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+    responses:
+      200:
+        description: OAuth client deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      404:
+        description: Client not found
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      401:
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      403:
+        description: Forbidden (not admin)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+adminDashboard:
+  get:
+    summary: Display admin dashboard
+    description: |
+      Returns the admin dashboard HTML page for managing OAuth clients.
+    tags: [Admin]
+    responses:
+      200:
+        description: Admin dashboard HTML page
+        content:
+          text/html:
+            schema:
+              type: string
+

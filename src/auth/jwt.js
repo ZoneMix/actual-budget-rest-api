@@ -21,9 +21,18 @@ if (!process.env.JWT_REFRESH_SECRET) {
 
 /**
  * Issue access and refresh tokens for a user.
+ * 
+ * @param {number} userId - User ID
+ * @param {string} username - Username
+ * @param {string|string[]} scopes - User scopes (comma-separated string or array)
+ * @param {string} role - User role (optional, defaults to 'user')
  */
-export const issueTokens = (userId, username, scope = 'api') => {
+export const issueTokens = (userId, username, scopes = 'api', role = 'user') => {
   pruneExpiredTokens();
+
+  // Normalize scopes to comma-separated string
+  const scopeString = Array.isArray(scopes) ? scopes.join(',') : scopes;
+  const scopeArray = Array.isArray(scopes) ? scopes : scopes.split(',').map(s => s.trim()).filter(Boolean);
 
   const jti = crypto.randomUUID();
   const now = Date.now();
@@ -31,13 +40,13 @@ export const issueTokens = (userId, username, scope = 'api') => {
   const refreshExpiresAt = new Date(now + REFRESH_TTL_SECONDS * 1000).toISOString();
 
   const accessToken = jwt.sign(
-    { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n', scope },
+    { user_id: userId, username, role, scope: scopeString, scopes: scopeArray, iss: 'actual-wrapper', aud: 'n8n' },
     process.env.JWT_SECRET,
     { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: jti }
   );
 
   const refreshToken = jwt.sign(
-    { user_id: userId, username, iss: 'actual-wrapper', aud: 'n8n' },
+    { user_id: userId, username, role, iss: 'actual-wrapper', aud: 'n8n' },
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: `${REFRESH_TTL_SECONDS}s`, jwtid: `${jti}-refresh` }
   );
@@ -45,14 +54,14 @@ export const issueTokens = (userId, username, scope = 'api') => {
   insertToken(jti, 'access', accessExpiresAt);
   insertToken(`${jti}-refresh`, 'refresh', refreshExpiresAt);
 
-  logAuthEvent('TOKEN_ISSUED', userId, { scope }, true);
+  logAuthEvent('TOKEN_ISSUED', userId, { scope: scopeString, role }, true);
 
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
     expires_in: ACCESS_TTL_SECONDS,
     token_type: 'Bearer',
-    scope,
+    scope: scopeString,
   };
 };
 

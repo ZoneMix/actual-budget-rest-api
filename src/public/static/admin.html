@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - OAuth Client Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .admin-container {
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .header {
+            background: white;
+            padding: 24px 32px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #1a202c;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .auth-section {
+            background: white;
+            padding: 20px 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .auth-section h3 {
+            margin: 0 0 8px 0;
+            color: #667eea;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .auth-section p {
+            margin: 0 0 12px 0;
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+            box-shadow: 0 2px 4px rgba(229, 62, 62, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: #c53030;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+        }
+
+        .btn-secondary {
+            background: #718096;
+            color: white;
+            box-shadow: 0 2px 4px rgba(113, 128, 150, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(113, 128, 150, 0.4);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .clients-section {
+            background: white;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .clients-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .clients-header h2 {
+            margin: 0;
+            color: #1a202c;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .clients-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 20px;
+        }
+
+        .clients-table th,
+        .clients-table td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .clients-table th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .clients-table tbody tr {
+            transition: background-color 0.15s ease;
+        }
+
+        .clients-table tbody tr:hover {
+            background: #f7fafc;
+        }
+
+        .clients-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .clients-table code {
+            background: #edf2f7;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .clients-table small {
+            color: #718096;
+            font-size: 13px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            overflow: auto;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-content {
+            background: white;
+            margin: 40px auto;
+            padding: 0;
+            border-radius: 16px;
+            max-width: 640px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease;
+            overflow: hidden;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 24px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .close {
+            color: white;
+            font-size: 32px;
+            font-weight: 300;
+            cursor: pointer;
+            line-height: 1;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+        }
+
+        .close:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-body {
+            padding: 32px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 6px;
+            color: #718096;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .alert {
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-10px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .alert-success {
+            background: #c6f6d5;
+            border: 1px solid #9ae6b4;
+            color: #22543d;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            border: 1px solid #fc8181;
+            color: #742a2a;
+        }
+
+        .alert-info {
+            background: #bee3f8;
+            border: 1px solid #90cdf4;
+            color: #2c5282;
+        }
+
+        .secret-display {
+            background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 2px solid #48bb78;
+        }
+
+        .secret-display strong {
+            display: block;
+            margin-bottom: 12px;
+            color: #22543d;
+            font-size: 14px;
+        }
+
+        .secret-display code {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            word-break: break-all;
+            color: #1a202c;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 12px;
+            border-radius: 6px;
+            display: block;
+            font-weight: 600;
+        }
+
+        .secret-warning {
+            color: #c53030;
+            font-weight: 600;
+            margin-top: 12px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .empty-state p {
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .admin-container {
+                padding: 16px;
+            }
+
+            .header {
+                padding: 20px;
+                flex-direction: column;
+                gap: 16px;
+                align-items: flex-start;
+            }
+
+            .clients-section {
+                padding: 20px;
+            }
+
+            .clients-header {
+                flex-direction: column;
+                gap: 16px;
+                align-items: flex-start;
+            }
+
+            .clients-table {
+                font-size: 14px;
+            }
+
+            .clients-table th,
+            .clients-table td {
+                padding: 12px 8px;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 20px auto;
+            }
+
+            .modal-body {
+                padding: 24px;
+            }
+
+            .form-actions {
+                flex-direction: column-reverse;
+            }
+
+            .form-actions .btn {
+                width: 100%;
+            }
+        }
+
+        /* Loading state */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        /* Badge styles for scopes */
+        .scope-badge {
+            display: inline-block;
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-container">
+        <div class="header">
+            <h1>OAuth Client Management</h1>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <div class="auth-section" id="auth-section" style="display: none;">
+            <h3>Authentication</h3>
+            <p id="auth-status">Using session-based authentication. You are logged in as an admin.</p>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="clients-section">
+            <div class="clients-header">
+                <h2>OAuth Clients</h2>
+                <button class="btn btn-primary" onclick="openCreateModal()">Create Client</button>
+            </div>
+
+            <div id="clients-container">
+                <div class="empty-state">
+                    <p>Loading clients...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="client-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Create OAuth Client</h3>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="client-form" onsubmit="handleSubmit(event)">
+                    <div class="form-group">
+                        <label for="client-id">Client ID *</label>
+                        <input type="text" id="client-id" required placeholder="my-oauth-client">
+                        <small>Unique identifier for the OAuth client</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-secret">Client Secret</label>
+                        <input type="text" id="client-secret" minlength="32" placeholder="Leave empty to auto-generate">
+                        <small>Leave empty to auto-generate a secure secret (minimum 32 characters if provided)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="allowed-scopes">Allowed Scopes</label>
+                        <input type="text" id="allowed-scopes" value="api" placeholder="api, read, write">
+                        <small>Space or comma-separated list of allowed scopes</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="redirect-uris">Redirect URIs</label>
+                        <textarea id="redirect-uris"
+                            placeholder="https://example.com/callback&#10;https://app.example.com/oauth/callback"></textarea>
+                        <small>One URI per line, or comma-separated</small>
+                    </div>
+                    <div id="created-secret-display"></div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submit-btn">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let editingClientId = null;
+
+        // Initialize - load clients on page load
+        loadClients();
+
+        async function logout() {
+            try {
+                // Call logout endpoint to destroy session
+                const response = await fetch('/logout', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    // Session destroyed, redirect to login
+                    window.location.href = '/login';
+                } else {
+                    // Even if logout fails, redirect to login
+                    // The session will expire or be invalidated on next request
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                // On error, still redirect to login
+                console.error('Logout error:', error);
+                window.location.href = '/login';
+            }
+        }
+
+        function getAuthHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+        }
+
+        async function loadClients() {
+            try {
+                const response = await fetch('/admin/oauth-clients', {
+                    method: 'GET',
+                    headers: getAuthHeaders(),
+                    credentials: 'include' // Include session cookies
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    showAlert('Authentication failed. Please log in again.', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/login?return_to=' + encodeURIComponent(window.location.pathname);
+                    }, 2000);
+                    return;
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to load clients');
+                }
+
+                const data = await response.json();
+                displayClients(data.clients);
+            } catch (error) {
+                showAlert(`Error loading clients: ${error.message}`, 'error');
+            }
+        }
+
+        function displayClients(clients) {
+            const container = document.getElementById('clients-container');
+
+            if (clients.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No OAuth clients found. Create one to get started.</p></div>';
+                return;
+            }
+
+            let html = '<table class="clients-table"><thead><tr><th>Client ID</th><th>Scopes</th><th>Redirect URIs</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
+
+            clients.forEach(client => {
+                const redirectUris = client.redirect_uris || 'None';
+                const created = new Date(client.created_at).toLocaleString();
+                const scopes = (client.allowed_scopes || 'api').split(',').map(s => s.trim());
+                const scopesHtml = scopes.map(scope => `<span class="scope-badge">${scope}</span>`).join('');
+
+                html += `
+                    <tr>
+                        <td><code>${escapeHtml(client.client_id)}</code></td>
+                        <td>${scopesHtml}</td>
+                        <td><small>${escapeHtml(redirectUris.length > 50 ? redirectUris.substring(0, 50) + '...' : redirectUris)}</small></td>
+                        <td><small>${created}</small></td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn btn-secondary btn-sm" onclick="openEditModal('${escapeHtml(client.client_id)}')">Edit</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteClient('${escapeHtml(client.client_id)}')">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function openCreateModal() {
+            editingClientId = null;
+            document.getElementById('modal-title').textContent = 'Create OAuth Client';
+            document.getElementById('submit-btn').textContent = 'Create';
+            document.getElementById('client-form').reset();
+            document.getElementById('client-id').disabled = false;
+            document.getElementById('allowed-scopes').value = 'api';
+            document.getElementById('created-secret-display').innerHTML = '';
+            document.getElementById('client-modal').style.display = 'block';
+        }
+
+        async function openEditModal(clientId) {
+            try {
+                const response = await fetch(`/admin/oauth-clients/${encodeURIComponent(clientId)}`, {
+                    method: 'GET',
+                    headers: getAuthHeaders(),
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load client');
+                }
+
+                const data = await response.json();
+                const client = data.client;
+
+                editingClientId = clientId;
+                document.getElementById('modal-title').textContent = 'Edit OAuth Client';
+                document.getElementById('submit-btn').textContent = 'Update';
+                document.getElementById('client-id').value = client.client_id;
+                document.getElementById('client-id').disabled = true;
+                document.getElementById('client-secret').value = '';
+                document.getElementById('allowed-scopes').value = client.allowed_scopes || 'api';
+                document.getElementById('redirect-uris').value = client.redirect_uris || '';
+                document.getElementById('created-secret-display').innerHTML = '';
+                document.getElementById('client-modal').style.display = 'block';
+            } catch (error) {
+                showAlert(`Error loading client: ${error.message}`, 'error');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('client-modal').style.display = 'none';
+            editingClientId = null;
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+
+            const clientId = document.getElementById('client-id').value.trim();
+            const clientSecret = document.getElementById('client-secret').value.trim();
+            const allowedScopes = document.getElementById('allowed-scopes').value.trim();
+            const redirectUris = document.getElementById('redirect-uris').value.trim();
+
+            // Parse redirect URIs (support both newline and comma separated)
+            const redirectUrisArray = redirectUris
+                .split(/[\n,]/)
+                .map(uri => uri.trim())
+                .filter(uri => uri.length > 0);
+
+            try {
+                let response;
+                if (editingClientId) {
+                    // Update
+                    const body = {};
+                    if (clientSecret) body.client_secret = clientSecret;
+                    if (allowedScopes) body.allowed_scopes = allowedScopes;
+                    if (redirectUrisArray.length > 0) body.redirect_uris = redirectUrisArray;
+
+                    response = await fetch(`/admin/oauth-clients/${encodeURIComponent(editingClientId)}`, {
+                        method: 'PUT',
+                        headers: getAuthHeaders(),
+                        credentials: 'include',
+                        body: JSON.stringify(body)
+                    });
+                } else {
+                    // Create
+                    const body = {
+                        client_id: clientId,
+                        allowed_scopes: allowedScopes || 'api',
+                        redirect_uris: redirectUrisArray
+                    };
+                    if (clientSecret) body.client_secret = clientSecret;
+
+                    response = await fetch('/admin/oauth-clients', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        credentials: 'include',
+                        body: JSON.stringify(body)
+                    });
+                }
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Operation failed');
+                }
+
+                if (editingClientId) {
+                    showAlert('Client updated successfully', 'success');
+                    closeModal();
+                    loadClients();
+                } else {
+                    // Show the secret (only time it's available)
+                    const secretDisplay = document.getElementById('created-secret-display');
+                    secretDisplay.innerHTML = `
+                        <div class="secret-display">
+                            <strong>Client Secret (save this now - it won't be shown again!):</strong>
+                            <code>${data.client.client_secret}</code>
+                            <div class="secret-warning">⚠️ This is the only time you'll see this secret. Make sure to save it securely.</div>
+                        </div>
+                    `;
+                    showAlert('Client created successfully! Save the secret above.', 'success');
+                    loadClients();
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteClient(clientId) {
+            if (!confirm(`Are you sure you want to delete client "${clientId}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/oauth-clients/${encodeURIComponent(clientId)}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders(),
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to delete client');
+                }
+
+                showAlert('Client deleted successfully', 'success');
+                loadClients();
+            } catch (error) {
+                showAlert(`Error deleting client: ${error.message}`, 'error');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            container.innerHTML = '';
+            container.appendChild(alert);
+
+            setTimeout(() => {
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateY(-10px)';
+                setTimeout(() => {
+                    alert.remove();
+                }, 300);
+            }, 5000);
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function (event) {
+            const modal = document.getElementById('client-modal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+
+</html>

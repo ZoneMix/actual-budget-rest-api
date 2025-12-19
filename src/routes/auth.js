@@ -42,22 +42,32 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
         throwUnauthorized('Refresh token revoked');
       }
 
+      // Get user's current role and scopes from database
+      const { getDb } = await import('../db/authDb.js');
+      const db = getDb();
+      const user = db.prepare('SELECT role, scopes FROM users WHERE id = ?').get(decoded.user_id);
+      const role = user?.role || decoded.role || 'user';
+      const scopes = user?.scopes || decoded.scope || 'api';
+      const scopeArray = Array.isArray(scopes) ? scopes : scopes.split(',').map(s => s.trim()).filter(Boolean);
+      const scopeString = Array.isArray(scopes) ? scopes.join(',') : scopes;
+
       // Generate new access token with new JTI
       const newJti = crypto.randomUUID();
       const accessExpiresAt = new Date(Date.now() + ACCESS_TTL_SECONDS * 1000).toISOString();
       const accessToken = jwt.sign(
-        { user_id: decoded.user_id, username: decoded.username, iss: 'actual-wrapper', aud: 'n8n' },
+        { user_id: decoded.user_id, username: decoded.username, role, scope: scopeString, scopes: scopeArray, iss: 'actual-wrapper', aud: 'n8n' },
         process.env.JWT_SECRET,
         { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: newJti }
       );
 
       insertToken(newJti, 'access', accessExpiresAt);
-      logAuthEvent('TOKEN_REFRESHED', decoded.user_id, { username: decoded.username }, true);
+      logAuthEvent('TOKEN_REFRESHED', decoded.user_id, { username: decoded.username, role }, true);
 
       return res.json({
         access_token: accessToken,
         expires_in: ACCESS_TTL_SECONDS,
         token_type: 'Bearer',
+        scope: scopeString,
       });
     } catch (err) {
       // Re-throw HTTP errors (like throwUnauthorized above)
@@ -74,8 +84,8 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
     throwBadRequest('Username and password required');
   }
 
-  const { userId, username: uname } = await authenticateUser(username, password);
-  const tokens = issueTokens(userId, uname);
+  const { userId, username: uname, role, scopes } = await authenticateUser(username, password);
+  const tokens = issueTokens(userId, uname, scopes, role);
   res.json(tokens);
 });
 

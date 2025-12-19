@@ -43,6 +43,7 @@ export const validatePasswordComplexity = (password) => {
 /**
  * Ensures the admin user exists and its password hash is up-to-date.
  * Called on server startup.
+ * Sets role='admin' and scopes='api,admin' for the admin user.
  */
 export const ensureAdminUserHash = async () => {
   const db = getDb();
@@ -63,20 +64,42 @@ export const ensureAdminUserHash = async () => {
 
   const hash = await bcrypt.hash(adminPassword, 12);
 
-  const upsert = db.prepare(`
-    INSERT INTO users (username, password_hash, is_active)
-    VALUES (?, ?, TRUE)
-    ON CONFLICT(username) DO UPDATE SET
-      password_hash = excluded.password_hash
-  `);
+  // Check if updated_at column exists (for backward compatibility)
+  const tableInfo = db.prepare("PRAGMA table_info(users)").all();
+  const hasUpdatedAt = tableInfo.some(col => col.name === 'updated_at');
+  
+  let upsert;
+  if (hasUpdatedAt) {
+    upsert = db.prepare(`
+      INSERT INTO users (username, password_hash, role, scopes, is_active, updated_at)
+      VALUES (?, ?, 'admin', 'api,admin', TRUE, CURRENT_TIMESTAMP)
+      ON CONFLICT(username) DO UPDATE SET
+        password_hash = excluded.password_hash,
+        role = 'admin',
+        scopes = 'api,admin',
+        updated_at = CURRENT_TIMESTAMP
+    `);
+  } else {
+    // Fallback for databases without updated_at column
+    upsert = db.prepare(`
+      INSERT INTO users (username, password_hash, role, scopes, is_active)
+      VALUES (?, ?, 'admin', 'api,admin', TRUE)
+      ON CONFLICT(username) DO UPDATE SET
+        password_hash = excluded.password_hash,
+        role = 'admin',
+        scopes = 'api,admin'
+    `);
+  }
+  
+  upsert.run(adminUsername, hash);
 
   upsert.run(adminUsername, hash);
-  logger.info(`Admin user '${adminUsername}' hash created/updated`);
+  logger.info(`Admin user '${adminUsername}' hash created/updated with admin role and scopes`);
 };
 
 /**
  * Authenticate a local user with username/password.
- * Returns userId and username.
+ * Returns userId, username, role, and scopes.
  */
 export const authenticateUser = async (username, password) => {
   pruneExpiredTokens();
@@ -93,7 +116,16 @@ export const authenticateUser = async (username, password) => {
     throw new Error('Invalid password');
   }
 
-  logAuthEvent('LOGIN_SUCCESS', user.id, { username }, true);
+  logAuthEvent('LOGIN_SUCCESS', user.id, { username, role: user.role }, true);
 
-  return { userId: user.id, username: user.username };
+  // Parse scopes from comma-separated string or default to 'api'
+  const scopes = user.scopes ? user.scopes.split(',').map(s => s.trim()).filter(Boolean) : ['api'];
+  const role = user.role || 'user';
+
+  return { 
+    userId: user.id, 
+    username: user.username,
+    role,
+    scopes,
+  };
 };
