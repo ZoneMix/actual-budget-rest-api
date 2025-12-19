@@ -44,11 +44,17 @@ const migrateClientSecret = async (db, clientId, plainSecret) => {
  * Supports both hashed and plain-text secrets (for migration).
  */
 export const validateClient = async (clientId, clientSecret) => {
+  if (!clientId || !clientSecret) {
+    logger.warn('OAuth2 client validation failed: missing client_id or client_secret');
+    throw new AuthenticationError('Invalid client credentials');
+  }
+
   pruneExpiredCodes();
   const db = getDb();
   const client = db.prepare('SELECT * FROM clients WHERE client_id = ?').get(clientId);
 
   if (!client) {
+    logger.warn(`OAuth2 client validation failed: client_id not found: ${clientId}`);
     throw new AuthenticationError('Invalid client credentials');
   }
 
@@ -57,17 +63,20 @@ export const validateClient = async (clientId, clientSecret) => {
     // Compare with hashed secret
     const isValid = await compareClientSecret(clientSecret, client.client_secret);
     if (!isValid) {
+      logger.warn(`OAuth2 client validation failed: invalid client_secret for client_id: ${clientId}`);
       throw new AuthenticationError('Invalid client credentials');
     }
   } else {
     // Legacy: compare plain text (and migrate to hashed)
     if (client.client_secret !== clientSecret) {
+      logger.warn(`OAuth2 client validation failed: invalid client_secret for client_id: ${clientId}`);
       throw new AuthenticationError('Invalid client credentials');
     }
     // Migrate to hashed format
     await migrateClientSecret(db, clientId, clientSecret);
   }
 
+  logger.debug(`OAuth2 client validation successful: ${clientId}`);
   return client;
 };
 

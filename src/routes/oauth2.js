@@ -82,24 +82,68 @@ router.get('/authorize', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * Extract client credentials from request.
+ * Supports both:
+ * 1. HTTP Basic Authentication (Authorization header) - OAuth2 recommended
+ * 2. Request body parameters (client_id, client_secret)
+ */
+const extractClientCredentials = (req) => {
+  // Method 1: Try Basic Auth header first (OAuth2 recommended)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Basic ')) {
+    try {
+      const base64Credentials = authHeader.slice(6); // Remove 'Basic ' prefix
+      const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+      const [clientId, clientSecret] = credentials.split(':', 2);
+      
+      if (clientId && clientSecret) {
+        return { clientId, clientSecret };
+      }
+    } catch {
+      // Invalid Basic Auth format, fall through to body method
+    }
+  }
+  
+  // Method 2: Fall back to request body
+  const { client_id, client_secret } = req.body;
+  if (client_id && client_secret) {
+    return { clientId: client_id, clientSecret: client_secret };
+  }
+  
+  return null;
+};
+
+/**
  * POST /oauth/token
  *
  * OAuth2 token endpoint. Exchanges authorization code for access token.
  * Validates client credentials and authorization code before issuing tokens.
+ * 
+ * Supports client credentials via:
+ * - HTTP Basic Authentication (Authorization: Basic <base64(client_id:client_secret)>) - Recommended
+ * - Request body (client_id, client_secret) - form-encoded or JSON
  */
-router.post('/token', express.urlencoded({ extended: true }), asyncHandler(async (req, res) => {
-  const { grant_type, code, client_id, client_secret, redirect_uri } = req.body;
+router.post('/token', express.json(), express.urlencoded({ extended: true }), asyncHandler(async (req, res) => {
+  const { grant_type, code, redirect_uri } = req.body;
 
   // Only support authorization code grant
   if (grant_type !== 'authorization_code') {
     throwBadRequest('Unsupported grant_type');
   }
 
+  // Extract client credentials (supports Basic Auth or body)
+  const credentials = extractClientCredentials(req);
+  if (!credentials) {
+    throwBadRequest('Client credentials required. Provide via Basic Auth header or request body (client_id, client_secret)');
+  }
+
+  const { clientId, clientSecret } = credentials;
+
   // Validate client credentials
-  await validateClient(client_id, client_secret);
+  await validateClient(clientId, clientSecret);
   
   // Validate and exchange authorization code
-  const { userId, scope } = validateAuthCode(code, client_id, redirect_uri);
+  const { userId, scope } = validateAuthCode(code, clientId, redirect_uri);
 
   // Get user details for token issuance
   const db = getDb();
