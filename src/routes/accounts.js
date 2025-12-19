@@ -1,6 +1,15 @@
-// src/routes/accounts.js - Full CRUD + extras
+/**
+ * Account management routes.
+ *
+ * Provides full CRUD operations for accounts plus additional actions:
+ * - List all accounts
+ * - Create, update, delete accounts
+ * - Close/reopen accounts (with optional transfer)
+ * - Get account balance (with optional date cutoff)
+ *
+ * All routes require JWT authentication.
+ */
 import express from 'express';
-import rateLimit from 'express-rate-limit';
 import { authenticateJWT } from '../auth/jwt.js';
 import {
   accountsList,
@@ -14,84 +23,69 @@ import {
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
 import { IDSchema, CreateAccountSchema, UpdateAccountSchema, CloseAccountSchema } from '../middleware/validation-schemas.js';
+import { standardWriteLimiter, deleteLimiter } from '../middleware/rateLimiters.js';
+import { sendSuccess, sendCreated } from '../middleware/responseHelpers.js';
 
 const router = express.Router();
 router.use(authenticateJWT);
 
-// Rate limiting for write operations
-const accountWriteLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30,
-  message: { error: 'Too many account operations. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const accountDeleteLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: 'Too many delete operations. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 router.get('/', asyncHandler(async (req, res) => {
   const accounts = await accountsList();
-  res.json({ success: true, accounts });
+  sendSuccess(res, { accounts });
 }));
 
 router.post(
   '/',
-  accountWriteLimiter,
+  standardWriteLimiter,
   validateBody(CreateAccountSchema),
   asyncHandler(async (req, res) => {
     const { account, initialBalance } = req.validatedBody;
     const id = await accountCreate(account, initialBalance);
-    res.status(201).json({ success: true, id });
+    sendCreated(res, { id });
   })
 );
 
 router.put(
   '/:id',
-  accountWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   validateBody(UpdateAccountSchema),
   asyncHandler(async (req, res) => {
     const { fields } = req.validatedBody;
     await accountUpdate(req.validatedParams.id, fields);
-    res.json({ success: true });
+    sendSuccess(res);
   })
 );
 
 router.delete(
   '/:id',
-  accountDeleteLimiter,
+  deleteLimiter,
   validateParams(IDSchema),
   asyncHandler(async (req, res) => {
     await accountDelete(req.validatedParams.id);
-    res.json({ success: true });
+    sendSuccess(res);
   })
 );
 
 router.post(
   '/:id/close',
-  accountWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   validateBody(CloseAccountSchema),
   asyncHandler(async (req, res) => {
     const { transferAccountId, transferCategoryId } = req.validatedBody;
     await accountClose(req.validatedParams.id, transferAccountId || null, transferCategoryId || null);
-    res.json({ success: true });
+    sendSuccess(res);
   })
 );
 
 router.post(
   '/:id/reopen',
-  accountWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   asyncHandler(async (req, res) => {
     await accountReopen(req.validatedParams.id);
-    res.json({ success: true });
+    sendSuccess(res);
   })
 );
 
@@ -101,7 +95,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const cutoff = req.query.cutoff ? new Date(req.query.cutoff) : null;
     const balance = await accountBalance(req.validatedParams.id, cutoff);
-    res.json({ success: true, balance });
+    sendSuccess(res, { balance });
   })
 );
 

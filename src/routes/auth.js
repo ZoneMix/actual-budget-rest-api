@@ -1,10 +1,12 @@
 /**
- * Authentication routes:
- * - POST /auth/login  (password or refresh token)
+ * Authentication routes for JWT-based API access.
+ *
+ * Endpoints:
+ * - POST /auth/login  - Authenticate with username/password or refresh token
+ * - POST /auth/logout - Revoke access and optionally refresh tokens
  */
 
 import express from 'express';
-import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticateUser } from '../auth/user.js';
@@ -14,32 +16,33 @@ import { ACCESS_TTL_SECONDS } from '../config/index.js';
 import { validateBody } from '../middleware/validation-schemas.js';
 import { LoginSchema, LogoutSchema } from '../middleware/validation-schemas.js';
 import logger, { logAuthEvent } from '../logging/logger.js';
+import { loginLimiterWithLogging } from '../middleware/rateLimiters.js';
+import { throwUnauthorized, throwBadRequest } from '../middleware/responseHelpers.js';
 
 const router = express.Router();
 
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    logAuthEvent('RATE_LIMITED', null, { ip: req.ip, endpoint: '/auth/login' }, false);
-    res.status(429).json({ error: 'Too many login attempts. Try again later.' });
-  },
-});
-
-router.post('/login', loginLimiter, validateBody(LoginSchema), async (req, res) => {
+/**
+ * POST /auth/login
+ *
+ * Supports two authentication flows:
+ * 1. Refresh token: Exchange refresh token for new access token
+ * 2. Password: Authenticate with username/password to get access + refresh tokens
+ */
+router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async (req, res) => {
   const { username, password, refresh_token } = req.validatedBody;
 
-  // Refresh token flow
+  // Flow 1: Refresh token exchange
   if (refresh_token && !username && !password) {
     try {
       const decoded = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
+      
+      // Check if token was revoked
       if (isTokenRevoked(decoded.jti)) {
         logAuthEvent('REFRESH_FAILED', decoded.user_id, { reason: 'token_revoked' }, false);
-        return res.status(401).json({ error: 'Refresh token revoked' });
+        throwUnauthorized('Refresh token revoked');
       }
 
+      // Generate new access token with new JTI
       const newJti = crypto.randomUUID();
       const accessExpiresAt = new Date(Date.now() + ACCESS_TTL_SECONDS * 1000).toISOString();
       const accessToken = jwt.sign(
@@ -49,7 +52,6 @@ router.post('/login', loginLimiter, validateBody(LoginSchema), async (req, res) 
       );
 
       insertToken(newJti, 'access', accessExpiresAt);
-
       logAuthEvent('TOKEN_REFRESHED', decoded.user_id, { username: decoded.username }, true);
 
       return res.json({
@@ -58,14 +60,18 @@ router.post('/login', loginLimiter, validateBody(LoginSchema), async (req, res) 
         token_type: 'Bearer',
       });
     } catch (err) {
+      // Re-throw HTTP errors (like throwUnauthorized above)
+      if (err.status) throw err;
+      
+      // Handle JWT verification errors
       logAuthEvent('REFRESH_FAILED', null, { reason: 'invalid_token', error: err.message }, false);
-      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+      throwUnauthorized('Invalid or expired refresh token');
     }
   }
 
-  // Password login flow
+  // Flow 2: Username/password authentication
   if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password required' });
+    throwBadRequest('Username and password required');
   }
 
   const { userId, username: uname } = await authenticateUser(username, password);
@@ -73,10 +79,16 @@ router.post('/login', loginLimiter, validateBody(LoginSchema), async (req, res) 
   res.json(tokens);
 });
 
+/**
+ * POST /auth/logout
+ *
+ * Revokes the current access token (from JWT middleware) and optionally
+ * revokes a refresh token if provided in the request body.
+ */
 router.post('/logout', authenticateJWT, validateBody(LogoutSchema), (req, res) => {
-  const user = req.user;  // From middleware (has user_id, username, jti for access)
+  const user = req.user; // Set by authenticateJWT middleware
 
-  // Always revoke the current access token JTI
+  // Always revoke the current access token
   if (user?.jti) {
     revokeToken(user.jti);
     logAuthEvent('LOGOUT', user.user_id, { username: user.username, jti: user.jti }, true);
@@ -93,8 +105,8 @@ router.post('/logout', authenticateJWT, validateBody(LogoutSchema), (req, res) =
       }
       res.json({ success: true, message: 'Logged out successfully – access and refresh tokens revoked' });
     } catch (err) {
+      // Refresh token invalid/expired, but access token already revoked
       logger.warn('Invalid refresh_token provided on logout', { error: err.message, userId: user.user_id });
-      // Still succeed partially (access revoked)
       res.json({
         success: true,
         message: 'Access token revoked; refresh_token was invalid or already expired'

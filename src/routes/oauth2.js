@@ -1,5 +1,12 @@
 /**
  * OAuth2 Authorization Server endpoints for n8n integration.
+ *
+ * Implements OAuth2 authorization code flow:
+ * 1. GET /oauth/authorize - User authorizes client, receives authorization code
+ * 2. POST /oauth/token - Client exchanges code for access token
+ *
+ * Note: This is simplified for internal n8n use - authorization is auto-approved
+ * if the user is already logged in via session.
  */
 
 import express from 'express';
@@ -9,49 +16,84 @@ import { validateAuthCode } from '../auth/oauth2/code.js';
 import { issueTokens } from '../auth/jwt.js';
 import { getDb } from '../db/authDb.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { throwBadRequest, throwInternalError } from '../middleware/responseHelpers.js';
 
 const router = express.Router();
 
+/**
+ * GET /oauth/authorize
+ *
+ * OAuth2 authorization endpoint. Validates client and redirect URI,
+ * then generates and returns an authorization code.
+ *
+ * If user is not logged in via session, redirects to login page.
+ * Otherwise, auto-approves and redirects back with authorization code.
+ */
 router.get('/authorize', asyncHandler(async (req, res) => {
   const { client_id, redirect_uri, scope = 'api', state, response_type = 'code' } = req.query;
 
-  if (response_type !== 'code') return res.status(400).json({ error: 'Unsupported response_type' });
+  // Validate OAuth2 parameters
+  if (response_type !== 'code') {
+    throwBadRequest('Unsupported response_type');
+  }
 
-  if (!client_id || !redirect_uri) return res.status(400).json({ error: 'Missing parameters' });
+  if (!client_id || !redirect_uri) {
+    throwBadRequest('Missing parameters');
+  }
 
+  // Verify client exists
   const db = getDb();
   const client = db.prepare('SELECT * FROM clients WHERE client_id = ?').get(client_id);
-  if (!client) return res.status(400).json({ error: 'Invalid client_id' });
+  if (!client) {
+    throwBadRequest('Invalid client_id');
+  }
 
+  // Verify redirect URI is allowed for this client
   const allowedUris = client.redirect_uris.split(',');
-  if (!allowedUris.includes(redirect_uri)) return res.status(400).json({ error: 'Invalid redirect_uri' });
+  if (!allowedUris.includes(redirect_uri)) {
+    throwBadRequest('Invalid redirect_uri');
+  }
 
-  // Require session login
+  // Require user to be logged in via session
   if (!req.session.user) {
     const params = new URLSearchParams({ ...req.query, return_to: req.originalUrl });
     return res.redirect(`/login?${params}`);
   }
 
-  // Auto-approve authorization code (simplified for internal n8n integration)
+  // Auto-approve and generate authorization code (simplified for internal use)
   const code = generateAuthCode(client_id, req.session.user.id, redirect_uri, scope);
   const redirect = `${redirect_uri}?code=${code}${state ? `&state=${state}` : ''}`;
   res.redirect(redirect);
 }));
 
+/**
+ * POST /oauth/token
+ *
+ * OAuth2 token endpoint. Exchanges authorization code for access token.
+ * Validates client credentials and authorization code before issuing tokens.
+ */
 router.post('/token', express.urlencoded({ extended: true }), asyncHandler(async (req, res) => {
   const { grant_type, code, client_id, client_secret, redirect_uri } = req.body;
 
+  // Only support authorization code grant
   if (grant_type !== 'authorization_code') {
-    return res.status(400).json({ error: 'Unsupported grant_type' });
+    throwBadRequest('Unsupported grant_type');
   }
 
+  // Validate client credentials
   await validateClient(client_id, client_secret);
+  
+  // Validate and exchange authorization code
   const { userId, scope } = validateAuthCode(code, client_id, redirect_uri);
 
+  // Get user details for token issuance
   const db = getDb();
   const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-  if (!user) throw new Error('User not found');
+  if (!user) {
+    throwInternalError('User not found');
+  }
 
+  // Issue JWT tokens
   const tokens = issueTokens(userId, user.username, scope);
   res.json(tokens);
 }));
