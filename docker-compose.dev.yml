@@ -74,11 +74,11 @@ services:
     environment:
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
       # For local development of the Actual Budget REST API n8n node
-      #- N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom
+      - N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom
     volumes:
       - ./data/dev/n8n:/home/node/.n8n
       # For local development of the Actual Budget REST API n8n node
-      #- ./n8n-nodes-actual-budget-rest-api:/home/node/.n8n/custom/node_modules/n8n-nodes-actual-budget-rest-api
+      - ./n8n-nodes-actual-budget-rest-api:/home/node/.n8n/custom/node_modules/n8n-nodes-actual-budget-rest-api
     depends_on:
       - actual-api-wrapper
     logging:

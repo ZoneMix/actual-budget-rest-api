@@ -42,226 +42,224 @@ curl http://localhost:3000/accounts \
 - API Docs: protected Swagger UI at `/docs` with OpenAPI source in [src/docs/openapi.yml](src/docs/openapi.yml)
 - Security: helmet headers, request IDs, SQLite token revocation, rate limiting, input validation
 - Environment Validation: Automatic validation of all environment variables on startup
-- Metrics: Built-in metrics collection at `/metrics` endpoint
-- **Grafana Monitoring**: Pre-configured Grafana dashboard for real-time metrics visualization (development)
+- Metrics: Built-in Prometheus metrics collection at `/metrics/prometheus` endpoint
+- Monitoring: Pre-configured Prometheus and Grafana setup for real-time metrics visualization (see [monitoring/](monitoring/))
 - Health Checks: Comprehensive health endpoint with database and API connectivity checks
 - Redis Support: Optional Redis for distributed rate limiting (falls back to memory)
-- Docker: production image + dev `docker compose` stack (Actual Server + n8n + Redis + Grafana)
+- Docker: production image + dev `docker compose` stack (Actual Server + n8n + Redis + Prometheus + Grafana)
 
 ## Requirements
 - Node.js 22+ and npm
+- Docker and Docker Compose (for recommended development workflow)
 - Actual Budget Server credentials (or use the dev `docker compose` stack)
 - For OAuth2 to n8n (optional): n8n instance and client credentials
 - For production: dotenvx CLI and encrypted `.env` file with `DOTENV_PRIVATE_KEY`
 
-## Development
+## Installation & Setup
 
-**Recommended: Docker-Driven Development**
+This section covers production deployment. For development setup, see the [Development](#development) section below.
 
-This project is designed for Docker-driven development. All services (API, Actual Server, n8n, Redis) run in containers with proper environment configuration. 
+### Prerequisites
 
-**Why Docker?**
-- All environment variables are managed in `.env.local` (mounted into container)
-- No need to manually export or set environment variables
-- Consistent development environment across machines
-- All dependencies (Actual Server, Redis, n8n) run automatically
-- Hot reload works via Docker volume mounts
+1. **Clone the repository with submodules**:
+   ```bash
+   git clone --recurse-submodules https://github.com/your-username/actual-budget-rest-api.git
+   cd actual-budget-rest-api
+   ```
+   
+   **Important**: The `--recurse-submodules` flag is required because this project includes the `n8n-nodes-actual-budget-rest-api` as a git submodule. If you've already cloned without it, run:
+   ```bash
+   git submodule update --init --recursive
+   ```
 
-**Local `npm start` or `npm run dev`** requires manual environment variable setup and is not the primary development workflow. See Option 2 below for advanced local development.
+2. **Install dotenvx** (required for production):
+   ```bash
+   npm install -g dotenvx
+   ```
+   
+   dotenvx is used to manage encrypted environment files in production. It provides secure encryption for sensitive configuration data.
 
-### Option 1: Docker Dev Stack (Recommended - Full-featured, Simplest)
-Bring up all services (API + Actual Server + n8n + Redis) with automatic rebuilds on code changes:
+3. **Docker and Docker Compose** (for containerized deployment):
+   - Docker 20.10+ and Docker Compose 2.0+
+   - Or use the production Docker image directly
+
+### Minimum Environment Variables
+
+Create a `.env` file with the following **minimum required variables** for production:
 
 ```bash
-docker compose -f docker-compose.dev.yml up --build --force-recreate --remove-orphans
-```
+# Application environment
+NODE_ENV=production
 
-First-run initialization (Actual Server):
-- On first startup, Actual Server is not configured.
-- Open http://localhost:5006 and set a password.
-- Create/open your budget and obtain the Sync ID:
-  - In the Actual app, go to Settings → Advanced → Show Sync ID (or similar).
-- Add the following to `.env.local` (mounted as `/app/.env` in the API container):
-
-```
+# Admin credentials
 ADMIN_USER=admin
-ADMIN_PASSWORD=Password123!
+ADMIN_PASSWORD=YourSecurePassword123!  # Must meet complexity requirements (12+ chars, uppercase, lowercase, number, special char)
 
-# In development, secrets can be shorter or omitted (auto-generated)
-# In production, these must be 32+ characters
-JWT_SECRET=dev-secret-not-for-production
-JWT_REFRESH_SECRET=dev-refresh-secret-not-for-production
+# JWT secrets (MUST be 32+ characters in production)
+JWT_SECRET=your-jwt-secret-at-least-32-characters-long
+JWT_REFRESH_SECRET=your-refresh-secret-different-from-jwt-secret
+SESSION_SECRET=your-session-secret-different-from-jwt-secrets
 
-ACTUAL_SERVER_URL=http://actual-server-dev:5006
-ACTUAL_PASSWORD=<the password you set in Actual Server>
-ACTUAL_SYNC_ID=<your budget sync id>
-
-# Optional n8n OAuth2
-N8N_CLIENT_ID=example-n8n
-N8N_CLIENT_SECRET=replace-with-long-secret  # 32+ chars in production
-N8N_OAUTH2_CALLBACK_URL=http://localhost:5678/rest/oauth2-credential/callback
-
-# Optional Redis for distributed rate limiting
-# REDIS_HOST=redis
-# REDIS_PORT=6379
-# REDIS_PASSWORD=  # Optional, set if Redis has password
+# Actual Budget Server connection
+ACTUAL_SERVER_URL=https://your-actual-server.com  # Your production Actual Server URL
+ACTUAL_PASSWORD=your-actual-server-password
+ACTUAL_SYNC_ID=your-budget-sync-id
 ```
 
-Then restart the API container (or re-run the compose command) so it picks up `.env.local`.
-
-**Note**: In development mode, missing secrets are auto-generated with warnings. For production, ensure all secrets are 32+ characters and unique.
-
-**Reducing Log Output:**
-- Set `LOG_LEVEL=warn` or `LOG_LEVEL=error` in `.env.local` to reduce verbosity
-- View only specific service logs: `docker compose -f docker-compose.dev.yml logs -f actual-api-wrapper`
-- See [docs/LOGGING.md](docs/LOGGING.md) for detailed logging configuration
-
-Ports:
-- API: http://localhost:3000
-- n8n: http://localhost:5678
-- Actual Server: http://localhost:5006
-- Redis: localhost:6379 (optional, for distributed rate limiting)
-- **Grafana (Metrics): http://localhost:3001** (username: `admin`, password: `admin`)
-
-### Monitoring with Grafana
-
-Grafana is pre-configured to monitor your API metrics. After starting the services:
-
-1. Open http://localhost:3001 in your browser
-2. Login with `admin` / `admin` (change password if prompted)
-3. Navigate to **Dashboards → API Metrics Dashboard**
-
-The dashboard shows:
-- Total requests over time
-- Error rate gauge
-- Average response time
-- Requests by HTTP method (pie chart)
-- Requests by route (table)
-- Errors by status code (table)
-
-See [grafana/README.md](grafana/README.md) for detailed setup and customization instructions.
-
-### Option 2: Local Development (Advanced - Requires Manual Setup)
-
-**Note**: This requires manually setting up all environment variables. Docker-driven development (Option 1) is recommended.
-
-If you want to run the API locally for faster iteration:
-
-1. Start Actual Server in Docker:
-
+**Generate secure secrets**:
 ```bash
-docker compose -f docker-compose.dev.yml up -d actual-server redis
+# Generate secure secrets (32+ characters) - use different values for each!
+openssl rand -base64 32  # For JWT_SECRET
+openssl rand -base64 32  # For JWT_REFRESH_SECRET (must be different!)
+openssl rand -base64 32  # For SESSION_SECRET (must be different!)
 ```
 
-2. Create a `.env.local` file with all required variables (see `.env.example` for reference):
+**Security Note**: In production, all secrets must be:
+- At least 32 characters long
+- Unique (never reuse the same secret for different purposes)
+- Randomly generated (use `openssl rand -base64 32`)
 
-```bash
-# Copy and customize from .env.example
-cp .env.example .env.local
-# Edit .env.local with your values
-```
-
-3. Install dependencies and run:
-
-```bash
-npm ci
-npm run dev  # Uses Node --watch for hot reload
-```
-
-**Requirements for local development:**
-- All environment variables must be set in `.env.local` or exported
-- Actual Server must be running (Docker or external)
-- Redis optional (falls back to memory store)
-- Development mode auto-generates missing secrets (with warnings)
-
-**Benefits**: Code changes reload instantly via Node `--watch`; no Docker rebuilds needed.
-**Drawbacks**: Requires manual environment setup; not the primary development workflow.
-
-## Production
-Set the same Actual credentials via environment variables in `.env` (not `.env.local`). The production Actual Server provides the password and sync id values. For n8n in production:
-- Configure the same OAuth2 endpoint and credentials
-- Ensure `ALLOWED_ORIGINS` includes your n8n instance's URL
-- Use HTTPS for the callback URL
+See [.env.example](.env.example) for a complete list of all available environment variables with descriptions.
 
 ### Environment Management with dotenvx
-This project uses **dotenvx** to manage encrypted environment files. In production, a `.env` file (or encrypted `.env.prod`) is required along with the decryption key.
 
-1. Create a `.env` file with production values or use dotenvx to encrypt it:
+This project uses **dotenvx** to encrypt environment files in production.
 
+1. **Create and encrypt `.env`**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with production values
+   dotenvx encrypt
+   ```
+
+2. **Or set variables individually**:
+   ```bash
+   dotenvx set ADMIN_PASSWORD "your-password"
+   dotenvx set JWT_SECRET "your-secret"
+   # ... set other variables
+   dotenvx encrypt
+   ```
+
+3. **Store the private key securely**:
+   - Extract from `.env.keys`: `grep DOTENV_PRIVATE_KEY .env.keys`
+   - Store in your secrets manager (CI/CD, Kubernetes, etc.)
+   - Never commit `.env.keys` to git
+
+4. **Deploy**:
+   ```bash
+   export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
+   docker compose up -d --build
+   ```
+
+### Production Deployment
+
+**Docker Compose** (recommended):
 ```bash
-# Initialize dotenvx (generates .env.keys)
-echo "ADMIN_USER=admin" > .env
-dotenvx encrypt
-dotenvx decrypt
-
-# Encrypt your production .env
-dotenvx set ADMIN_PASSWORD "your-production-password"
-dotenvx set JWT_SECRET "your-production-jwt-secret"
-# ... repeat for other required vars
-
-dotenvx encrypt
+export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
+docker compose up -d --build
 ```
 
-2. Securely store the private key:
-   - The key is in `.env.keys` (never commit this)
-   - Provide `DOTENV_PRIVATE_KEY` to the runtime (e.g., as a secret in CI/CD or container env)
-   - The Docker container reads `DOTENV_PRIVATE_KEY` from the environment or compose file
-
-3. Run with dotenvx:
-
+**Docker Image**:
 ```bash
-# With the private key set:
-export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
-
-# Or in Docker:
-docker run \
-  -v ./data/actual-api:/app/.actual-cache \
+docker build -t actual-api-wrapper:latest .
+docker run -d \
+  --name actual-api-wrapper \
+  -e DOTENV_PRIVATE_KEY="$DOTENV_PRIVATE_KEY" \
+  -v $(pwd)/data/actual-api:/app/.actual-cache \
   -p 3000:3000 \
   actual-api-wrapper:latest
-
-# Or with compose:
-docker compose up -d --force-recreate --build
 ```
 
-See the [docker-compose.yml](docker-compose.yml) for how it's wired up in containers.
+**Production Checklist**:
+- ✅ Use HTTPS with reverse proxy (nginx, Traefik, etc.)
+- ✅ Set `TRUST_PROXY=true` if behind reverse proxy
+- ✅ Configure `ALLOWED_ORIGINS` with production domains
+- ✅ Set `LOG_LEVEL=warn` or `error` for production
+- ✅ Configure Redis for distributed rate limiting
+- ✅ Set up monitoring (Prometheus/Grafana) - see [monitoring/](monitoring/)
+- ✅ Regular backups of `DATA_DIR` volume
+- ✅ For n8n: Use HTTPS callback URLs, configure OAuth2 credentials
+
+## Development
+
+### Quick Start (Docker - Recommended)
+
+1. **Setup environment**:
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local with your values (see below for minimum requirements)
+   ```
+
+2. **Start all services**:
+   ```bash
+   docker compose -f docker-compose.dev.yml up --build
+   ```
+
+3. **Configure Actual Server** (first run only):
+   - Open http://localhost:5006 → Set password → Create/open budget
+   - Get Sync ID from Settings → Advanced → Show Sync ID
+   - Update `ACTUAL_PASSWORD` and `ACTUAL_SYNC_ID` in `.env.local`
+   - Restart: `docker compose -f docker-compose.dev.yml restart actual-api-wrapper`
+
+4. **Access services**:
+   - API: http://localhost:3000
+   - Actual Server: http://localhost:5006
+   - n8n: http://localhost:5678
+   - Grafana: http://localhost:3001 (admin/admin)
+   - Prometheus: http://localhost:9090
+
+**Minimum `.env.local` for development**:
+```bash
+ADMIN_USER=admin
+ADMIN_PASSWORD=Password123!
+JWT_SECRET=dev-secret-not-for-production
+JWT_REFRESH_SECRET=dev-refresh-secret-not-for-production
+ACTUAL_SERVER_URL=http://actual-server-dev:5006
+ACTUAL_PASSWORD=<your-actual-server-password>
+ACTUAL_SYNC_ID=<your-budget-sync-id>
+```
+
+**Note**: In development, missing secrets are auto-generated with warnings. Secrets can be shorter than production requirements.
+
+
+### Monitoring
+
+The dev stack includes Prometheus and Grafana. Access Grafana at http://localhost:3001 (admin/admin) → **Dashboards → Actual Budget REST API Metrics**.
+
+The dashboard shows request rates, error rates, response times, and more. See [monitoring/README.md](monitoring/README.md) for configuration details.
+
 
 ## Environment Variables
 
-All environment variables are validated on startup using Zod schemas. Invalid or missing required variables will cause the application to exit with clear error messages.
+All variables are validated on startup. Invalid or missing required variables cause the application to exit with clear error messages.
 
-### Required Variables
-- `ADMIN_USER`: admin username (default `admin`)
-- `ADMIN_PASSWORD`: required; admin password (validated for complexity)
-- `JWT_SECRET`: required in production; auto-generated in development if omitted (32+ chars in production)
-- `JWT_REFRESH_SECRET`: required in production; auto-generated in development if omitted (32+ chars in production)
-- `ACTUAL_SERVER_URL`: Actual server URL (e.g., `http://localhost:5006`)
-- `ACTUAL_PASSWORD`: Actual server password
+### Required (Production)
+- `ADMIN_USER`: Admin username (default: `admin`)
+- `ADMIN_PASSWORD`: Admin password (12+ chars, complexity required)
+- `JWT_SECRET`: JWT signing key (32+ chars in production)
+- `JWT_REFRESH_SECRET`: Refresh token key (32+ chars, different from `JWT_SECRET`)
+- `SESSION_SECRET`: Session encryption key (32+ chars, different from JWT secrets)
+- `ACTUAL_SERVER_URL`: Actual Budget Server URL
+- `ACTUAL_PASSWORD`: Actual Budget Server password
 - `ACTUAL_SYNC_ID`: Budget sync ID
 
-### Optional Variables
-- `SESSION_SECRET`: required in production; auto-generated in development if omitted (32+ chars in production)
-- `JWT_ACCESS_TTL`: optional, default `1h` (supports `30m`, `3600`, etc.)
-- `JWT_REFRESH_TTL`: optional, default `24h`
-- `PORT`: server port (default `3000`)
-- `ALLOWED_ORIGINS`: CSV of allowed origins for CORS (default: `http://localhost:3000,http://localhost:5678`)
-- `TRUST_PROXY`: set `true` if running behind a reverse proxy
-- `LOG_LEVEL`: winston log level (default `info`)
-- `DATA_DIR`: Actual data directory (default `/app/.actual-cache`); stores `auth.db`
-- `N8N_CLIENT_ID` / `N8N_CLIENT_SECRET` / `N8N_OAUTH2_CALLBACK_URL`: enable OAuth2 endpoints when all are present
-- `REDIS_URL`: Redis connection URL (e.g., `redis://localhost:6379`) - optional, for distributed rate limiting
-- `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD`: Alternative Redis connection (if not using `REDIS_URL`)
-- `ENABLE_CORS`: enable/disable CORS (default `true`)
-- `ENABLE_HELMET`: enable/disable Helmet security headers (default `true`)
-- `ENABLE_RATE_LIMITING`: enable/disable rate limiting (default `true`)
-- `MAX_REQUEST_SIZE`: maximum request body size (default `10kb`)
+### Optional
+- `PORT`: Server port (default: `3000`)
+- `NODE_ENV`: Environment mode (`development` | `production` | `test`)
+- `JWT_ACCESS_TTL`: Access token TTL (default: `1h`)
+- `JWT_REFRESH_TTL`: Refresh token TTL (default: `24h`)
+- `ALLOWED_ORIGINS`: CORS origins (CSV, default: `http://localhost:3000,http://localhost:5678`)
+- `TRUST_PROXY`: Trust proxy headers (default: `false`)
+- `LOG_LEVEL`: Log level (default: `info`)
+- `DATA_DIR`: Data directory (default: `/app/.actual-cache`)
+- `REDIS_URL` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD`: Redis connection
+- `N8N_CLIENT_ID` / `N8N_CLIENT_SECRET` / `N8N_OAUTH2_CALLBACK_URL`: OAuth2 for n8n
+- `ENABLE_CORS` / `ENABLE_HELMET` / `ENABLE_RATE_LIMITING`: Feature toggles (default: `true`)
+- `MAX_REQUEST_SIZE`: Max request body size (default: `10kb`)
 
-### Development Mode
-In development mode (`NODE_ENV=development`), the following relaxations apply:
-- Secrets can be shorter (minimum 8 characters recommended)
-- Missing secrets are auto-generated with warnings
-- Less strict validation for easier local development
+**Development Mode**: In `NODE_ENV=development`, secrets can be shorter and missing secrets are auto-generated with warnings.
 
-See [.env.example](.env.example) for a complete list with descriptions.
+See [.env.example](.env.example) for complete reference.
 
 ## API Docs & Validation
 - OpenAPI source: [src/docs/openapi.yml](src/docs/openapi.yml)
@@ -296,94 +294,52 @@ The `/query` endpoint allows executing ActualQL queries against Actual Budget da
 - **Documentation**: See [ActualQL docs](https://actualbudget.org/docs/api/actual-ql/)
 
 ## Connecting n8n
-n8n can integrate with the API via OAuth2 for secure token-based workflows. Use either built-in session/JWT auth or the OAuth2 flow. If using in production behind a reverse-proxy like traefik, ensure to replace the `localhost` and other docker hostnames with the correct domains.
 
-### Option 1: Basic Auth or Bearer Token (Quick Start)
-For development, you can use manual session login or JWT bearer tokens:
+### OAuth2 Flow (Recommended)
 
-1. Log in via basic auth:
-   - Enter credentials in n8n HTTP node with basic auth.
+1. **Configure environment variables**:
+   ```bash
+   N8N_CLIENT_ID=example-n8n
+   N8N_CLIENT_SECRET=<32+ character secret>
+   N8N_OAUTH2_CALLBACK_URL=http://localhost:5678/rest/oauth2-credential/callback
+   ```
 
-2. Or, obtain a bearer token:
-   - POST to `/auth/login` with `{ "username": "admin", "password": "..." }`
-   - Copy the `access_token` from the response
-   - In n8n, create a credential of type "Generic Credential Type" or similar HTTP auth
-   - Set header: `Authorization: Bearer <access_token>`
+2. **In n8n, create OAuth2 credential**:
+   - Type: **OAuth2**
+   - Authorization URL: `http://localhost:3000/oauth/authorize` (or your API URL)
+   - Token URL: `http://actual-api-wrapper-dev:3000/oauth/token` (use Docker service name)
+   - Client ID & Secret: Match your env vars
+   - Redirect URL: Match `N8N_OAUTH2_CALLBACK_URL`
 
-### Option 2: OAuth2 Flow (Production Recommended)
-Set up OAuth2 for secure, refreshable tokens:
+3. **Use in workflows**: Select the OAuth2 credential in HTTP request nodes.
 
-1. Configure env vars (already in `.env.local` example above):
-   - `N8N_CLIENT_ID`: a unique identifier (e.g., `example-n8n`)
-   - `N8N_CLIENT_SECRET`: a long random secret (32+ chars)
-   - `N8N_OAUTH2_CALLBACK_URL`: n8n's OAuth callback URL (e.g., `http://localhost:5678/rest/oauth2-credential/callback`)
+**Benefits**: Automatic token refresh, no passwords stored, revocable tokens.
 
-2. In n8n, add a new credential:
-   - Select **OAuth2** type
-   - **Authorization URL**: `http://localhost:3000/oauth/authorize`
-   - **Token URL**: `http://actual-api-wrapper-dev:3000/oauth/token`
-   - **Client ID**: same as `N8N_CLIENT_ID`
-   - **Client Secret**: same as `N8N_CLIENT_SECRET`
-   - **Redirect URL**: same as `N8N_OAUTH2_CALLBACK_URL`
-   - Authorize and use in n8n workflows
+### Alternative: Bearer Token
 
-3. Test in n8n:
-   - Add an HTTP request node
-   - Set URL to an API endpoint (e.g., `http://actual-api-wrapper-dev:3000/accounts`)
-   - In authentication, select the OAuth2 credential you just created
-   - Execute the node
+For development, use JWT bearer tokens:
+1. POST to `/auth/login` → Get `access_token`
+2. In n8n HTTP node, set header: `Authorization: Bearer <token>`
 
-Benefits of OAuth2:
-- Tokens are refreshed automatically
-- No passwords are stored in n8n
-- Tokens can be revoked from the API
-
-### Troubleshooting
-- **"Resource not accessible" in n8n**: Check that the API and n8n are on the same network (both in docker-compose).
-- **Token expired**: OAuth2 automatically refreshes; session tokens may need manual re-login.
-- **CORS error**: Verify `ALLOWED_ORIGINS` includes n8n's origin (e.g., `http://localhost:5678`).
+**Note**: In production behind a reverse proxy, replace `localhost` and Docker hostnames with actual domains.
 
 ## CLI Commands
 
-### Development (Docker - Recommended)
 ```bash
-# Start all services (API + Actual Server + n8n + Redis)
+# Testing & Quality
+npm test             # Run tests
+npm run test:watch   # Run tests in watch mode
+npm run test:coverage # Run tests with coverage
+npm run lint         # Lint code
+npm run audit        # Security audit
+npm run validate:openapi  # Validate OpenAPI spec
+
+# Docker Development
 docker compose -f docker-compose.dev.yml up --build
-
-# Rebuild and restart
-docker compose -f docker-compose.dev.yml up --build --force-recreate
+docker compose -f docker-compose.dev.yml logs -f actual-api-wrapper
 ```
 
-### Local Development (Advanced)
-**Note**: Requires manual environment variable setup. See [Option 2](#option-2-local-development-advanced---requires-manual-setup) above.
-- Start: `npm start` (requires all env vars set)
-- Dev (watch mode): `npm run dev` (requires all env vars set)
-
-### Testing & Quality
-- Test: `npm test`
-- Test (watch): `npm run test:watch`
-- Test (coverage): `npm run test:coverage`
-- Lint: `npm run lint`
-- Audit: `npm run audit`
-- Validate OpenAPI: `npm run validate:openapi`
-- Pre-commit hooks: see [PRECOMMIT_SETUP.md](PRECOMMIT_SETUP.md)
-
-## Docker (Production)
-Build and run the image:
-
-```bash
-docker build -t actual-api-wrapper:latest .
-docker run --rm -p 3000:3000 \
-	-v $(pwd)/data/actual-api:/app/.actual-cache \
-	--env-file ./.env \
-	actual-api-wrapper:latest
-```
-
-Or use the compose file:
-
-```bash
-docker compose up -d --build
-```
+See [PRECOMMIT_SETUP.md](PRECOMMIT_SETUP.md) for pre-commit hooks setup.
 
 ## Data & Persistence
 - SQLite auth DB: `${DATA_DIR}/auth.db` (persist the `DATA_DIR` volume)
@@ -392,20 +348,9 @@ docker compose up -d --build
 
 ## Observability
 
-### Logging
-- Structured logs via winston (JSON in production), respect `LOG_LEVEL` and `NODE_ENV`
-- Each request includes an `X-Request-ID` for traceability
-- Comprehensive error logging with request context
-
-### Metrics
-- Metrics endpoint: `GET /metrics` (consider protecting in production)
-- Tracks: request counts, response times, error rates, system resources
-- In-memory storage (consider Redis for distributed deployments)
-
-### Health Checks
-- Health endpoint: `GET /health`
-- Checks: database connectivity, Actual API connectivity, system resources
-- Returns 200 (healthy) or 503 (degraded) status codes
+- **Logging**: Structured JSON logs (winston), respects `LOG_LEVEL`. Each request includes `X-Request-ID` for tracing.
+- **Metrics**: Prometheus endpoint at `/metrics/prometheus`. Pre-configured Grafana dashboards in [monitoring/](monitoring/).
+- **Health**: `/health` endpoint returns 200 (healthy) or 503 (degraded). Checks database, Actual API, and system resources.
 
 ## CI / Security
 GitHub Actions run dependency and image security checks:
