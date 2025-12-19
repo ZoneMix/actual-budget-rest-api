@@ -111,5 +111,56 @@ services:
         max-file: "2"
         compress: "true"
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./data/dev/prometheus:/etc/prometheus
+      - prometheus-data-dev:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - actual-api-wrapper
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+        compress: "true"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-dev
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+    volumes:
+      - grafana-data-dev:/var/lib/grafana
+      - ./data/dev/grafana/provisioning:/etc/grafana/provisioning
+      - ./data/dev/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+        compress: "true"
+
 volumes:
   redis-data-dev:
+  prometheus-data-dev:
+  grafana-data-dev:
