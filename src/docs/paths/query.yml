@@ -1,6 +1,19 @@
 query:
   post:
     summary: Execute ActualQL query
+    description: |
+      Execute ActualQL queries against Actual Budget data.
+      
+      **Security Restrictions:**
+      - Only read-only tables are allowed (transactions, accounts, categories, etc.)
+      - Filter depth is limited to 5 levels
+      - Result size is limited to 10,000 records
+      - Query structure is validated for security
+      - All queries are audit logged
+      
+      **Rate Limited:** 20 requests per minute
+      
+      See [ActualQL documentation](https://actualbudget.org/docs/api/actual-ql/) for query syntax.
     tags: [Query]
     security:
       - bearerAuth: []
@@ -13,10 +26,58 @@ query:
             required: [query]
             properties:
               query:
-                type: string
+                type: object
+                description: ActualQL query object
+                required: [table]
+                properties:
+                  table:
+                    type: string
+                    enum:
+                      - transactions
+                      - accounts
+                      - categories
+                      - category_groups
+                      - payees
+                      - schedules
+                      - rules
+                      - budgets
+                      - budget_months
+                    description: Table to query (whitelist enforced)
+                    example: transactions
+                  filter:
+                    type: object
+                    description: Filter conditions (max depth 5 levels)
+                    example:
+                      date:
+                        $gte: '2024-01-01'
+                  select:
+                    oneOf:
+                      - type: string
+                        enum: ['*']
+                        description: Select all fields
+                      - type: array
+                        items:
+                          type: string
+                        description: Select specific fields
+                    example: ['id', 'amount', 'date']
+                  options:
+                    type: object
+                    description: Query options
+                    properties:
+                      limit:
+                        type: integer
+                        maximum: 10000
+                        description: Maximum number of results
+                      orderBy:
+                        type: string
+                        description: Field to order by
+                      order:
+                        type: string
+                        enum: [asc, desc]
+                        description: Sort order
     responses:
-      200:
-        description: Query result
+      '200':
+        description: Query executed successfully
         content:
           application/json:
             schema:
@@ -24,7 +85,27 @@ query:
               properties:
                 success:
                   type: boolean
+                  example: true
                 result:
                   type: array
+                  description: Query results (max 10,000 records)
                   items:
                     type: object
+      '400':
+        description: Invalid query (validation failed)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      '403':
+        description: Query rejected (security restriction)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      '429':
+        description: Rate limit exceeded
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'

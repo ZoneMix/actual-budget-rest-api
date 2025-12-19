@@ -1,9 +1,21 @@
 Error:
   type: object
+  description: Standard error response format
   properties:
     error:
       type: string
       description: Error message
+    requestId:
+      type: string
+      description: Request ID for tracing (if available)
+      example: '550e8400-e29b-41d4-a716-446655440000'
+    code:
+      type: string
+      description: Error code for programmatic handling
+      example: 'VALIDATION_ERROR'
+    details:
+      type: object
+      description: Additional error details (development only)
 Success:
   type: object
   properties:
@@ -278,3 +290,102 @@ CloseAccountRequest:
       type: string
       description: Category for transfer transaction
       example: category-uuid
+
+Metrics:
+  type: object
+  description: Full application metrics snapshot
+  properties:
+    requests:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total number of requests processed
+          example: 1234
+        errors:
+          type: integer
+          description: Total number of error responses (4xx, 5xx)
+          example: 5
+        byMethod:
+          type: object
+          description: Request count by HTTP method
+          additionalProperties:
+            type: integer
+          example:
+            GET: 800
+            POST: 300
+            PUT: 100
+            DELETE: 34
+        byRoute:
+          type: object
+          description: Request count by route pattern
+          additionalProperties:
+            type: integer
+          example:
+            '/accounts': 200
+            '/transactions': 150
+            '/auth/login': 50
+    responseTimes:
+      type: array
+      description: Array of response times in milliseconds (last 1000 requests)
+      items:
+        type: integer
+      example: [45, 52, 38, 67, 42]
+    errorRates:
+      type: object
+      properties:
+        byStatus:
+          type: object
+          description: Error count by HTTP status code
+          additionalProperties:
+            type: integer
+          example:
+            '400': 2
+            '401': 1
+            '404': 1
+            '500': 1
+    averageResponseTime:
+      type: string
+      description: Average response time in milliseconds
+      example: '52ms'
+    errorRate:
+      type: string
+      description: Error rate as percentage
+      example: '0.41%'
+
+MetricsSummary:
+  type: object
+  description: Lightweight summary of key metrics
+  properties:
+    requests:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total number of requests
+          example: 1234
+        errors:
+          type: integer
+          description: Total number of errors
+          example: 5
+        byMethod:
+          type: object
+          description: Request count by HTTP method
+          additionalProperties:
+            type: integer
+          example:
+            GET: 800
+            POST: 300
+            PUT: 100
+            DELETE: 34
+    performance:
+      type: object
+      properties:
+        averageResponseTime:
+          type: string
+          description: Average response time
+          example: '52ms'
+        errorRate:
+          type: string
+          description: Error rate percentage
+          example: '0.41%'

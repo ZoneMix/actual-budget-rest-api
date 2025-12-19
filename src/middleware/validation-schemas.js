@@ -159,12 +159,36 @@ export const UpdateScheduleSchema = z.object({
   }),
 });
 
-// Query schema
+// ActualQL Query schema with security restrictions
+// Based on: https://actualbudget.org/docs/api/actual-ql/
 export const QuerySchema = z.object({
   query: z.object({
-    table: z.string().min(1),
-    filter: z.any().optional(),
-    select: z.any().optional(),
+    // Only allow read-only tables (whitelist)
+    table: z.enum([
+      'transactions',
+      'accounts',
+      'categories',
+      'category_groups',
+      'payees',
+      'schedules',
+      'rules',
+      'budgets',
+      'budget_months',
+    ], {
+      errorMap: () => ({ message: 'Invalid table name. Allowed tables: transactions, accounts, categories, category_groups, payees, schedules, rules, budgets, budget_months' }),
+    }),
+    // Filter conditions with validation
+    filter: z.record(z.any()).optional(),
+    // Select fields (array of strings or '*')
+    select: z.union([
+      z.literal('*'),
+      z.array(z.string()),
+      z.string(),
+    ]).optional(),
+    // Options (only allow safe options)
+    options: z.object({
+      splits: z.enum(['inline', 'grouped', 'all']).optional(),
+    }).optional(),
   }),
 });
 

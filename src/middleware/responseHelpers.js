@@ -14,7 +14,11 @@
  * throwBadRequest('Invalid input');
  */
 
-import { httpError } from './errorHandler.js';
+import {
+  ValidationError,
+  AuthenticationError,
+  InternalServerError,
+} from '../errors/index.js';
 
 /**
  * Send a success response (200 OK).
@@ -57,25 +61,16 @@ export const sendCreated = (res, data = null) => {
 };
 
 /**
- * Throw an HTTP error that will be caught by the error handler middleware.
- * Errors thrown this way are automatically logged and formatted consistently.
- *
- * @param {number} status - HTTP status code
- * @param {string} message - Error message
- * @throws {Error} HTTP error with status code
- */
-export const throwError = (status, message) => {
-  throw httpError(status, message);
-};
-
-/**
  * Common HTTP error throwers for convenience.
  * These throw errors that are caught by the error handler middleware.
  */
-export const throwBadRequest = (message = 'Bad request') => throwError(400, message);
-export const throwUnauthorized = (message = 'Unauthorized') => throwError(401, message);
-export const throwForbidden = (message = 'Forbidden') => throwError(403, message);
-export const throwNotFound = (message = 'Not found') => throwError(404, message);
-export const throwConflict = (message = 'Conflict') => throwError(409, message);
-export const throwInternalError = (message = 'Internal server error') => throwError(500, message);
+export const throwBadRequest = (message = 'Bad request', field = null, details = null) => {
+  throw new ValidationError(message, field, details);
+};
+export const throwUnauthorized = (message = 'Unauthorized', details = null) => {
+  throw new AuthenticationError(message, details);
+};
+export const throwInternalError = (message = 'Internal server error', details = null) => {
+  throw new InternalServerError(message, details);
+};
 

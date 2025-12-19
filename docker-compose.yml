@@ -12,6 +12,14 @@ services:
       sh -c "dotenvx run -- npm start"
     environment:
       DOTENV_PRIVATE_KEY: ${DOTENV_PRIVATE_KEY}  # Master key from host .env or secrets
+      # Redis connection (optional - will use memory store if not set)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}  # Optional: Set if Redis password is configured
+      # Or use REDIS_URL instead: redis://redis:6379 or redis://password@redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
       interval: 30s
@@ -19,5 +27,31 @@ services:
       retries: 3
       start_period: 40s
 
+  redis:
+    image: redis:7-alpine
+    container_name: actual-api-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    # Redis password (set REDIS_PASSWORD env var for production)
+    # In production, always use a strong password
+    command: >
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+        redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\"
+      else
+        redis-server --appendonly yes
+      fi"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
 volumes:
   auth-data:
+  redis-data:

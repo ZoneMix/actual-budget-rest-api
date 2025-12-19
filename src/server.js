@@ -27,23 +27,30 @@ import { initActualApi, shutdownActualApi } from './services/actualApi.js';
 import { ensureAdminUserHash } from './auth/user.js';
 import { ensureN8NClient } from './auth/oauth2/client.js';
 import { closeDb } from './db/authDb.js';
-import { PORT } from './config/index.js';
+import { closeRedis } from './config/redis.js';
+import { PORT, NODE_ENV, TRUST_PROXY, ALLOWED_ORIGINS } from './config/index.js';
+import env from './config/env.js';
 import { swaggerUi, specs } from './config/swagger.js';
 import { authenticateForDocs } from './auth/docsAuth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
+import { metricsMiddleware } from './middleware/metrics.js';
+import metricsRoutes from './routes/metrics.js';
 import logger from './logging/logger.js';
 
 const app = express();
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = NODE_ENV === 'production';
 
 // Trust proxy if behind reverse proxy
-if (isProd || process.env.TRUST_PROXY === 'true') {
+if (isProd || TRUST_PROXY) {
   app.set('trust proxy', 1);
 }
 
 // Request ID tracking (first middleware)
 app.use(requestIdMiddleware);
+
+// Metrics collection (second middleware, after request ID)
+app.use(metricsMiddleware);
 
 // Security headers
 app.use(helmet({
@@ -59,9 +66,7 @@ app.use(helmet({
 }));
 
 // CORS configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:3000', 'http://localhost:5678'];
+const allowedOrigins = ALLOWED_ORIGINS;
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -98,17 +103,15 @@ app.use((req, res, next) => {
 });
 
 // Session configuration with security improvements
-if (isProd && !process.env.SESSION_SECRET) {
-  logger.error('FATAL: SESSION_SECRET is required in production');
-  process.exit(1);
-}
-
-const sessionSecret = process.env.SESSION_SECRET || (() => {
+// SESSION_SECRET is validated in env.js, but we need a fallback for development
+const sessionSecret = env.SESSION_SECRET || (() => {
   if (!isProd) {
     const secret = crypto.randomBytes(32).toString('hex');
     logger.warn('SESSION_SECRET not set; generated random secret for this session (will be different on restart)');
     return secret;
   }
+  // This should never happen due to env validation, but just in case
+  throw new Error('SESSION_SECRET is required');
 })();
 
 app.use(session({
@@ -116,17 +119,19 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProd,
-    httpOnly: true,
-    sameSite: 'lax',
+    secure: isProd, // HTTPS only in production
+    httpOnly: true, // Prevent XSS access to cookie
+    sameSite: isProd ? 'strict' : 'lax', // Strict in production for better CSRF protection
     maxAge: 60 * 60 * 1000, // 1 hour
   },
   name: 'sessionId', // Don't use default 'connect.sid'
 }));
 
 // Body parsing with size limits
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ limit: '10kb', extended: true }));
+// Default limit for most routes (can be overridden per-route)
+import { MAX_REQUEST_SIZE } from './config/index.js';
+app.use(express.json({ limit: MAX_REQUEST_SIZE }));
+app.use(express.urlencoded({ limit: MAX_REQUEST_SIZE, extended: true }));
 
 // Serve static files (CSS, JS, HTML)
 app.use('/static', express.static('./src/public/static'));
@@ -134,6 +139,7 @@ app.use('/static', express.static('./src/public/static'));
 // Mount routers
 app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
+app.use('/metrics', metricsRoutes); // Metrics endpoints (protected in production)
 app.use(loginRoutes); // Root /login GET/POST
 
 // Only mount OAuth routes if n8n is configured
@@ -179,7 +185,7 @@ app.use(errorHandler);
     
     logger.info('Startup complete', {
       port: PORT,
-      env: process.env.NODE_ENV || 'development',
+      env: NODE_ENV,
       n8nOAuth: n8nEnabled,
     });
   } catch (err) {
@@ -195,6 +201,7 @@ const shutdown = async (signal) => {
   try {
     await shutdownActualApi();
     closeDb();
+    await closeRedis();
     logger.info('Shutdown complete');
     process.exit(0);
   } catch (err) {

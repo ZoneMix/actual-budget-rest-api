@@ -13,16 +13,58 @@ services:
     working_dir: /app
     command: >
       sh -c "dotenvx run -- npm start"
+    environment:
+      # Redis connection (optional - will use memory store if not set)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}  # Optional: Set if Redis password is configured
+      # Or use REDIS_URL instead: redis://redis:6379 or redis://password@redis:6379
+      # Log level: Set to 'warn' or 'error' to reduce log verbosity
+      # LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      actual-server:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    depends_on:
-      actual-server:
-        condition: service_healthy
-        restart: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+
+  redis:
+    image: redis:7-alpine
+    container_name: actual-api-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data-dev:/data
+    # Redis runs without password by default in dev (can be set via REDIS_PASSWORD env var)
+    # For production, always set a password
+    command: redis-server --appendonly yes
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+        compress: "true"
 
   n8n:
     image: n8nio/n8n:latest
@@ -39,6 +81,12 @@ services:
       #- ./n8n-nodes-actual-budget-rest-api:/home/node/.n8n/custom/node_modules/n8n-nodes-actual-budget-rest-api
     depends_on:
       - actual-api-wrapper
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
 
   actual-server:
     container_name: actual-server-dev
@@ -56,3 +104,12 @@ services:
       retries: 3
       start_period: 20s
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+        compress: "true"
+
+volumes:
+  redis-data-dev:

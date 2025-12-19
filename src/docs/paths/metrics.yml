@@ -1,0 +1,115 @@
+metrics:
+  get:
+    tags:
+      - Metrics
+    summary: Get full metrics snapshot
+    description: |
+      Returns comprehensive application metrics including:
+      - Request counts (total, by method, by route)
+      - Response times (average, distribution)
+      - Error rates (by status code)
+      
+      **Note**: In production, this endpoint requires JWT authentication.
+    operationId: getMetrics
+    security:
+      - bearerAuth: []
+    responses:
+      '200':
+        description: Metrics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: '2024-12-19T18:00:00.000Z'
+                metrics:
+                  $ref: '../components/schemas.yml#/Metrics'
+      '401':
+        description: Unauthorized (production only)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+metricsSummary:
+  get:
+    tags:
+      - Metrics
+    summary: Get summary metrics
+    description: |
+      Returns a lightweight summary of key metrics:
+      - Total requests and errors
+      - Average response time
+      - Error rate percentage
+      - Request count by method
+      
+      **Note**: In production, this endpoint requires JWT authentication.
+    operationId: getMetricsSummary
+    security:
+      - bearerAuth: []
+    responses:
+      '200':
+        description: Summary metrics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: '2024-12-19T18:00:00.000Z'
+                summary:
+                  $ref: '../components/schemas.yml#/MetricsSummary'
+      '401':
+        description: Unauthorized (production only)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+metricsReset:
+  post:
+    tags:
+      - Metrics
+    summary: Reset metrics counters
+    description: |
+      Resets all metrics counters to zero. Useful for:
+      - Testing and development
+      - Periodic metric resets
+      - Troubleshooting
+      
+      **Note**: Requires JWT authentication. Admin access recommended.
+    operationId: resetMetrics
+    security:
+      - bearerAuth: []
+    responses:
+      '200':
+        description: Metrics reset successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: 'Metrics reset successfully'
+      '401':
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+

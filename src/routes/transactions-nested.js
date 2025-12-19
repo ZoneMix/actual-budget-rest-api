@@ -9,8 +9,12 @@ import {
   TransactionsImportSchema,
 } from '../middleware/validation-schemas.js';
 import { bulkOperationLimiter } from '../middleware/rateLimiters.js';
+import { bulkBodyParser } from '../middleware/bodyParser.js';
 
 const router = express.Router({ mergeParams: true }); // Important: mergeParams to access :accountId
+
+// Use larger body parser for bulk operations
+router.use(bulkBodyParser);
 
 router.get(
   '/',

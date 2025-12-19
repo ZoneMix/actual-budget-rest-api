@@ -40,6 +40,7 @@ export const getDb = () => {
     CREATE TABLE IF NOT EXISTS clients (
       client_id TEXT PRIMARY KEY,
       client_secret TEXT NOT NULL,
+      client_secret_hashed BOOLEAN DEFAULT FALSE,
       allowed_scopes TEXT DEFAULT 'api',
       redirect_uris TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -55,6 +56,27 @@ export const getDb = () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // Migrations: Add missing columns to existing tables
+  try {
+    // Check if client_secret_hashed column exists
+    const tableInfo = db.prepare("PRAGMA table_info(clients)").all();
+    const hasHashedColumn = tableInfo.some(col => col.name === 'client_secret_hashed');
+    
+    if (!hasHashedColumn) {
+      logger.info('Migrating clients table: adding client_secret_hashed column');
+      db.exec(`
+        ALTER TABLE clients 
+        ADD COLUMN client_secret_hashed BOOLEAN DEFAULT FALSE;
+      `);
+      logger.info('Migration complete: client_secret_hashed column added');
+    }
+  } catch (migrationError) {
+    // If migration fails, log but don't crash (column might already exist)
+    logger.warn('Migration check failed (this is usually safe to ignore):', {
+      error: migrationError.message,
+    });
+  }
 
   return db;
 };

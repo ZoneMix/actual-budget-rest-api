@@ -1,9 +1,22 @@
 health:
   get:
     summary: Health check
+    description: |
+      Returns comprehensive health status including:
+      - Application status (ok/degraded)
+      - Database connectivity
+      - Actual API connectivity
+      - System resources (development only)
+      
+      **Information Disclosure Prevention:**
+      - Production: Only shows service status, no system details
+      - Development: Shows full system information (memory, uptime, node version, platform)
+      
+      Returns 200 for healthy, 503 for degraded status.
     tags: [Health]
+    operationId: getHealth
     responses:
-      200:
+      '200':
         description: API is healthy
         content:
           application/json:
@@ -12,4 +25,83 @@ health:
               properties:
                 status:
                   type: string
+                  enum: [ok, degraded]
                   example: ok
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: '2024-12-19T18:00:00.000Z'
+                checks:
+                  type: object
+                  properties:
+                    database:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [ok, error]
+                          example: ok
+                        message:
+                          type: string
+                          example: 'Database connection healthy'
+                        error:
+                          type: string
+                          description: Error details (development only)
+                    actualApi:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [ok, error]
+                          example: ok
+                        message:
+                          type: string
+                          example: 'Actual API connection healthy'
+                        error:
+                          type: string
+                          description: Error details (development only)
+                    system:
+                      type: object
+                      description: System information (development only)
+                      properties:
+                        memory:
+                          type: object
+                          properties:
+                            rss:
+                              type: string
+                              example: '150MB'
+                            heapTotal:
+                              type: string
+                              example: '50MB'
+                            heapUsed:
+                              type: string
+                              example: '30MB'
+                            external:
+                              type: string
+                              example: '5MB'
+                        uptime:
+                          type: string
+                          example: '3600s'
+                        nodeVersion:
+                          type: string
+                          example: 'v24.12.0'
+                        platform:
+                          type: string
+                          example: 'darwin'
+      '503':
+        description: Service is degraded (one or more checks failed)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [degraded]
+                  example: degraded
+                timestamp:
+                  type: string
+                  format: date-time
+                checks:
+                  type: object
+                  description: Health check results

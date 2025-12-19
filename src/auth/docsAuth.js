@@ -18,14 +18,15 @@ export const authenticateForDocs = (req, res, next) => {
   if (token) {
     // Use existing JWT middleware logic
     try {
-      const decoded = jwt.decode(token);
-      if (decoded && !isTokenRevoked(decoded.jti)) {
-        const payload = jwt.verify(token, process.env.JWT_SECRET);
+      // Verify token first (decode doesn't verify signature)
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      // Then check if token is revoked
+      if (payload && !isTokenRevoked(payload.jti)) {
         req.user = payload;
         return next();
       }
-    } catch (err) {
-      // JWT invalid, continue to session check
+    } catch {
+      // JWT invalid or expired, continue to session check
     }
   }
 

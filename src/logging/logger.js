@@ -8,8 +8,8 @@ import winston from 'winston';
 const { combine, timestamp, json, printf, colorize, errors } = winston.format;
 
 // Custom format for development (readable)
-const devFormat = printf(({ level, message, timestamp, ...metadata }) => {
-  let msg = `${timestamp} [${level}] ${message}`;
+const devFormat = printf(({ level, message, timestamp: ts, ...metadata }) => {
+  let msg = `${ts} [${level}] ${message}`;
   if (Object.keys(metadata).length > 0) {
     msg += ` ${JSON.stringify(metadata)}`;
   }
@@ -48,18 +48,6 @@ export const logAuthEvent = (event, userId, details, success) => {
     userId,
     success,
     ...details,
-  });
-};
-
-export const logAccessControl = (userId, resource, action, allowed, reason) => {
-  const level = allowed ? 'info' : 'warn';
-  logger[level]({
-    type: 'ACCESS_CONTROL',
-    userId,
-    resource,
-    action,
-    allowed,
-    reason,
   });
 };
 

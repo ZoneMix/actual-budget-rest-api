@@ -143,6 +143,3 @@ vite.config.ts.timestamp-*
 
 # appdata
 data/
-
-# Markdown
-SECURITY*.md

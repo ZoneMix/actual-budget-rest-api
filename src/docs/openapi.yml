@@ -2,7 +2,18 @@ openapi: 3.0.0
 info:
   title: Actual Budget REST API
   version: 1.0.0
-  description: REST API wrapper for Actual Budget with OAuth2 integration for n8n.
+  description: |
+    REST API wrapper for Actual Budget with OAuth2 integration for n8n.
+    
+    **Features:**
+    - JWT-based authentication with access and refresh tokens
+    - OAuth2 flow for n8n integration
+    - Comprehensive metrics collection
+    - Health checks with service status
+    - Secure ActualQL query endpoint
+    - Rate limiting with Redis support
+    - Environment variable validation
+    - Comprehensive error handling
 servers:
   - url: http://localhost:3000
     description: Development server
@@ -21,10 +32,17 @@ tags:
   - name: Schedules
   - name: Query
   - name: Health
+  - name: Metrics
 
 paths:
   /health:
     $ref: './paths/health.yml#/health'
+  /metrics:
+    $ref: './paths/metrics.yml#/metrics'
+  /metrics/summary:
+    $ref: './paths/metrics.yml#/metricsSummary'
+  /metrics/reset:
+    $ref: './paths/metrics.yml#/metricsReset'
   /auth/login:
     $ref: './paths/authentication.yml#/authLogin'
   /auth/logout:
@@ -123,3 +141,7 @@ components:
       $ref: './components/schemas.yml#/UpdateAccountRequest'
     CloseAccountRequest:
       $ref: './components/schemas.yml#/CloseAccountRequest'
+    Metrics:
+      $ref: './components/schemas.yml#/Metrics'
+    MetricsSummary:
+      $ref: './components/schemas.yml#/MetricsSummary'

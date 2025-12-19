@@ -49,7 +49,10 @@ router.get('/authorize', asyncHandler(async (req, res) => {
   }
 
   // Verify redirect URI is allowed for this client
-  const allowedUris = client.redirect_uris.split(',');
+  if (!client.redirect_uris) {
+    throwBadRequest('Client has no configured redirect URIs');
+  }
+  const allowedUris = client.redirect_uris.split(',').map(uri => uri.trim()).filter(Boolean);
   if (!allowedUris.includes(redirect_uri)) {
     throwBadRequest('Invalid redirect_uri');
   }
@@ -61,9 +64,21 @@ router.get('/authorize', asyncHandler(async (req, res) => {
   }
 
   // Auto-approve and generate authorization code (simplified for internal use)
+  // Store state in session for CSRF protection
+  if (state) {
+    req.session.oauth2_state = state;
+  }
+  
   const code = generateAuthCode(client_id, req.session.user.id, redirect_uri, scope);
-  const redirect = `${redirect_uri}?code=${code}${state ? `&state=${state}` : ''}`;
-  res.redirect(redirect);
+  
+  // Build redirect URL with state parameter
+  const redirectUrl = new URL(redirect_uri);
+  redirectUrl.searchParams.set('code', code);
+  if (state) {
+    redirectUrl.searchParams.set('state', state);
+  }
+  
+  res.redirect(redirectUrl.toString());
 }));
 
 /**

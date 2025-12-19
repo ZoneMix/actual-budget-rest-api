@@ -1,6 +1,10 @@
 oauthAuthorize:
   get:
     summary: OAuth2 authorization endpoint
+    description: |
+      Initiates OAuth2 authorization code flow for n8n integration.
+      
+      **Note**: Client secrets are hashed with bcrypt before storage for security.
     tags: [OAuth2]
     parameters:
       - in: query
@@ -41,6 +45,10 @@ oauthAuthorize:
 oauthToken:
   post:
     summary: OAuth2 token endpoint
+    description: |
+      Exchanges authorization code for access token.
+      
+      **Note**: Client secrets are validated against bcrypt hashes stored in the database.
     tags: [OAuth2]
     requestBody:
       required: true

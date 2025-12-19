@@ -1,6 +1,14 @@
 authLogin:
   post:
     summary: Authenticate user
+    description: |
+      Authenticate with username/password or refresh token.
+      
+      **Rate Limited:** 5 requests per 15 minutes (strict limit for security)
+      
+      **Authentication Methods:**
+      1. Username/Password: Returns access_token and refresh_token
+      2. Refresh Token: Exchanges refresh_token for new access_token
     tags: [Authentication]
     requestBody:
       required: true
@@ -29,8 +37,20 @@ authLogin:
           application/json:
             schema:
               $ref: '../components/schemas.yml#/AuthTokens'
+      400:
+        description: Bad request (missing required fields)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
       401:
-        description: Invalid credentials
+        description: Invalid credentials or expired refresh token
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      429:
+        description: Rate limit exceeded (too many login attempts)
         content:
           application/json:
             schema:
