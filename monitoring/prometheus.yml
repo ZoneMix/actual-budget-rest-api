@@ -1,0 +1,50 @@
+# Prometheus configuration for Actual Budget REST API
+# 
+# This configuration file is used to scrape metrics from the Actual Budget REST API.
+# The API exposes metrics at the /metrics/prometheus endpoint in Prometheus format.
+#
+# Usage:
+#   1. Copy this file to your Prometheus configuration directory
+#   2. Update the target URL if your API is running on a different host/port
+#   3. Restart Prometheus to load the new configuration
+#
+# For Docker Compose:
+#   Mount this file to /etc/prometheus/prometheus.yml in the Prometheus container
+#   Example: ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+global:
+  scrape_interval: 15s      # How often to scrape targets
+  evaluation_interval: 15s   # How often to evaluate rules
+  external_labels:
+    monitor: 'actual-budget-api'
+    environment: 'development'  # Change to 'production' for production deployments
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           # - alertmanager:9093
+
+# Load rules once and periodically evaluate them (optional)
+# rule_files:
+#   # - "first_rules.yml"
+#   # - "second_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Scrape the Actual Budget REST API
+  - job_name: 'actual-api-wrapper'
+    scrape_interval: 5s      # More frequent scraping for API metrics
+    metrics_path: '/metrics/prometheus'
+    static_configs:
+      - targets: ['actual-api-wrapper:3000']  # Update hostname/port as needed
+        labels:
+          service: 'actual-api-wrapper'
+          environment: 'development'  # Change to 'production' for production deployments
+
+  # Optional: Scrape Prometheus itself
+  # - job_name: 'prometheus'
+  #   static_configs:
+  #     - targets: ['localhost:9090']
+
