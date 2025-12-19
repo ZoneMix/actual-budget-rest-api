@@ -6,16 +6,16 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getDb, insertToken, pruneExpiredTokens } from '../db/authDb.js';
 import { ACCESS_TTL_SECONDS, REFRESH_TTL_SECONDS } from '../config/index.js';
-import { logAuthEvent, logSuspiciousActivity } from '../logging/logger.js';
+import logger, { logAuthEvent, logSuspiciousActivity } from '../logging/logger.js';
 
 // Verify JWT secrets are configured
 if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is required but not set');
+  logger.error('FATAL: JWT_SECRET is required but not set');
   process.exit(1);
 }
 
 if (!process.env.JWT_REFRESH_SECRET) {
-  console.error('FATAL: JWT_REFRESH_SECRET is required but not set');
+  logger.error('FATAL: JWT_REFRESH_SECRET is required but not set');
   process.exit(1);
 }
 

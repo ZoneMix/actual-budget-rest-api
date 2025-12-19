@@ -1,6 +1,5 @@
 // src/routes/payees.js - CRUD for payees + merge
 import express from 'express';
-import rateLimit from 'express-rate-limit';
 import { authenticateJWT } from '../auth/jwt.js';
 import {
   payeesList,
@@ -11,19 +10,11 @@ import {
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
-import { IDSchema, CreatePayeeSchema, UpdatePayeeSchema } from '../middleware/validation-schemas.js';
-import { z } from 'zod';
+import { IDSchema, CreatePayeeSchema, UpdatePayeeSchema, MergePayeesSchema } from '../middleware/validation-schemas.js';
+import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT);
-
-const payeeWriteLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  message: { error: 'Too many payee operations. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 router.get('/', asyncHandler(async (req, res) => {
   const payees = await payeesList();
@@ -32,7 +23,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 router.post(
   '/',
-  payeeWriteLimiter,
+  standardWriteLimiter,
   validateBody(CreatePayeeSchema),
   asyncHandler(async (req, res) => {
     const { payee } = req.validatedBody;
@@ -43,7 +34,7 @@ router.post(
 
 router.put(
   '/:id',
-  payeeWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   validateBody(UpdatePayeeSchema),
   asyncHandler(async (req, res) => {
@@ -55,7 +46,7 @@ router.put(
 
 router.delete(
   '/:id',
-  payeeWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   asyncHandler(async (req, res) => {
     await payeeDelete(req.validatedParams.id);
@@ -65,11 +56,8 @@ router.delete(
 
 router.post(
   '/merge',
-  payeeWriteLimiter,
-  validateBody(z.object({
-    targetId: z.string().uuid(),
-    mergeIds: z.array(z.string().uuid()).min(1),
-  })),
+  standardWriteLimiter,
+  validateBody(MergePayeesSchema),
   asyncHandler(async (req, res) => {
     const { targetId, mergeIds } = req.validatedBody;
     await payeesMerge(targetId, mergeIds);

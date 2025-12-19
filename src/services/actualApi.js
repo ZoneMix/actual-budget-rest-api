@@ -76,7 +76,7 @@ export const accountCreate = async (account, initialBalance = 0) => {
   return runWithApi(
     'accountCreate',
     async (apiInstance) => apiInstance.createAccount(account, initialBalance),
-    { syncBefore: true, syncAfter: true }
+    { syncBefore: false, syncAfter: true }
   );
 };
 
@@ -124,7 +124,7 @@ export const transactionsAdd = async (accountId, transactions, runTransfers = fa
     'transactionsAdd',
     async (apiInstance) =>
       apiInstance.addTransactions(accountId, transactions, runTransfers, learnCategories),
-    { syncBefore: true, syncAfter: true }
+    { syncBefore: false, syncAfter: true }
   );
 };
 
@@ -219,7 +219,7 @@ export const payeeCreate = async (payee) => {
   return runWithApi(
     'payeeCreate',
     async (apiInstance) => apiInstance.createPayee(payee),
-    { syncBefore: true, syncAfter: true }
+    { syncBefore: false, syncAfter: true }
   );
 };
 

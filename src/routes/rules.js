@@ -1,7 +1,5 @@
 // src/routes/rules.js - CRUD for rules + payee-specific rules
 import express from 'express';
-import rateLimit from 'express-rate-limit';
-import { z } from 'zod';
 import { authenticateJWT } from '../auth/jwt.js';
 import {
   rulesList,
@@ -12,18 +10,11 @@ import {
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
-import { IDSchema, CreateRuleSchema, UpdateRuleSchema } from '../middleware/validation-schemas.js';
+import { IDSchema, CreateRuleSchema, UpdateRuleSchema, PayeeIdParamsSchema } from '../middleware/validation-schemas.js';
+import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT);
-
-const ruleWriteLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  message: { error: 'Too many rule operations. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 router.get('/', asyncHandler(async (req, res) => {
   const rules = await rulesList();
@@ -32,7 +23,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 router.get(
   '/payees/:payeeId',
-  validateParams(z.object({ payeeId: z.string().uuid() })),
+  validateParams(PayeeIdParamsSchema),
   asyncHandler(async (req, res) => {
     const rules = await payeeRulesList(req.validatedParams.payeeId);
     res.json({ success: true, payeeId: req.validatedParams.payeeId, rules });
@@ -41,7 +32,7 @@ router.get(
 
 router.post(
   '/',
-  ruleWriteLimiter,
+  standardWriteLimiter,
   validateBody(CreateRuleSchema),
   asyncHandler(async (req, res) => {
     const { rule } = req.validatedBody;
@@ -52,7 +43,7 @@ router.post(
 
 router.put(
   '/:id',
-  ruleWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   validateBody(UpdateRuleSchema),
   asyncHandler(async (req, res) => {
@@ -64,7 +55,7 @@ router.put(
 
 router.delete(
   '/:id',
-  ruleWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   asyncHandler(async (req, res) => {
     await ruleDelete(req.validatedParams.id);

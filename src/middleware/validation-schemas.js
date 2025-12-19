@@ -182,6 +182,50 @@ export const LogoutSchema = z.object({
   refresh_token: z.string().optional(),
 });
 
+// Payee merge schema
+export const MergePayeesSchema = z.object({
+  targetId: z.string().uuid(),
+  mergeIds: z.array(z.string().uuid()).min(1),
+});
+
+// Budget schemas
+export const BudgetMonthParamsSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+});
+
+export const BudgetCategoryParamsSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  categoryId: z.string().uuid(),
+});
+
+export const BudgetCarryoverSchema = z.object({
+  flag: z.boolean(),
+});
+
+export const BudgetHoldSchema = z.object({
+  amount: z.number(),
+});
+
+// Transaction schemas
+export const AccountIdParamsSchema = z.object({
+  accountId: z.string().uuid(),
+});
+
+export const TransactionsAddSchema = z.object({
+  transactions: z.array(CreateTransactionSchema),
+  runTransfers: z.boolean().optional().default(false),
+  learnCategories: z.boolean().optional().default(false),
+});
+
+export const TransactionsImportSchema = z.object({
+  transactions: z.array(CreateTransactionSchema),
+});
+
+// Rules schemas
+export const PayeeIdParamsSchema = z.object({
+  payeeId: z.string().uuid(),
+});
+
 // Validation middleware factory
 export const validateBody = (schema) => (req, res, next) => {
   const result = schema.safeParse(req.body);

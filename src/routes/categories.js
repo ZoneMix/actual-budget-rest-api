@@ -1,22 +1,14 @@
 // src/routes/categories.js - CRUD for categories (pattern repeated for other resources)
 import express from 'express';
-import rateLimit from 'express-rate-limit';
 import { authenticateJWT } from '../auth/jwt.js';
 import { categoriesList, categoryCreate, categoryUpdate, categoryDelete } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
 import { IDSchema, CreateCategorySchema, UpdateCategorySchema } from '../middleware/validation-schemas.js';
+import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT);
-
-const categoryWriteLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  message: { error: 'Too many category operations. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 router.get('/', asyncHandler(async (req, res) => {
   const categories = await categoriesList();
@@ -25,7 +17,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 router.post(
   '/',
-  categoryWriteLimiter,
+  standardWriteLimiter,
   validateBody(CreateCategorySchema),
   asyncHandler(async (req, res) => {
     const { category } = req.validatedBody;
@@ -36,7 +28,7 @@ router.post(
 
 router.put(
   '/:id',
-  categoryWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   validateBody(UpdateCategorySchema),
   asyncHandler(async (req, res) => {
@@ -48,7 +40,7 @@ router.put(
 
 router.delete(
   '/:id',
-  categoryWriteLimiter,
+  standardWriteLimiter,
   validateParams(IDSchema),
   asyncHandler(async (req, res) => {
     await categoryDelete(req.validatedParams.id);
