@@ -12,7 +12,7 @@
  */
 
 import express from 'express';
-import { getDb } from '../db/authDb.js';
+import { getRow } from '../db/authDb.js';
 import { getActualApi } from '../services/actualApi.js';
 import { NODE_ENV } from '../config/index.js';
 import logger from '../logging/logger.js';
@@ -23,11 +23,10 @@ const isProduction = NODE_ENV === 'production';
 /**
  * Check database connectivity.
  */
-const checkDatabase = () => {
+const checkDatabase = async () => {
   try {
-    const db = getDb();
     // Simple query to verify connection
-    db.prepare('SELECT 1').get();
+    await getRow('SELECT 1');
     return { status: 'ok', message: 'Database connection healthy' };
   } catch (error) {
     logger.error('Database health check failed', { error: error.message });
@@ -99,7 +98,7 @@ const getSystemInfo = () => {
  * - Development: Shows full system information (memory, uptime, node version, etc.)
  */
 router.get('/', async (req, res) => {
-  const databaseCheck = checkDatabase();
+  const databaseCheck = await checkDatabase();
   const actualApiCheck = await checkActualApi();
   const systemInfo = getSystemInfo();
 

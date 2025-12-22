@@ -1,31 +1,30 @@
 services:
-  actual-api-wrapper:
+  actual-rest-api-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    image: actual-api-wrapper-dev
-    container_name: actual-api-wrapper-dev
+    image: actual-rest-api-dev
+    container_name: actual-rest-api-dev
     ports:
       - "3000:3000"
     volumes:
-      - ./data/dev/actual-api-wrapper:/app/.actual-cache
+      - ./data/dev/actual-rest-api:/app/.actual-cache
       - ./.env.local:/app/.env:ro
     working_dir: /app
     command: >
       sh -c "dotenvx run -- npm start"
     environment:
-      # Redis connection (optional - will use memory store if not set)
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}  # Optional: Set if Redis password is configured
-      # Or use REDIS_URL instead: redis://redis:6379 or redis://password@redis:6379
-      # Log level: Set to 'warn' or 'error' to reduce log verbosity
-      # LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: development
+      DB_TYPE: postgres
+      REDIS_HOST: redis-dev
+      POSTGRES_HOST: postgres-dev
     depends_on:
-      actual-server:
+      actual-server-dev:
         condition: service_healthy
         restart: true
-      redis:
+      redis-dev:
+        condition: service_healthy
+      postgres-dev:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
@@ -40,13 +39,13 @@ services:
         max-file: "3"
         compress: "true"
 
-  redis:
+  redis-dev:
     image: redis:7-alpine
-    container_name: actual-api-redis-dev
+    container_name: actual-rest-api-redis-dev
     ports:
       - "6379:6379"
     volumes:
-      - redis-data-dev:/data
+      - ./data/dev/redis:/data
     # Redis runs without password by default in dev (can be set via REDIS_PASSWORD env var)
     # For production, always set a password
     command: redis-server --appendonly yes
@@ -66,7 +65,7 @@ services:
         max-file: "2"
         compress: "true"
 
-  n8n:
+  n8n-dev:
     image: n8nio/n8n:latest
     container_name: n8n-dev
     ports:
@@ -80,7 +79,7 @@ services:
       # For local development of the Actual Budget REST API n8n node
       - ./n8n-nodes-actual-budget-rest-api:/home/node/.n8n/custom/node_modules/n8n-nodes-actual-budget-rest-api
     depends_on:
-      - actual-api-wrapper
+      - actual-rest-api-dev
     logging:
       driver: "json-file"
       options:
@@ -88,7 +87,7 @@ services:
         max-file: "3"
         compress: "true"
 
-  actual-server:
+  actual-server-dev:
     container_name: actual-server-dev
     image: docker.io/actualbudget/actual-server:latest
     ports:
@@ -111,23 +110,23 @@ services:
         max-file: "2"
         compress: "true"
 
-  prometheus:
+  prometheus-dev:
     image: prom/prometheus:latest
     container_name: prometheus-dev
     ports:
       - "9090:9090"
     volumes:
-      - ./data/dev/prometheus:/etc/prometheus
-      - prometheus-data-dev:/prometheus
+      - ./data/dev/prometheus:/prometheus
+      - ./monitoring/prometheus.yml:/prometheus/prometheus.yml
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--storage.tsdb.retention.time=30d'
       - '--web.enable-lifecycle'
     depends_on:
-      - actual-api-wrapper
+      - actual-rest-api-dev
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -136,7 +135,7 @@ services:
         max-file: "2"
         compress: "true"
 
-  grafana:
+  grafana-dev:
     image: grafana/grafana:latest
     container_name: grafana-dev
     ports:
@@ -147,20 +146,35 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3001
     volumes:
-      - grafana-data-dev:/var/lib/grafana
-      - ./data/dev/grafana/provisioning:/etc/grafana/provisioning
-      - ./data/dev/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./data/dev/grafana/data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
-      - prometheus
+      - prometheus-dev
+    restart: unless-stopped
+
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: postgres-dev
+    ports:
+      - "5432:5432"
+    environment:
+      # Fallback defaults if .env.postgres doesn't exist
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - ./data/dev/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
+        max-size: "5m"
         max-file: "2"
         compress: "true"
-
-volumes:
-  redis-data-dev:
-  prometheus-data-dev:
-  grafana-data-dev:

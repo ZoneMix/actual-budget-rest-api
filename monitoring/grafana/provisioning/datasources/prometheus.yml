@@ -4,7 +4,8 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090  # Update hostname/port if Prometheus is running elsewhere
+    url: http://prometheus-dev:9090  # Update hostname/port if Prometheus is running elsewhere
     isDefault: true
     editable: true
+
 

@@ -14,7 +14,7 @@ import { validateClient } from '../auth/oauth2/client.js';
 import { generateAuthCode } from '../auth/oauth2/code.js';
 import { validateAuthCode } from '../auth/oauth2/code.js';
 import { issueTokens } from '../auth/jwt.js';
-import { getDb } from '../db/authDb.js';
+import { getRow } from '../db/authDb.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { throwBadRequest, throwInternalError } from '../middleware/responseHelpers.js';
 
@@ -41,9 +41,14 @@ router.get('/authorize', asyncHandler(async (req, res) => {
     throwBadRequest('Missing parameters');
   }
 
+  // Validate client_id format (alphanumeric, underscore, hyphen, max 255 chars)
+  const CLIENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,255}$/;
+  if (!CLIENT_ID_PATTERN.test(client_id)) {
+    throwBadRequest('Invalid client_id format');
+  }
+
   // Verify client exists
-  const db = getDb();
-  const client = db.prepare('SELECT * FROM clients WHERE client_id = ?').get(client_id);
+  const client = await getRow('SELECT * FROM clients WHERE client_id = ?', [client_id]);
   if (!client) {
     throwBadRequest('Invalid client_id');
   }
@@ -69,7 +74,7 @@ router.get('/authorize', asyncHandler(async (req, res) => {
     req.session.oauth2_state = state;
   }
   
-  const code = generateAuthCode(client_id, req.session.user.id, redirect_uri, scope);
+  const code = await generateAuthCode(client_id, req.session.user.id, redirect_uri, scope);
   
   // Build redirect URL with state parameter
   const redirectUrl = new URL(redirect_uri);
@@ -143,17 +148,16 @@ router.post('/token', express.json(), express.urlencoded({ extended: true }), as
   await validateClient(clientId, clientSecret);
   
   // Validate and exchange authorization code
-  const { userId, scope } = validateAuthCode(code, clientId, redirect_uri);
+  const { userId, scope } = await validateAuthCode(code, clientId, redirect_uri);
 
   // Get user details for token issuance
-  const db = getDb();
-  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+  const user = await getRow('SELECT username FROM users WHERE id = ?', [userId]);
   if (!user) {
     throwInternalError('User not found');
   }
 
   // Issue JWT tokens
-  const tokens = issueTokens(userId, user.username, scope);
+  const tokens = await issueTokens(userId, user.username, scope);
   res.json(tokens);
 }));
 

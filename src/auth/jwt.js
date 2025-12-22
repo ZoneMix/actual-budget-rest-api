@@ -4,7 +4,7 @@
 
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { getDb, insertToken, pruneExpiredTokens } from '../db/authDb.js';
+import { insertToken, pruneExpiredTokens, executeQuery, getRow } from '../db/authDb.js';
 import { ACCESS_TTL_SECONDS, REFRESH_TTL_SECONDS } from '../config/index.js';
 import logger, { logAuthEvent, logSuspiciousActivity } from '../logging/logger.js';
 
@@ -20,6 +20,19 @@ if (!process.env.JWT_REFRESH_SECRET) {
 }
 
 /**
+ * Validate JTI format (UUID v4 or UUID v4 with '-refresh' suffix for refresh tokens).
+ * Returns true if jti is a valid UUID v4 format or refresh token format, false otherwise.
+ */
+const validateJTI = (jti) => {
+  if (!jti || typeof jti !== 'string') return false;
+  // UUID v4 pattern
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  // Refresh token pattern (UUID v4 + '-refresh')
+  const REFRESH_JTI_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}-refresh$/i;
+  return UUID_PATTERN.test(jti) || REFRESH_JTI_PATTERN.test(jti);
+};
+
+/**
  * Issue access and refresh tokens for a user.
  * 
  * @param {number} userId - User ID
@@ -27,8 +40,8 @@ if (!process.env.JWT_REFRESH_SECRET) {
  * @param {string|string[]} scopes - User scopes (comma-separated string or array)
  * @param {string} role - User role (optional, defaults to 'user')
  */
-export const issueTokens = (userId, username, scopes = 'api', role = 'user') => {
-  pruneExpiredTokens();
+export const issueTokens = async (userId, username, scopes = 'api', role = 'user') => {
+  await pruneExpiredTokens();
 
   // Normalize scopes to comma-separated string
   const scopeString = Array.isArray(scopes) ? scopes.join(',') : scopes;
@@ -51,8 +64,14 @@ export const issueTokens = (userId, username, scopes = 'api', role = 'user') => 
     { expiresIn: `${REFRESH_TTL_SECONDS}s`, jwtid: `${jti}-refresh` }
   );
 
-  insertToken(jti, 'access', accessExpiresAt);
-  insertToken(`${jti}-refresh`, 'refresh', refreshExpiresAt);
+  // Validate JTI format before inserting (should always be valid since we generate it)
+  if (!validateJTI(jti)) {
+    logger.error(`Invalid JTI format generated: ${jti}`);
+    throw new Error('Failed to generate valid JTI');
+  }
+  
+  await insertToken(jti, 'access', accessExpiresAt);
+  await insertToken(`${jti}-refresh`, 'refresh', refreshExpiresAt);
 
   logAuthEvent('TOKEN_ISSUED', userId, { scope: scopeString, role }, true);
 
@@ -68,28 +87,36 @@ export const issueTokens = (userId, username, scopes = 'api', role = 'user') => 
 /**
  * Revoke a token by JTI (used on logout).
  */
-export const revokeToken = (jti) => {
-  pruneExpiredTokens();
-  const db = getDb();
-  const { changes } = db.prepare('UPDATE tokens SET revoked = TRUE WHERE jti = ?').run(jti);
-  if (changes === 0) {
+export const revokeToken = async (jti) => {
+  if (!validateJTI(jti)) {
+    logger.warn(`Invalid JTI format: ${jti}`);
+    throw new Error('Invalid JTI format');
+  }
+  await pruneExpiredTokens();
+  const result = await executeQuery('UPDATE tokens SET revoked = TRUE WHERE jti = ?', [jti]);
+  if (result.changes === 0) {
     const placeholderExpiry = new Date(Date.now() + REFRESH_TTL_SECONDS * 1000).toISOString();
-    db.prepare(
-      "INSERT INTO tokens (jti, token_type, expires_at, revoked) VALUES (?, 'unknown', ?, TRUE)"
-    ).run(jti, placeholderExpiry);
+    await executeQuery(
+      "INSERT INTO tokens (jti, token_type, expires_at, revoked) VALUES (?, 'unknown', ?, TRUE)",
+      [jti, placeholderExpiry]
+    );
   }
 };
 
 /**
  * Check if a token is revoked.
  */
-export const isTokenRevoked = (jti) => {
+export const isTokenRevoked = async (jti) => {
   if (!jti) return true;
-  pruneExpiredTokens();
-  const db = getDb();
-  const row = db.prepare('SELECT revoked FROM tokens WHERE jti = ?').get(jti);
+  if (!validateJTI(jti)) {
+    logger.warn(`Invalid JTI format in isTokenRevoked: ${jti}`);
+    return true; // Invalid format treated as revoked
+  }
+  await pruneExpiredTokens();
+  const row = await getRow('SELECT revoked FROM tokens WHERE jti = ?', [jti]);
   if (!row) return false;
-  return row.revoked === 1;
+  // SQLite returns 1/0 for booleans, PostgreSQL returns true/false
+  return row.revoked === true || row.revoked === 1;
 };
 
 export const authenticateJWT = async (req, res, next) => {
@@ -106,7 +133,7 @@ export const authenticateJWT = async (req, res, next) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
     // Then check if token is revoked
-    if (isTokenRevoked(payload.jti)) {
+    if (await isTokenRevoked(payload.jti)) {
       logSuspiciousActivity('REVOKED_TOKEN_USE', payload.user_id, { jti: payload.jti, ip: req.ip });
       return res.status(401).json({ error: 'Token has been revoked' });
     }

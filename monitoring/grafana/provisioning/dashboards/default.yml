@@ -11,3 +11,4 @@ providers:
     options:
       path: /var/lib/grafana/dashboards  # Update path if mounting dashboards elsewhere
 
+

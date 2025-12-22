@@ -37,15 +37,14 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
       const decoded = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
       
       // Check if token was revoked
-      if (isTokenRevoked(decoded.jti)) {
+      if (await isTokenRevoked(decoded.jti)) {
         logAuthEvent('REFRESH_FAILED', decoded.user_id, { reason: 'token_revoked' }, false);
         throwUnauthorized('Refresh token revoked');
       }
 
       // Get user's current role and scopes from database
-      const { getDb } = await import('../db/authDb.js');
-      const db = getDb();
-      const user = db.prepare('SELECT role, scopes FROM users WHERE id = ?').get(decoded.user_id);
+      const { getRow } = await import('../db/authDb.js');
+      const user = await getRow('SELECT role, scopes FROM users WHERE id = ?', [decoded.user_id]);
       const role = user?.role || decoded.role || 'user';
       const scopes = user?.scopes || decoded.scope || 'api';
       const scopeArray = Array.isArray(scopes) ? scopes : scopes.split(',').map(s => s.trim()).filter(Boolean);
@@ -60,7 +59,7 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
         { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: newJti }
       );
 
-      insertToken(newJti, 'access', accessExpiresAt);
+      await insertToken(newJti, 'access', accessExpiresAt);
       logAuthEvent('TOKEN_REFRESHED', decoded.user_id, { username: decoded.username, role }, true);
 
       return res.json({
@@ -85,7 +84,7 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
   }
 
   const { userId, username: uname, role, scopes } = await authenticateUser(username, password);
-  const tokens = issueTokens(userId, uname, scopes, role);
+  const tokens = await issueTokens(userId, uname, scopes, role);
   res.json(tokens);
 });
 
@@ -95,12 +94,12 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
  * Revokes the current access token (from JWT middleware) and optionally
  * revokes a refresh token if provided in the request body.
  */
-router.post('/logout', authenticateJWT, validateBody(LogoutSchema), (req, res) => {
+router.post('/logout', authenticateJWT, validateBody(LogoutSchema), async (req, res) => {
   const user = req.user; // Set by authenticateJWT middleware
 
   // Always revoke the current access token
   if (user?.jti) {
-    revokeToken(user.jti);
+    await revokeToken(user.jti);
     logAuthEvent('LOGOUT', user.user_id, { username: user.username, jti: user.jti }, true);
   }
 
@@ -110,7 +109,7 @@ router.post('/logout', authenticateJWT, validateBody(LogoutSchema), (req, res) =
     try {
       const decodedRefresh = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
       if (decodedRefresh?.jti) {
-        revokeToken(decodedRefresh.jti);
+        await revokeToken(decodedRefresh.jti);
         logAuthEvent('REFRESH_REVOKED', user.user_id, { jti: decodedRefresh.jti }, true);
       }
       res.json({ success: true, message: 'Logged out successfully – access and refresh tokens revoked' });

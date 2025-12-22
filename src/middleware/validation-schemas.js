@@ -194,7 +194,11 @@ export const QuerySchema = z.object({
 
 // Auth schemas
 export const LoginSchema = z.object({
-  username: z.string().min(1).max(255).optional(),
+  username: z.string()
+    .min(1)
+    .max(255)
+    .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores, and hyphens')
+    .optional(),
   password: z.string().min(1).optional(),
   refresh_token: z.string().optional(),
 }).refine(

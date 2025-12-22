@@ -3,8 +3,7 @@
  */
 
 import bcrypt from 'bcrypt';
-import { getDb } from '../db/authDb.js';
-import { pruneExpiredTokens } from '../db/authDb.js';
+import { executeQuery, getRow, pruneExpiredTokens } from '../db/authDb.js';
 import logger, { logAuthEvent } from '../logging/logger.js';
 
 /**
@@ -46,7 +45,6 @@ export const validatePasswordComplexity = (password) => {
  * Sets role='admin' and scopes='api,admin' for the admin user.
  */
 export const ensureAdminUserHash = async () => {
-  const db = getDb();
   const adminUsername = process.env.ADMIN_USER || 'admin';
   const adminPassword = process.env.ADMIN_PASSWORD;
 
@@ -64,13 +62,12 @@ export const ensureAdminUserHash = async () => {
 
   const hash = await bcrypt.hash(adminPassword, 12);
 
-  // Check if updated_at column exists (for backward compatibility)
-  const tableInfo = db.prepare("PRAGMA table_info(users)").all();
-  const hasUpdatedAt = tableInfo.some(col => col.name === 'updated_at');
-  
-  let upsert;
-  if (hasUpdatedAt) {
-    upsert = db.prepare(`
+  // Use PostgreSQL or SQLite compatible UPSERT (both support ON CONFLICT)
+  // Try to use role/scopes columns if they exist (migrations should have added them)
+  // If they don't exist yet, fall back to basic query
+  try {
+    // Try the full query with role/scopes/updated_at
+    await executeQuery(`
       INSERT INTO users (username, password_hash, role, scopes, is_active, updated_at)
       VALUES (?, ?, 'admin', 'api,admin', TRUE, CURRENT_TIMESTAMP)
       ON CONFLICT(username) DO UPDATE SET
@@ -78,23 +75,31 @@ export const ensureAdminUserHash = async () => {
         role = 'admin',
         scopes = 'api,admin',
         updated_at = CURRENT_TIMESTAMP
-    `);
-  } else {
-    // Fallback for databases without updated_at column
-    upsert = db.prepare(`
-      INSERT INTO users (username, password_hash, role, scopes, is_active)
-      VALUES (?, ?, 'admin', 'api,admin', TRUE)
-      ON CONFLICT(username) DO UPDATE SET
-        password_hash = excluded.password_hash,
-        role = 'admin',
-        scopes = 'api,admin'
-    `);
+    `, [adminUsername, hash]);
+    logger.info(`Admin user '${adminUsername}' hash created/updated with admin role and scopes`);
+  } catch {
+    // If columns don't exist, try without updated_at
+    try {
+      await executeQuery(`
+        INSERT INTO users (username, password_hash, role, scopes, is_active)
+        VALUES (?, ?, 'admin', 'api,admin', TRUE)
+        ON CONFLICT(username) DO UPDATE SET
+          password_hash = excluded.password_hash,
+          role = 'admin',
+          scopes = 'api,admin'
+      `, [adminUsername, hash]);
+      logger.info(`Admin user '${adminUsername}' hash created/updated with admin role and scopes`);
+    } catch {
+      // Fallback to basic query if role/scopes columns don't exist
+      await executeQuery(`
+        INSERT INTO users (username, password_hash, is_active)
+        VALUES (?, ?, TRUE)
+        ON CONFLICT(username) DO UPDATE SET
+          password_hash = excluded.password_hash
+      `, [adminUsername, hash]);
+      logger.info(`Admin user '${adminUsername}' hash created/updated`);
+    }
   }
-  
-  upsert.run(adminUsername, hash);
-
-  upsert.run(adminUsername, hash);
-  logger.info(`Admin user '${adminUsername}' hash created/updated with admin role and scopes`);
 };
 
 /**
@@ -102,10 +107,8 @@ export const ensureAdminUserHash = async () => {
  * Returns userId, username, role, and scopes.
  */
 export const authenticateUser = async (username, password) => {
-  pruneExpiredTokens();
-  const db = getDb();
-
-  const user = db.prepare('SELECT * FROM users WHERE username = ? AND is_active = TRUE').get(username);
+  await pruneExpiredTokens();
+  const user = await getRow('SELECT * FROM users WHERE username = ? AND is_active = TRUE', [username]);
   if (!user) {
     logAuthEvent('LOGIN_FAILED', null, { username, reason: 'user_not_found' }, false);
     throw new Error('User not found or inactive');
@@ -116,11 +119,11 @@ export const authenticateUser = async (username, password) => {
     throw new Error('Invalid password');
   }
 
-  logAuthEvent('LOGIN_SUCCESS', user.id, { username, role: user.role }, true);
-
   // Parse scopes from comma-separated string or default to 'api'
   const scopes = user.scopes ? user.scopes.split(',').map(s => s.trim()).filter(Boolean) : ['api'];
   const role = user.role || 'user';
+
+  logAuthEvent('LOGIN_SUCCESS', user.id, { username, role }, true);
 
   return { 
     userId: user.id, 

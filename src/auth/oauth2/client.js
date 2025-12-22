@@ -7,7 +7,7 @@
 
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import { getDb, pruneExpiredCodes } from '../../db/authDb.js';
+import { executeQuery, getRow, pruneExpiredCodes } from '../../db/authDb.js';
 import logger from '../../logging/logger.js';
 import { AuthenticationError } from '../../errors/index.js';
 
@@ -30,13 +30,13 @@ const compareClientSecret = async (plainSecret, hashedSecret) => {
  * Migrate existing plain-text secrets to hashed format.
  * This is a one-time migration for existing clients.
  */
-const migrateClientSecret = async (db, clientId, plainSecret) => {
+const migrateClientSecret = async (clientId, plainSecret) => {
   const hashed = await hashClientSecret(plainSecret);
-  db.prepare(`
+  await executeQuery(`
     UPDATE clients
     SET client_secret = ?, client_secret_hashed = TRUE
     WHERE client_id = ?
-  `).run(hashed, clientId);
+  `, [hashed, clientId]);
   logger.info(`Migrated client secret to hashed format: ${clientId}`);
 };
 
@@ -50,9 +50,15 @@ export const validateClient = async (clientId, clientSecret) => {
     throw new AuthenticationError('Invalid client credentials');
   }
 
-  pruneExpiredCodes();
-  const db = getDb();
-  const client = db.prepare('SELECT * FROM clients WHERE client_id = ?').get(clientId);
+  // Validate client_id format (alphanumeric, underscore, hyphen, max 255 chars)
+  const CLIENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,255}$/;
+  if (!CLIENT_ID_PATTERN.test(clientId)) {
+    logger.warn(`OAuth2 client validation failed: invalid client_id format: ${clientId}`);
+    throw new AuthenticationError('Invalid client credentials');
+  }
+
+  await pruneExpiredCodes();
+  const client = await getRow('SELECT * FROM clients WHERE client_id = ?', [clientId]);
 
   if (!client) {
     logger.warn(`OAuth2 client validation failed: client_id not found: ${clientId}`);
@@ -60,7 +66,10 @@ export const validateClient = async (clientId, clientSecret) => {
   }
 
   // Check if secret is hashed
-  if (client.client_secret_hashed) {
+  // SQLite returns 1/0 for booleans, PostgreSQL returns true/false
+  const isHashed = client.client_secret_hashed === true || client.client_secret_hashed === 1;
+  
+  if (isHashed) {
     // Compare with hashed secret
     const isValid = await compareClientSecret(clientSecret, client.client_secret);
     if (!isValid) {
@@ -74,7 +83,7 @@ export const validateClient = async (clientId, clientSecret) => {
       throw new AuthenticationError('Invalid client credentials');
     }
     // Migrate to hashed format
-    await migrateClientSecret(db, clientId, clientSecret);
+    await migrateClientSecret(clientId, clientSecret);
   }
 
   logger.debug(`OAuth2 client validation successful: ${clientId}`);
@@ -108,27 +117,33 @@ export const ensureN8NClient = async () => {
     logger.warn('N8N_CLIENT_SECRET is too short. Use at least 32 characters for security.');
   }
 
-  const db = getDb();
-  const existing = db.prepare('SELECT client_secret_hashed FROM clients WHERE client_id = ?').get(clientId);
+  // Validate client_id format
+  const CLIENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,255}$/;
+  if (!CLIENT_ID_PATTERN.test(clientId)) {
+    logger.warn(`Invalid client_id format during n8n client setup: ${clientId}`);
+    throw new Error('Invalid client_id format');
+  }
+
+  const existing = await getRow('SELECT client_secret_hashed FROM clients WHERE client_id = ?', [clientId]);
 
   // Hash the secret before storage
   const hashedSecret = await hashClientSecret(clientSecret);
 
   if (!existing) {
     // New client - insert with hashed secret
-    db.prepare(`
+    await executeQuery(`
       INSERT INTO clients (client_id, client_secret, client_secret_hashed, allowed_scopes, redirect_uris)
       VALUES (?, ?, TRUE, 'api', ?)
-    `).run(clientId, hashedSecret, callbackUrl);
+    `, [clientId, hashedSecret, callbackUrl]);
     logger.info(`Registered n8n OAuth2 client: ${clientId} (secret hashed)`);
   } else {
     // Update secret and callback in case they changed
     // Always update to hashed format if it wasn't already
-    db.prepare(`
+    await executeQuery(`
       UPDATE clients
       SET client_secret = ?, client_secret_hashed = TRUE, redirect_uris = ?
       WHERE client_id = ?
-    `).run(hashedSecret, callbackUrl, clientId);
+    `, [hashedSecret, callbackUrl, clientId]);
     logger.info(`Updated n8n OAuth2 client: ${clientId} (secret hashed)`);
   }
 
@@ -147,9 +162,8 @@ export const generateClientSecret = () => {
  * Get all OAuth clients (without secrets).
  * Returns safe client information for listing.
  */
-export const listClients = () => {
-  const db = getDb();
-  const clients = db.prepare(`
+export const listClients = async () => {
+  const clients = await executeQuery(`
     SELECT 
       client_id,
       allowed_scopes,
@@ -157,18 +171,17 @@ export const listClients = () => {
       created_at
     FROM clients
     ORDER BY created_at DESC
-  `).all();
+  `);
   
-  return clients;
+  return clients.rows || [];
 };
 
 /**
  * Get a single OAuth client by ID (without secret).
  * Returns safe client information.
  */
-export const getClient = (clientId) => {
-  const db = getDb();
-  const client = db.prepare(`
+export const getClient = async (clientId) => {
+  const client = await getRow(`
     SELECT 
       client_id,
       allowed_scopes,
@@ -176,7 +189,7 @@ export const getClient = (clientId) => {
       created_at
     FROM clients
     WHERE client_id = ?
-  `).get(clientId);
+  `, [clientId]);
   
   return client || null;
 };
@@ -197,10 +210,8 @@ export const createClient = async ({ clientId, clientSecret, allowedScopes = 'ap
     throw new Error('clientId is required');
   }
 
-  const db = getDb();
-  
   // Check if client already exists
-  const existing = db.prepare('SELECT client_id FROM clients WHERE client_id = ?').get(clientId);
+  const existing = await getRow('SELECT client_id FROM clients WHERE client_id = ?', [clientId]);
   if (existing) {
     throw new Error(`Client with ID '${clientId}' already exists`);
   }
@@ -222,10 +233,10 @@ export const createClient = async ({ clientId, clientSecret, allowedScopes = 'ap
   const hashedSecret = await hashClientSecret(plainSecret);
 
   // Insert client
-  db.prepare(`
+  await executeQuery(`
     INSERT INTO clients (client_id, client_secret, client_secret_hashed, allowed_scopes, redirect_uris)
     VALUES (?, ?, TRUE, ?, ?)
-  `).run(clientId, hashedSecret, allowedScopes, redirectUrisStr);
+  `, [clientId, hashedSecret, allowedScopes, redirectUrisStr]);
 
   logger.info(`Created OAuth client: ${clientId}`);
 
@@ -250,10 +261,8 @@ export const createClient = async ({ clientId, clientSecret, allowedScopes = 'ap
  * @returns {Object} Updated client info (without secret)
  */
 export const updateClient = async (clientId, { clientSecret, allowedScopes, redirectUris }) => {
-  const db = getDb();
-  
   // Check if client exists
-  const existing = db.prepare('SELECT client_id FROM clients WHERE client_id = ?').get(clientId);
+  const existing = await getRow('SELECT client_id FROM clients WHERE client_id = ?', [clientId]);
   if (!existing) {
     throw new Error(`Client with ID '${clientId}' not found`);
   }
@@ -289,11 +298,11 @@ export const updateClient = async (clientId, { clientSecret, allowedScopes, redi
 
   values.push(clientId);
 
-  db.prepare(`
+  await executeQuery(`
     UPDATE clients
     SET ${updates.join(', ')}
     WHERE client_id = ?
-  `).run(...values);
+  `, values);
 
   logger.info(`Updated OAuth client: ${clientId}`);
 
@@ -306,10 +315,8 @@ export const updateClient = async (clientId, { clientSecret, allowedScopes, redi
  * @param {string} clientId - Client identifier
  * @returns {boolean} True if client was deleted, false if not found
  */
-export const deleteClient = (clientId) => {
-  const db = getDb();
-  
-  const result = db.prepare('DELETE FROM clients WHERE client_id = ?').run(clientId);
+export const deleteClient = async (clientId) => {
+  const result = await executeQuery('DELETE FROM clients WHERE client_id = ?', [clientId]);
   
   if (result.changes > 0) {
     logger.info(`Deleted OAuth client: ${clientId}`);
