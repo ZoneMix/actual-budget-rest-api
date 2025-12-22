@@ -14,9 +14,9 @@ Your project now has comprehensive pre-commit hooks configured using **Husky** a
 Runs before every commit and checks:
 
 ✔️ **No .env files committed**
-- Blocks `.env`, `.env.local`, `.env.keys` from being pushed
+- Blocks `.env`, `.env.local` from being pushed
 - Prevents accidental secrets exposure
-- Use dotenvx for encrypted environment management
+- For production, use secrets managers (GitHub Secrets, AWS Secrets Manager, etc.)
 
 ✔️ **No hardcoded secrets**
 - Scans for patterns: `password=`, `secret:`, `api_key`, `token`, etc.
@@ -184,9 +184,9 @@ Hooks are automatically installed when dependencies are installed.
    - Never modify package.json without `npm install`
    - Keeps team dependencies consistent
 
-4. **Use dotenvx for team secrets**
-   - Encrypt .env with: `dotenvx encrypt`
-   - Commit .env.keys for team sharing
+4. **Use secrets managers for production**
+   - For development: Keep `.env.local` local, never commit it
+   - For production: Use secrets managers (GitHub Secrets, AWS Secrets Manager, Kubernetes Secrets, etc.)
    - Hooks prevent accidental .env commits
 
 ## 🚨 When to Bypass Hooks

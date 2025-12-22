@@ -8,18 +8,14 @@ services:
     volumes:
       - ./data/prod/actual-api:/app/.actual-cache  # Persistent encrypted DB and SQLite auth.db
     working_dir: /app
-    command: >
-      sh -c "dotenvx run -- npm start"
+    command: npm start
+    # Use .env if not using secrets manager with CI/CD pipeline
+    #env_file:
+    #  - .env
     environment:
-      DOTENV_PRIVATE_KEY: ${DOTENV_PRIVATE_KEY}  # Master key from host .env or secrets
-      # Redis connection (optional - will use memory store if not set)
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}  # Optional: Set if Redis password is configured
-      # Or use REDIS_URL instead: redis://redis:6379 or redis://password@redis:6379
-      # Database connection (SQLite)
+      # Environment variables should be provided via secrets manager or .env file
+      # For production, use GitHub Secrets, AWS Secrets Manager, etc.
       DB_TYPE: sqlite
-      # SQLite database will be stored in DATA_DIR/auth.db (default: /app/.actual-cache/auth.db)
     depends_on:
       redis:
         condition: service_healthy
@@ -46,7 +42,7 @@ services:
         redis-server --appendonly yes
       fi"
     environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # Redis password (set REDIS_PASSWORD env var for production)
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -54,4 +50,3 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
-

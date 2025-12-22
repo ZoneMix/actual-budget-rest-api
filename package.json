@@ -1,5 +1,5 @@
 {
-  "name": "actual-api-wrapper",
+  "name": "actual-rest-api",
   "version": "2.0.0",
   "type": "module",
   "main": "server.js",

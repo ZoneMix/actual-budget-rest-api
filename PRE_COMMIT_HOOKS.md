@@ -9,9 +9,9 @@ This project uses **Husky** and **lint-staged** to automatically check your code
 Runs automatically before every commit:
 
 1. **Prevents .env files from being committed**
-   - Blocks `.env`, `.env.local`, `.env.keys` files
+   - Blocks `.env`, `.env.local` files
    - These contain secrets and should never be in git
-   - Use dotenvx to manage encrypted environment files
+   - For production, use secrets managers (GitHub Secrets, AWS Secrets Manager, etc.)
 
 2. **Detects hardcoded secrets**
    - Scans for patterns like `password=`, `secret:`, `api_key`, `token`, etc.
@@ -165,11 +165,8 @@ npm run lint
 ### Need to update .env.local
 
 1. Update your `.env.local` locally (don't commit)
-2. Use dotenvx to encrypt it:
-   ```bash
-   dotenvx encrypt .env.local
-   ```
-3. The `.env.keys` file is what you commit for team sharing
+2. For development: Keep `.env.local` local, never commit it
+3. For production: Use secrets managers (GitHub Secrets, AWS Secrets Manager, etc.) to manage environment variables
 
 ### Accidentally committed .env
 
@@ -205,7 +202,7 @@ git push --force-with-lease
 
 2. **Never bypass .env checks**
    - This prevents accidental secret leaks
-   - Use dotenvx for team secrets
+   - For production, use secrets managers (GitHub Secrets, AWS Secrets Manager, etc.)
 
 3. **Write meaningful commit messages**
    - Helps with git history and debugging

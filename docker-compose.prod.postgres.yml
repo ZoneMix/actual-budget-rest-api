@@ -1,26 +1,21 @@
 services:
-  actual-api-rest-api:
+  actual-rest-api:
     build: .  # Builds Dockerfile (copies from ./src)
-    image: actual-api-rest-api  # Tagged for reuse
-    container_name: actual-api-rest-api
+    image: actual-rest-api  # Tagged for reuse
+    container_name: actual-rest-api
     ports:
       - "3000:3000"
     volumes:
-      - ./data/prod/actual-api:/app/.actual-cache  # Persistent encrypted DB
+      - ./data/prod/actual-rest-api:/app/.actual-cache  # Persistent encrypted DB
     working_dir: /app
-    command: >
-      sh -c "dotenvx run -- npm start"
+    command: npm start
+    # Use .env if not using secrets manager with CI/CD pipeline
+    #env_file:
+    #  - .env
     environment:
-      DOTENV_PRIVATE_KEY: ${DOTENV_PRIVATE_KEY}  # Master key from host .env or secrets
-      # Redis connection (optional - will use memory store if not set)
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}  # Optional: Set if Redis password is configured
-      # Or use REDIS_URL instead: redis://redis:6379 or redis://password@redis:6379
-      # Database connection (PostgreSQL)
+      # Environment variables should be provided via secrets manager or .env file
+      # For production, use GitHub Secrets, AWS Secrets Manager, etc.
       DB_TYPE: postgres
-      # Override POSTGRES_HOST for Docker Compose (use service name 'postgres' instead of 'localhost')
-      POSTGRES_HOST: postgres
     depends_on:
       redis:
         condition: service_healthy
@@ -64,15 +59,11 @@ services:
     ports:
       - "5432:5432"
     env_file:
-      # Use separate .env.postgres file since Docker Compose can't read encrypted dotenvx files
-      # Create .env.postgres with: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
       - .env.postgres
-      - .env.postgres.local  # Optional: local overrides (gitignored)
     environment:
-      # Fallback defaults if .env.postgres doesn't exist
-      POSTGRES_USER: ${POSTGRES_USER:-actual_api}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-actual_api_auth}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
       - ./data/prod/postgres:/var/lib/postgresql/data
     healthcheck:

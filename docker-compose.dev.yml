@@ -7,12 +7,12 @@ services:
     container_name: actual-rest-api-dev
     ports:
       - "3000:3000"
+    env_file:
+      - .env.local
     volumes:
       - ./data/dev/actual-rest-api:/app/.actual-cache
-      - ./.env.local:/app/.env:ro
     working_dir: /app
-    command: >
-      sh -c "dotenvx run -- npm start"
+    command: npm start
     environment:
       NODE_ENV: development
       DB_TYPE: postgres

@@ -1,12 +1,6 @@
 # Development Dockerfile - uses LTS Node but runs as root for easier development
 FROM node:24-alpine
 
-# Install dotenvx CLI (from docs)
-RUN apk add --no-cache curl && \
-    curl -fsSL https://dotenvx.sh/install.sh | sh && \
-    apk del curl && \
-    rm -rf /var/cache/apk/*
-
 WORKDIR /app
 
 # Copy package files
@@ -17,7 +11,6 @@ RUN npm install && npm cache clean --force
 COPY src ./src
 
 # Note: .env.local should be provided via docker-compose volume mount
-# or use dotenvx with encrypted .env files
 
 EXPOSE 3000
 

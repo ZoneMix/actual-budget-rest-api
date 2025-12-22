@@ -1,6 +1,6 @@
 # Actual Budget REST API (Actual Budget API wrapper)
 
-A secure Node.js/Express REST API that wraps the Actual Budget SDK (`@actual-app/api`). It provides JWT-based auth, optional OAuth2 for n8n, Swagger documentation, and a hardened runtime (helmet, CORS, structured logging, rate limits per route).
+A secure Node.js/Express REST API that wraps the Actual Budget SDK (`@actual-app/api`). It provides JWT-based auth with role-based access control, optional OAuth2 for n8n, admin API for OAuth client management, PostgreSQL or SQLite database support, Swagger documentation, and a hardened runtime (helmet, CORS, structured logging, rate limits per route).
 
 ![Actual REST API Login](images/login.png)
 
@@ -36,11 +36,13 @@ curl http://localhost:3000/accounts \
 ![Test Account Creation](images/test_account.png)
 
 ## Features
-- Authentication: JWT access/refresh tokens, session login for docs
+- Authentication: JWT access/refresh tokens, session login for docs, role-based access control (RBAC)
 - Optional OAuth2: first-party flow for n8n (`/oauth/authorize`, `/oauth/token`)
+- Admin API: OAuth client management endpoints (`/admin/oauth-clients`) with secure secret hashing
 - Endpoints: accounts, transactions, budgets, categories, payees, rules, schedules, query
 - API Docs: protected Swagger UI at `/docs` with OpenAPI source in [src/docs/openapi.yml](src/docs/openapi.yml)
-- Security: helmet headers, request IDs, SQLite token revocation, rate limiting, input validation
+- Database Support: PostgreSQL (recommended for production) or SQLite (default, simpler setup)
+- Security: helmet headers, request IDs, token revocation, rate limiting, input validation, bcrypt-hashed OAuth secrets
 - Environment Validation: Automatic validation of all environment variables on startup
 - Metrics: Built-in Prometheus metrics collection at `/metrics/prometheus` endpoint
 - Monitoring: Pre-configured Prometheus and Grafana setup for real-time metrics visualization (see [monitoring/](monitoring/))
@@ -53,7 +55,7 @@ curl http://localhost:3000/accounts \
 - Docker and Docker Compose (for recommended development workflow)
 - Actual Budget Server credentials (or use the dev `docker compose` stack)
 - For OAuth2 to n8n (optional): n8n instance and client credentials
-- For production: dotenvx CLI and encrypted `.env` file with `DOTENV_PRIVATE_KEY`
+- For production: Secrets manager (GitHub Secrets, AWS Secrets Manager, etc.) for secure environment variable management
 
 ## Installation & Setup
 
@@ -72,14 +74,7 @@ This section covers production deployment. For development setup, see the [Devel
    git submodule update --init --recursive
    ```
 
-2. **Install dotenvx** (required for production):
-   ```bash
-   npm install -g dotenvx
-   ```
-   
-   dotenvx is used to manage encrypted environment files in production. It provides secure encryption for sensitive configuration data.
-
-3. **Docker and Docker Compose** (for containerized deployment):
+2. **Docker and Docker Compose** (for containerized deployment):
    - Docker 20.10+ and Docker Compose 2.0+
    - Or use the production Docker image directly
 
@@ -121,64 +116,114 @@ openssl rand -base64 32  # For SESSION_SECRET (must be different!)
 
 See [.env.example](.env.example) for a complete list of all available environment variables with descriptions.
 
-### Environment Management with dotenvx
+### Environment Management for Production
 
-This project uses **dotenvx** to encrypt environment files in production.
+**For production deployments, use a secrets manager** to securely manage environment variables. This is the recommended approach for CI/CD pipelines, Kubernetes, and cloud deployments.
 
-1. **Create and encrypt `.env`**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with production values
-   dotenvx encrypt
+#### Option 1: GitHub Actions / GitHub Secrets (Recommended for CI/CD)
+
+1. **Store secrets in GitHub**:
+   - Go to your repository → Settings → Secrets and variables → Actions
+   - Add each environment variable as a secret (e.g., `ADMIN_PASSWORD`, `JWT_SECRET`, etc.)
+
+2. **Use in GitHub Actions workflow**:
+   ```yaml
+   - name: Deploy to production
+     env:
+       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+       JWT_SECRET: ${{ secrets.JWT_SECRET }}
+       JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+       # ... other secrets
+     run: docker compose up -d --build
    ```
 
-2. **Or set variables individually**:
+#### Option 2: AWS Secrets Manager / Parameter Store
+
+1. **Store secrets in AWS**:
    ```bash
-   dotenvx set ADMIN_PASSWORD "your-password"
-   dotenvx set JWT_SECRET "your-secret"
-   # ... set other variables
-   dotenvx encrypt
+   aws secretsmanager create-secret \
+     --name actual-rest-api/admin-password \
+     --secret-string "YourSecurePassword123!"
    ```
 
-3. **Store the private key securely**:
-   - Extract from `.env.keys`: `grep DOTENV_PRIVATE_KEY .env.keys`
-   - Store in your secrets manager (CI/CD, Kubernetes, etc.)
-   - Never commit `.env.keys` to git
-
-4. **Deploy**:
+2. **Retrieve and inject in deployment**:
    ```bash
-   export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
-   docker compose up -d --build
+   export ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
+     --secret-id actual-rest-api/admin-password \
+     --query SecretString --output text)
    ```
+
+#### Option 3: Kubernetes Secrets
+
+1. **Create secrets**:
+   ```bash
+   kubectl create secret generic actual-rest-api-secrets \
+     --from-literal=ADMIN_PASSWORD='YourSecurePassword123!' \
+     --from-literal=JWT_SECRET='your-jwt-secret' \
+     # ... other secrets
+   ```
+
+2. **Reference in deployment**:
+   ```yaml
+   env:
+     - name: ADMIN_PASSWORD
+       valueFrom:
+         secretKeyRef:
+           name: actual-rest-api-secrets
+           key: ADMIN_PASSWORD
+   ```
+
+#### Option 4: Docker Compose with .env file (Development Only)
+
+For local development, you can use a `.env` file:
+```bash
+cp .env.example .env
+# Edit .env with your values
+docker compose up -d --build
+```
+
+**⚠️ Important**: Never commit `.env` files to git. Always use secrets managers in production.
 
 ### Production Deployment
 
 **Docker Compose with PostgreSQL** (recommended for production):
 ```bash
-export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
-# Create .env.postgres file with: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+# Set environment variables via secrets manager or .env file
+# Required: DB_TYPE=postgres and PostgreSQL connection parameters
+# POSTGRES_URL=postgresql://user:password@postgres:5432/database
+# OR use individual parameters: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
 docker compose -f docker-compose.prod.postgres.yml up -d --build
 ```
 
 **Docker Compose with SQLite** (simpler, single-container):
 ```bash
-export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
-# Set DB_TYPE=sqlite in your .env file
+# Set environment variables via secrets manager or .env file
+# Required: DB_TYPE=sqlite
 docker compose -f docker-compose.prod.sqlite.yml up -d --build
 ```
 
+**Note**: For production, inject environment variables from your secrets manager (GitHub Secrets, AWS Secrets Manager, etc.) rather than using `.env` files.
+
 **Docker Image**:
 ```bash
-docker build -t actual-api-wrapper:latest .
+docker build -t actual-rest-api:latest .
 docker run -d \
-  --name actual-api-wrapper \
-  -e DOTENV_PRIVATE_KEY="$DOTENV_PRIVATE_KEY" \
+  --name actual-rest-api \
+  -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  -e JWT_SECRET="$JWT_SECRET" \
+  -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET" \
+  -e DB_TYPE=postgres \
+  -e POSTGRES_URL="postgresql://user:password@host:5432/database" \
+  # ... add all other required environment variables from secrets manager
   -v $(pwd)/data/actual-api:/app/.actual-cache \
   -p 3000:3000 \
-  actual-api-wrapper:latest
+  actual-rest-api:latest
 ```
 
+**Note**: In production, retrieve secrets from your secrets manager and pass them as environment variables. Never hardcode secrets in scripts or commit them to version control.
+
 **Production Checklist**:
+- ✅ Use secrets manager (GitHub Secrets, AWS Secrets Manager, etc.) for all sensitive environment variables
 - ✅ Use HTTPS with reverse proxy (nginx, Traefik, etc.)
 - ✅ Set `TRUST_PROXY=true` if behind reverse proxy
 - ✅ Configure `ALLOWED_ORIGINS` with production domains
@@ -187,6 +232,7 @@ docker run -d \
 - ✅ Set up monitoring (Prometheus/Grafana) - see [monitoring/](monitoring/)
 - ✅ Regular backups of `DATA_DIR` volume
 - ✅ For n8n: Use HTTPS callback URLs, configure OAuth2 credentials
+- ✅ Never commit `.env` files or secrets to version control
 
 ## Development
 
@@ -207,7 +253,7 @@ docker run -d \
    - Open http://localhost:5006 → Set password → Create/open budget
    - Get Sync ID from Settings → Advanced → Show Sync ID
    - Update `ACTUAL_PASSWORD` and `ACTUAL_SYNC_ID` in `.env.local`
-   - Restart: `docker compose -f docker-compose.dev.yml restart actual-api-wrapper`
+   - Restart: `docker compose -f docker-compose.dev.yml restart actual-rest-api-dev`
 
 4. **Access services**:
    - API: http://localhost:3000
@@ -264,6 +310,9 @@ All variables are validated on startup. Invalid or missing required variables ca
 - `N8N_CLIENT_ID` / `N8N_CLIENT_SECRET` / `N8N_OAUTH2_CALLBACK_URL`: OAuth2 for n8n
 - `ENABLE_CORS` / `ENABLE_HELMET` / `ENABLE_RATE_LIMITING`: Feature toggles (default: `true`)
 - `MAX_REQUEST_SIZE`: Max request body size (default: `10kb`)
+- `DB_TYPE`: Database type (`sqlite` | `postgres`, default: `postgres`)
+- `POSTGRES_URL`: PostgreSQL connection URL (format: `postgresql://user:password@host:port/database`)
+- `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`: PostgreSQL connection details (alternative to `POSTGRES_URL`)
 
 **Development Mode**: In `NODE_ENV=development`, secrets can be shorter and missing secrets are auto-generated with warnings.
 
@@ -284,14 +333,22 @@ npm run validate:openapi
 	- POST `/login` → create session, then access `/docs`
 - JWT login:
 	- POST `/auth/login` with `{ "username": "admin", "password": "..." }`
-	- Response contains `access_token`, `refresh_token`, `expires_in`
+	- Response contains `access_token`, `refresh_token`, `expires_in`, `scope`, `token_type`
+	- Tokens include user `role` and `scopes` for authorization
 	- Send `Authorization: Bearer <access_token>` to protected routes
 	- Rate limited: 5 requests per 15 minutes
+- JWT logout:
+	- POST `/auth/logout` with optional `refresh_token` in body
+	- Revokes both access and refresh tokens for secure session termination
 - n8n OAuth2 (optional):
   - Configure env vars listed above
   - Endpoints available: `/oauth/authorize`, `/oauth/token`
   - Client secrets are hashed with bcrypt before storage
   - See [Connecting n8n](#connecting-n8n) for setup details.
+- Admin API (requires admin role):
+  - Access admin dashboard at `/admin` (HTML interface)
+  - Manage OAuth clients via `/admin/oauth-clients` endpoints
+  - Requires JWT token with `admin` role and `admin` scope
 
 ## Query Endpoint
 
@@ -315,7 +372,7 @@ The `/query` endpoint allows executing ActualQL queries against Actual Budget da
 2. **In n8n, create OAuth2 credential**:
    - Type: **OAuth2**
    - Authorization URL: `http://localhost:3000/oauth/authorize` (or your API URL)
-   - Token URL: `http://actual-api-wrapper-dev:3000/oauth/token` (use Docker service name)
+   - Token URL: `http://actual-rest-api-dev:3000/oauth/token` (use Docker service name)
    - Client ID & Secret: Match your env vars
    - Redirect URL: Match `N8N_OAUTH2_CALLBACK_URL`
 
@@ -331,6 +388,47 @@ For development, use JWT bearer tokens:
 
 **Note**: In production behind a reverse proxy, replace `localhost` and Docker hostnames with actual domains.
 
+## Admin API
+
+The Admin API provides endpoints for managing OAuth clients. All endpoints require authentication with an admin role.
+
+### Accessing the Admin Dashboard
+
+1. **Web Interface**: Navigate to `/admin` in your browser (requires admin session login)
+2. **API Endpoints**: Use JWT tokens with `admin` role and `admin` scope
+
+### Admin Endpoints
+
+- `GET /admin/oauth-clients` - List all OAuth clients (without secrets)
+- `POST /admin/oauth-clients` - Create a new OAuth client (auto-generates secret if not provided)
+- `GET /admin/oauth-clients/:clientId` - Get a specific OAuth client
+- `PUT /admin/oauth-clients/:clientId` - Update an OAuth client (secret, scopes, redirect URIs)
+- `DELETE /admin/oauth-clients/:clientId` - Delete an OAuth client
+
+### Example: Creating an OAuth Client
+
+```bash
+# Get admin token
+TOKEN=$(curl http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{"username":"admin","password":"admin"}' \
+  -s | jq -r '.access_token')
+
+# Create a new OAuth client
+curl http://localhost:3000/admin/oauth-clients \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{
+    "client_id": "my-app",
+    "allowed_scopes": "api",
+    "redirect_uris": "http://localhost:8080/callback"
+  }'
+```
+
+**Note**: The `client_secret` is only returned once on creation - save it immediately! All secrets are hashed with bcrypt before storage.
+
 ## CLI Commands
 
 ```bash
@@ -344,15 +442,19 @@ npm run validate:openapi  # Validate OpenAPI spec
 
 # Docker Development
 docker compose -f docker-compose.dev.yml up --build
-docker compose -f docker-compose.dev.yml logs -f actual-api-wrapper
+docker compose -f docker-compose.dev.yml logs -f actual-rest-api-dev
 ```
 
 See [PRECOMMIT_SETUP.md](PRECOMMIT_SETUP.md) for pre-commit hooks setup.
 
 ## Data & Persistence
-- SQLite auth DB: `${DATA_DIR}/auth.db` (persist the `DATA_DIR` volume)
+- **Database Options**:
+  - **PostgreSQL** (recommended for production): Set `DB_TYPE=postgres` and configure `POSTGRES_URL` or individual connection parameters
+  - **SQLite** (default, simpler setup): Set `DB_TYPE=sqlite`, database stored at `${DATA_DIR}/auth.db`
+- **Automatic Migrations**: Schema migrations run on startup (adds `role`, `scopes`, `updated_at` columns to users table, `client_secret_hashed` to clients table)
+- **User Roles & Scopes**: Users have `role` (e.g., `admin`, `user`) and `scopes` (comma-separated, e.g., `api,admin`) for authorization
+- **OAuth Client Secrets**: All client secrets are hashed with bcrypt before storage for security
 - Actual SDK cache and budget data are managed by `@actual-app/api` using `DATA_DIR`
-- Database migrations: Automatic schema migrations on startup (e.g., `client_secret_hashed` column)
 
 ## Observability
 

@@ -30,7 +30,7 @@ This REST API wraps the Actual Budget SDK (`@actual-app/api`) to provide a secur
 │  └────────────────────────────────────────────────────────┘   │
 │  ┌────────────────────────────────────────────────────────┐   │
 │  │  Data Layer                                            │   │
-│  │  - SQLite (auth), Actual SDK (budget data)             │   │
+│  │  - PostgreSQL/SQLite (auth), Actual SDK (budget data)  │   │
 │  └────────────────────────────────────────────────────────┘   │
 └───────────────────────────┬───────────────────────────────────┘
                             │
@@ -50,6 +50,9 @@ src/
 ├── auth/              # Authentication & authorization
 │   ├── jwt.js        # JWT token management
 │   ├── user.js       # User authentication
+│   ├── admin.js      # Admin dashboard HTML
+│   ├── adminApi.js   # Admin API authentication middleware
+│   ├── permissions.js # Role and scope checking utilities
 │   ├── oauth2/       # OAuth2 implementation
 │   └── docsAuth.js   # Documentation access control
 ├── config/            # Configuration management
@@ -58,7 +61,7 @@ src/
 │   ├── swagger.js    # OpenAPI/Swagger setup
 │   └── redis.js      # Redis connection management
 ├── db/                # Database layer
-│   └── authDb.js     # SQLite authentication database
+│   └── authDb.js     # PostgreSQL/SQLite authentication database
 ├── docs/              # OpenAPI documentation
 │   ├── openapi.yml   # Main OpenAPI spec
 │   └── paths/        # Route definitions
@@ -81,6 +84,7 @@ src/
 ├── routes/            # Express route handlers
 │   ├── accounts.js
 │   ├── auth.js
+│   ├── admin.js      # Admin API routes (OAuth client management)
 │   ├── budgets.js
 │   ├── metrics.js    # Metrics endpoints
 │   ├── query.js      # ActualQL query endpoint
@@ -117,11 +121,13 @@ authenticateJWT middleware
     ↓
 Verify token signature
     ↓
-Check token revocation (SQLite)
+Check token revocation (PostgreSQL/SQLite)
     ↓
-Attach user to req.user
+Extract user role and scopes from token
     ↓
-Route handler
+Attach user (with role/scopes) to req.user
+    ↓
+Route handler (can check permissions)
 ```
 
 **OAuth2 Flow:**
@@ -141,6 +147,23 @@ POST /oauth/token
 Validate code, exchange for tokens
     ↓
 Return access_token + refresh_token
+```
+
+**Admin API Flow:**
+```
+Request to /admin/*
+    ↓
+authenticateAdminAPI middleware
+    ↓
+Try JWT authentication OR session authentication
+    ↓
+Check user has admin role OR admin scope
+    ↓
+If not admin: 403 Forbidden
+    ↓
+If admin: Continue to route handler
+    ↓
+Admin route handler (OAuth client management)
 ```
 
 ### 3. Route Handler Flow
@@ -181,12 +204,17 @@ Return to client
 
 ### Authentication Data
 ```
-SQLite Database (auth.db)
-├── users (username, password_hash)
-├── tokens (jti, revoked, expires_at)
-├── clients (OAuth2 clients)
-└── auth_codes (temporary authorization codes)
+PostgreSQL or SQLite Database (auth.db or PostgreSQL)
+├── users (username, password_hash, role, scopes, is_active, created_at, updated_at)
+├── tokens (jti, token_type, revoked, expires_at, issued_at)
+├── clients (client_id, client_secret [hashed], client_secret_hashed, allowed_scopes, redirect_uris)
+└── auth_codes (code, client_id, user_id, redirect_uri, scope, expires_at)
 ```
+
+**Database Selection:**
+- **PostgreSQL** (recommended for production): Set `DB_TYPE=postgres`, supports connection pooling, better for distributed deployments
+- **SQLite** (default): Set `DB_TYPE=sqlite`, simpler setup, sufficient for single-instance deployments
+- Automatic schema migrations on startup (adds role, scopes, updated_at columns)
 
 ### Budget Data
 ```
@@ -228,16 +256,23 @@ Actual Budget SDK
 ## Security Architecture
 
 ### Authentication Layers
-1. **Session-based**: For web UI (docs, login page)
-2. **JWT-based**: For API access (access + refresh tokens)
+1. **Session-based**: For web UI (docs, login page, admin dashboard)
+2. **JWT-based**: For API access (access + refresh tokens with role/scopes)
 3. **OAuth2**: For third-party integrations (n8n)
+
+### Authorization (Role-Based Access Control)
+- **Roles**: User roles stored in database (`admin`, `user`)
+- **Scopes**: Fine-grained permissions (comma-separated, e.g., `api`, `admin`)
+- **Token Claims**: JWT tokens include `role` and `scopes` for authorization
+- **Admin API**: Requires `admin` role or `admin` scope
+- **Permission Checks**: Middleware utilities (`isAdmin`, `hasScope`, `requireScope`)
 
 ### Security Measures
 - **Rate Limiting**: Per-route, with Redis support for distributed systems
 - **Input Validation**: Zod schemas for all inputs
-- **SQL Injection Protection**: Parameterized queries only
-- **Secret Hashing**: bcrypt for passwords and client secrets
-- **Token Revocation**: SQLite tracking of revoked tokens
+- **SQL Injection Protection**: Parameterized queries (works with both PostgreSQL and SQLite)
+- **Secret Hashing**: bcrypt for passwords and OAuth client secrets (12 rounds)
+- **Token Revocation**: Database tracking of revoked tokens (PostgreSQL/SQLite)
 - **CORS**: Whitelist-based origin control
 - **Helmet**: Security headers
 - **Request ID**: Traceability for debugging
@@ -245,6 +280,7 @@ Actual Budget SDK
 - **Query Security**: Table whitelist, filter depth limits, sanitized logging
 - **Session Security**: HttpOnly, Secure, SameSite cookies
 - **Error Information Disclosure**: Production hides internal error details
+- **Database Abstraction**: Unified interface for PostgreSQL and SQLite (automatic placeholder conversion)
 
 ## Rate Limiting Strategy
 
@@ -357,15 +393,17 @@ See [grafana/README.md](../grafana/README.md) for setup and customization detail
 - No external dependencies required
 
 ### Distributed Deployment
-- Redis for shared rate limiting state
-- Multiple instances can share rate limit counters
-- Stateless API design (JWT tokens)
+- **PostgreSQL**: Recommended for production (connection pooling, better concurrency)
+- **Redis**: Shared rate limiting state
+- Multiple instances can share rate limit counters and database
+- Stateless API design (JWT tokens with role/scopes)
 
 ### Performance Optimizations
 - Read operations skip sync (faster)
-- Prepared statements (SQLite)
-- Connection pooling (Actual SDK handles this)
+- Prepared statements (SQLite) / Parameterized queries (PostgreSQL)
+- Connection pooling (PostgreSQL pool, Actual SDK handles its own)
 - Request size limits prevent DoS
+- Async database operations (PostgreSQL) for better concurrency
 
 ## Testing Strategy
 
@@ -402,13 +440,15 @@ npm run test:coverage # With coverage report
 ### Development Stack (Docker Compose)
 ```
 Development Environment
-├── actual-api-wrapper (port 3000)
+├── actual-rest-api-dev (port 3000)
 │   ├── Express API
-│   ├── SQLite (auth.db)
+│   ├── PostgreSQL (auth database, recommended)
 │   └── Actual SDK cache
-├── actual-server (port 5006)
+├── actual-server-dev (port 5006)
 │   └── Actual Budget Server
-├── redis (port 6379)
+├── postgres-dev (port 5432)
+│   └── PostgreSQL database
+├── redis-dev (port 6379)
 │   └── Distributed rate limiting
 ├── n8n (port 5678)
 │   └── Workflow automation
@@ -429,8 +469,16 @@ All services include:
 Load Balancer
     ↓
 Multiple API Instances
+├── PostgreSQL (shared auth database, recommended)
 ├── Redis (shared rate limiting)
-├── SQLite per instance (or shared DB)
+└── Actual Server (external)
+```
+
+**Alternative (Single Instance):**
+```
+Single API Instance
+├── SQLite (auth.db, simpler setup)
+├── Redis (optional, for rate limiting)
 └── Actual Server (external)
 ```
 
@@ -450,8 +498,8 @@ Multiple API Instances
 
 ### Configuration Files
 - `.env.example`: Template with all variables and descriptions
-- `.env.local`: Development overrides (mounted in Docker dev)
-- `.env`: Production (encrypted with dotenvx)
+- `.env.local`: Development overrides (mounted in Docker dev, never committed)
+- **Production**: Use secrets managers (GitHub Secrets, AWS Secrets Manager, Kubernetes Secrets, etc.)
 
 ### Environment Validation
 - All variables validated against Zod schemas
@@ -477,27 +525,35 @@ Multiple API Instances
 13. ✅ **Security Audit**: Comprehensive security review and fixes (open redirect, OAuth2, query logging)
 14. ✅ **Metrics Routes**: Dedicated `/metrics` endpoints with summary and reset capabilities
 15. ✅ **Query Security**: Enhanced ActualQL query validation with depth limits and sanitized logging
+16. ✅ **PostgreSQL Support**: Full PostgreSQL support with SQLite fallback, unified database abstraction layer
+17. ✅ **Role-Based Access Control (RBAC)**: User roles and scopes for fine-grained authorization
+18. ✅ **Admin API**: OAuth client management endpoints with web dashboard (`/admin/oauth-clients`)
+19. ✅ **Enhanced Token Revocation**: Improved logout flow with refresh token revocation support
+20. ✅ **Permission System**: Utilities for checking roles and scopes (`isAdmin`, `hasScope`, `requireScope`)
 
 ### Future Enhancements
 
 ### Potential Improvements
-1. **Caching Layer**: Redis for frequently accessed data (beyond rate limiting)
-2. **Webhook Support**: Notify external systems of changes
-3. **GraphQL Endpoint**: Alternative to REST
-4. **API Versioning**: Support multiple API versions
-5. **Request Batching**: Allow multiple operations in one request
-6. **Prometheus Integration**: Native Prometheus metrics format for production
-7. **Distributed Tracing**: OpenTelemetry support
-8. **Production Grafana**: Set up Grafana for production monitoring
-9. **Alert Rules**: Configure Grafana alerts for error rates and performance
-10. **Log Aggregation**: Centralized logging solution (ELK, Loki) for production
+1. **User Management API**: CRUD endpoints for managing users (beyond admin user)
+2. **Multi-User Support**: Support for multiple admin and regular users
+3. **Caching Layer**: Redis for frequently accessed data (beyond rate limiting)
+4. **Webhook Support**: Notify external systems of changes
+5. **GraphQL Endpoint**: Alternative to REST
+6. **API Versioning**: Support multiple API versions
+7. **Request Batching**: Allow multiple operations in one request
+8. **Prometheus Integration**: Native Prometheus metrics format for production
+9. **Distributed Tracing**: OpenTelemetry support
+10. **Production Grafana**: Set up Grafana for production monitoring
+11. **Alert Rules**: Configure Grafana alerts for error rates and performance
+12. **Log Aggregation**: Centralized logging solution (ELK, Loki) for production
 
 ## Development Tools
 
 ### Docker Compose Services
-- **actual-api-wrapper**: Main API service (port 3000)
-- **actual-server**: Actual Budget server (port 5006)
-- **redis**: Rate limiting and caching (port 6379)
+- **actual-rest-api-dev**: Main API service (port 3000)
+- **actual-server-dev**: Actual Budget server (port 5006)
+- **postgres-dev**: PostgreSQL database (port 5432)
+- **redis-dev**: Rate limiting and caching (port 6379)
 - **n8n**: Workflow automation (port 5678)
 - **grafana**: Metrics visualization (port 3001)
 

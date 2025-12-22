@@ -11,12 +11,6 @@ RUN npm ci --omit=dev --omit=optional --ignore-scripts && \
 # Production stage
 FROM node:24-alpine
 
-# Install dotenvx CLI (from docs)
-RUN apk add --no-cache curl && \
-    curl -fsSL https://dotenvx.sh/install.sh | sh && \
-    apk del curl && \
-    rm -rf /var/cache/apk/*
-
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 -G nodejs
