@@ -6,6 +6,7 @@
  */
 
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { getDb, pruneExpiredCodes } from '../../db/authDb.js';
 import logger from '../../logging/logger.js';
 import { AuthenticationError } from '../../errors/index.js';
@@ -132,4 +133,188 @@ export const ensureN8NClient = async () => {
   }
 
   return true;
+};
+
+/**
+ * Generate a secure random client secret.
+ * Returns a base64-encoded random string of 32 bytes (44 characters).
+ */
+export const generateClientSecret = () => {
+  return crypto.randomBytes(32).toString('base64');
+};
+
+/**
+ * Get all OAuth clients (without secrets).
+ * Returns safe client information for listing.
+ */
+export const listClients = () => {
+  const db = getDb();
+  const clients = db.prepare(`
+    SELECT 
+      client_id,
+      allowed_scopes,
+      redirect_uris,
+      created_at
+    FROM clients
+    ORDER BY created_at DESC
+  `).all();
+  
+  return clients;
+};
+
+/**
+ * Get a single OAuth client by ID (without secret).
+ * Returns safe client information.
+ */
+export const getClient = (clientId) => {
+  const db = getDb();
+  const client = db.prepare(`
+    SELECT 
+      client_id,
+      allowed_scopes,
+      redirect_uris,
+      created_at
+    FROM clients
+    WHERE client_id = ?
+  `).get(clientId);
+  
+  return client || null;
+};
+
+/**
+ * Create a new OAuth client.
+ * Generates a secure secret automatically if not provided.
+ * 
+ * @param {Object} options - Client creation options
+ * @param {string} options.clientId - Client identifier (required)
+ * @param {string} [options.clientSecret] - Client secret (auto-generated if not provided)
+ * @param {string} [options.allowedScopes] - Allowed scopes (default: 'api')
+ * @param {string|string[]} [options.redirectUris] - Redirect URIs (comma-separated string or array)
+ * @returns {Object} Created client with plain secret (only returned once)
+ */
+export const createClient = async ({ clientId, clientSecret, allowedScopes = 'api', redirectUris = '' }) => {
+  if (!clientId) {
+    throw new Error('clientId is required');
+  }
+
+  const db = getDb();
+  
+  // Check if client already exists
+  const existing = db.prepare('SELECT client_id FROM clients WHERE client_id = ?').get(clientId);
+  if (existing) {
+    throw new Error(`Client with ID '${clientId}' already exists`);
+  }
+
+  // Generate secret if not provided
+  const plainSecret = clientSecret || generateClientSecret();
+  
+  // Validate secret length
+  if (plainSecret.length < 32) {
+    throw new Error('Client secret must be at least 32 characters long');
+  }
+
+  // Normalize redirect URIs
+  const redirectUrisStr = Array.isArray(redirectUris) 
+    ? redirectUris.join(',') 
+    : redirectUris;
+
+  // Hash the secret before storage
+  const hashedSecret = await hashClientSecret(plainSecret);
+
+  // Insert client
+  db.prepare(`
+    INSERT INTO clients (client_id, client_secret, client_secret_hashed, allowed_scopes, redirect_uris)
+    VALUES (?, ?, TRUE, ?, ?)
+  `).run(clientId, hashedSecret, allowedScopes, redirectUrisStr);
+
+  logger.info(`Created OAuth client: ${clientId}`);
+
+  // Return client info with plain secret (only time it's available)
+  return {
+    client_id: clientId,
+    client_secret: plainSecret, // Only returned on creation
+    allowed_scopes: allowedScopes,
+    redirect_uris: redirectUrisStr,
+    created_at: new Date().toISOString(),
+  };
+};
+
+/**
+ * Update an existing OAuth client.
+ * 
+ * @param {string} clientId - Client identifier
+ * @param {Object} updates - Fields to update
+ * @param {string} [updates.clientSecret] - New client secret (will be hashed)
+ * @param {string} [updates.allowedScopes] - New allowed scopes
+ * @param {string|string[]} [updates.redirectUris] - New redirect URIs
+ * @returns {Object} Updated client info (without secret)
+ */
+export const updateClient = async (clientId, { clientSecret, allowedScopes, redirectUris }) => {
+  const db = getDb();
+  
+  // Check if client exists
+  const existing = db.prepare('SELECT client_id FROM clients WHERE client_id = ?').get(clientId);
+  if (!existing) {
+    throw new Error(`Client with ID '${clientId}' not found`);
+  }
+
+  const updates = [];
+  const values = [];
+
+  if (clientSecret !== undefined) {
+    if (clientSecret.length < 32) {
+      throw new Error('Client secret must be at least 32 characters long');
+    }
+    const hashedSecret = await hashClientSecret(clientSecret);
+    updates.push('client_secret = ?', 'client_secret_hashed = TRUE');
+    values.push(hashedSecret, true);
+  }
+
+  if (allowedScopes !== undefined) {
+    updates.push('allowed_scopes = ?');
+    values.push(allowedScopes);
+  }
+
+  if (redirectUris !== undefined) {
+    const redirectUrisStr = Array.isArray(redirectUris) 
+      ? redirectUris.join(',') 
+      : redirectUris;
+    updates.push('redirect_uris = ?');
+    values.push(redirectUrisStr);
+  }
+
+  if (updates.length === 0) {
+    throw new Error('No fields to update');
+  }
+
+  values.push(clientId);
+
+  db.prepare(`
+    UPDATE clients
+    SET ${updates.join(', ')}
+    WHERE client_id = ?
+  `).run(...values);
+
+  logger.info(`Updated OAuth client: ${clientId}`);
+
+  return getClient(clientId);
+};
+
+/**
+ * Delete an OAuth client.
+ * 
+ * @param {string} clientId - Client identifier
+ * @returns {boolean} True if client was deleted, false if not found
+ */
+export const deleteClient = (clientId) => {
+  const db = getDb();
+  
+  const result = db.prepare('DELETE FROM clients WHERE client_id = ?').run(clientId);
+  
+  if (result.changes > 0) {
+    logger.info(`Deleted OAuth client: ${clientId}`);
+    return true;
+  }
+  
+  return false;
 };

@@ -250,6 +250,32 @@ export const PayeeIdParamsSchema = z.object({
   payeeId: z.string().uuid(),
 });
 
+// Admin OAuth client schemas
+export const CreateClientSchema = z.object({
+  client_id: z.string().min(1).max(255),
+  client_secret: z.string().min(32).optional(),
+  allowed_scopes: z.string().default('api'),
+  redirect_uris: z.union([
+    z.string(),
+    z.array(z.string().url()),
+  ]).optional().default(''),
+});
+
+export const UpdateClientSchema = z.object({
+  client_secret: z.string().min(32).optional(),
+  allowed_scopes: z.string().optional(),
+  redirect_uris: z.union([
+    z.string(),
+    z.array(z.string().url()),
+  ]).optional(),
+}).refine((obj) => Object.keys(obj).length > 0, {
+  message: 'At least one field must be updated',
+});
+
+export const ClientIdParamsSchema = z.object({
+  clientId: z.string().min(1).max(255),
+});
+
 // Validation middleware factory
 export const validateBody = (schema) => (req, res, next) => {
   const result = schema.safeParse(req.body);

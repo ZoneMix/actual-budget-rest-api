@@ -7,6 +7,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticateUser } from '../auth/user.js';
+import { authenticateAdminDashboard } from '../auth/adminDashboard.js';
 
 const router = express.Router();
 
@@ -18,6 +19,10 @@ const loginLimiter = rateLimit({
 
 router.get('/login', (req, res) => {
   res.sendFile('./src/public/static/api-login.html', { root: process.cwd() });
+});
+
+router.get('/admin', authenticateAdminDashboard, (req, res) => {
+  res.sendFile('./src/public/static/admin.html', { root: process.cwd() });
 });
 
 /**
@@ -56,6 +61,32 @@ router.post('/login', loginLimiter, async (req, res) => {
   // Validate return_to to prevent open redirect attacks
   const safeReturnTo = validateReturnTo(return_to, req.get('origin') || req.protocol + '://' + req.get('host'));
   res.redirect(safeReturnTo);
+});
+
+/**
+ * POST /logout
+ * 
+ * Destroys the session for session-based authentication.
+ * Used by the admin dashboard and other session-based flows.
+ */
+router.post('/logout', (req, res) => {
+  const sessionCookieName = req.session.cookie.name || 'sessionId';
+  
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to logout' });
+    }
+    
+    // Clear the session cookie with the same options used when creating it
+    res.clearCookie(sessionCookieName, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/',
+    });
+    
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
 });
 
 export default router;

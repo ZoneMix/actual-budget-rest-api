@@ -25,8 +25,11 @@ export const getDb = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      scopes TEXT DEFAULT 'api',
       is_active BOOLEAN DEFAULT TRUE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS tokens (
@@ -59,9 +62,62 @@ export const getDb = () => {
 
   // Migrations: Add missing columns to existing tables
   try {
-    // Check if client_secret_hashed column exists
-    const tableInfo = db.prepare("PRAGMA table_info(clients)").all();
-    const hasHashedColumn = tableInfo.some(col => col.name === 'client_secret_hashed');
+    const usersTableInfo = db.prepare("PRAGMA table_info(users)").all();
+    const clientsTableInfo = db.prepare("PRAGMA table_info(clients)").all();
+    
+    // Migration 1: Add role, scopes, and updated_at to users table
+    const hasRoleColumn = usersTableInfo.some(col => col.name === 'role');
+    const hasScopesColumn = usersTableInfo.some(col => col.name === 'scopes');
+    const hasUpdatedAtColumn = usersTableInfo.some(col => col.name === 'updated_at');
+    
+    if (!hasRoleColumn) {
+      logger.info('Migrating users table: adding role column');
+      db.exec(`
+        ALTER TABLE users 
+        ADD COLUMN role TEXT DEFAULT 'user';
+      `);
+      logger.info('Migration complete: role column added to users table');
+    }
+    
+    if (!hasScopesColumn) {
+      logger.info('Migrating users table: adding scopes column');
+      db.exec(`
+        ALTER TABLE users 
+        ADD COLUMN scopes TEXT DEFAULT 'api';
+      `);
+      logger.info('Migration complete: scopes column added to users table');
+    }
+    
+    if (!hasUpdatedAtColumn) {
+      logger.info('Migrating users table: adding updated_at column');
+      db.exec(`
+        ALTER TABLE users 
+        ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+      `);
+      logger.info('Migration complete: updated_at column added to users table');
+    }
+    
+    // Set admin user's role and scopes if they were just added
+    if (!hasRoleColumn || !hasScopesColumn) {
+      const adminUsername = process.env.ADMIN_USER || 'admin';
+      const adminUser = db.prepare('SELECT id FROM users WHERE username = ?').get(adminUsername);
+      if (adminUser) {
+        const updateFields = [];
+        if (!hasRoleColumn) updateFields.push("role = 'admin'");
+        if (!hasScopesColumn) updateFields.push("scopes = 'api,admin'");
+        if (updateFields.length > 0) {
+          db.prepare(`
+            UPDATE users 
+            SET ${updateFields.join(', ')}
+            WHERE username = ?
+          `).run(adminUsername);
+          logger.info(`Updated existing admin user '${adminUsername}' with admin role and scopes`);
+        }
+      }
+    }
+    
+    // Migration 2: Add client_secret_hashed to clients table
+    const hasHashedColumn = clientsTableInfo.some(col => col.name === 'client_secret_hashed');
     
     if (!hasHashedColumn) {
       logger.info('Migrating clients table: adding client_secret_hashed column');

@@ -22,6 +22,7 @@ security:
 tags:
   - name: Authentication
   - name: OAuth2
+  - name: Admin
   - name: Accounts
   - name: Transactions
   - name: Categories
@@ -107,6 +108,12 @@ paths:
     $ref: './paths/schedules.yml#/scheduleById'
   /query:
     $ref: './paths/query.yml#/query'
+  /admin:
+    $ref: './paths/admin.yml#/adminDashboard'
+  /admin/oauth-clients:
+    $ref: './paths/admin.yml#/adminOAuthClients'
+  /admin/oauth-clients/{clientId}:
+    $ref: './paths/admin.yml#/adminOAuthClientById'
 
 components:
   securitySchemes:
