@@ -7,12 +7,20 @@
  */
 
 import logger from '../logging/logger.js';
-import env, { getAllowedOrigins, getMaxRequestSize } from './env.js';
+import env, { getAllowedOrigins, getMaxRequestSize, isPostgresConfigured } from './env.js';
 
 // Export validated environment variables
 export const DATA_DIR = env.DATA_DIR;
 export const AUTH_DB_PATH = `${DATA_DIR}/auth.db`;
 export const PORT = env.PORT;
+export const DB_TYPE = env.DB_TYPE;
+export const POSTGRES_URL = env.POSTGRES_URL;
+export const POSTGRES_HOST = env.POSTGRES_HOST;
+export const POSTGRES_PORT = env.POSTGRES_PORT;
+export const POSTGRES_DB = env.POSTGRES_DB;
+export const POSTGRES_USER = env.POSTGRES_USER;
+export const POSTGRES_PASSWORD = env.POSTGRES_PASSWORD;
+export { isPostgresConfigured };
 export const NODE_ENV = env.NODE_ENV;
 export const TRUST_PROXY = env.TRUST_PROXY;
 export const LOG_LEVEL = env.LOG_LEVEL;

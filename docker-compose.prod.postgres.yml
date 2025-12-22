@@ -1,0 +1,85 @@
+services:
+  actual-api-rest-api:
+    build: .  # Builds Dockerfile (copies from ./src)
+    image: actual-api-rest-api  # Tagged for reuse
+    container_name: actual-api-rest-api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/prod/actual-api:/app/.actual-cache  # Persistent encrypted DB
+    working_dir: /app
+    command: >
+      sh -c "dotenvx run -- npm start"
+    environment:
+      DOTENV_PRIVATE_KEY: ${DOTENV_PRIVATE_KEY}  # Master key from host .env or secrets
+      # Redis connection (optional - will use memory store if not set)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}  # Optional: Set if Redis password is configured
+      # Or use REDIS_URL instead: redis://redis:6379 or redis://password@redis:6379
+      # Database connection (PostgreSQL)
+      DB_TYPE: postgres
+      # Override POSTGRES_HOST for Docker Compose (use service name 'postgres' instead of 'localhost')
+      POSTGRES_HOST: postgres
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: actual-rest-api-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/prod/redis:/data
+    # Redis password (set REDIS_PASSWORD env var for production)
+    # In production, always use a strong password
+    command: >
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+        redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\"
+      else
+        redis-server --appendonly yes
+      fi"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: actual-rest-api-postgres
+    ports:
+      - "5432:5432"
+    env_file:
+      # Use separate .env.postgres file since Docker Compose can't read encrypted dotenvx files
+      # Create .env.postgres with: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+      - .env.postgres
+      - .env.postgres.local  # Optional: local overrides (gitignored)
+    environment:
+      # Fallback defaults if .env.postgres doesn't exist
+      POSTGRES_USER: ${POSTGRES_USER:-actual_api}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-actual_api_auth}
+    volumes:
+      - ./data/prod/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-actual_api}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+

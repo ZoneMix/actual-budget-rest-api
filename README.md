@@ -153,10 +153,18 @@ This project uses **dotenvx** to encrypt environment files in production.
 
 ### Production Deployment
 
-**Docker Compose** (recommended):
+**Docker Compose with PostgreSQL** (recommended for production):
 ```bash
 export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
-docker compose up -d --build
+# Create .env.postgres file with: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+docker compose -f docker-compose.prod.postgres.yml up -d --build
+```
+
+**Docker Compose with SQLite** (simpler, single-container):
+```bash
+export DOTENV_PRIVATE_KEY="$(grep DOTENV_PRIVATE_KEY .env.keys | cut -d '=' -f2 | tail -n1)"
+# Set DB_TYPE=sqlite in your .env file
+docker compose -f docker-compose.prod.sqlite.yml up -d --build
 ```
 
 **Docker Image**:

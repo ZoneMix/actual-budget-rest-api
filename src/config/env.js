@@ -72,6 +72,21 @@ const envSchema = z.object({
   REDIS_PASSWORD: z.string().optional(),
 
   // ============================================================================
+  // Database Configuration (Authentication DB)
+  // ============================================================================
+  // Database type: 'postgres' (default) or 'sqlite'
+  DB_TYPE: z.enum(['sqlite', 'postgres']).default('postgres'),
+  // PostgreSQL connection URL (required if DB_TYPE=postgres)
+  // Format: postgresql://user:password@host:port/database
+  POSTGRES_URL: z.string().url('POSTGRES_URL must be a valid URL').optional(),
+  // Alternative PostgreSQL connection details (if not using POSTGRES_URL)
+  POSTGRES_HOST: z.string().optional(),
+  POSTGRES_PORT: z.string().transform(Number).pipe(z.number().int().positive()).optional(),
+  POSTGRES_DB: z.string().optional(),
+  POSTGRES_USER: z.string().optional(),
+  POSTGRES_PASSWORD: z.string().optional(),
+
+  // ============================================================================
   // Security Features (Optional flags)
   // ============================================================================
   ENABLE_CORS: z.string().transform(v => v === 'true').default('true'),
@@ -166,6 +181,18 @@ try {
     }
   }
   
+  // Database configuration validation
+  if (env.DB_TYPE === 'postgres') {
+    const hasPostgresUrl = !!env.POSTGRES_URL;
+    const hasPostgresDetails = !!(env.POSTGRES_HOST && env.POSTGRES_DB && env.POSTGRES_USER && env.POSTGRES_PASSWORD);
+    
+    if (!hasPostgresUrl && !hasPostgresDetails) {
+      logger.error('❌ PostgreSQL configuration required when DB_TYPE=postgres');
+      logger.error('   Provide either POSTGRES_URL or all of: POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD');
+      process.exit(1);
+    }
+  }
+  
   logger.info('✅ Environment variables validated successfully');
 } catch (error) {
   // Check if it's a ZodError with errors array
@@ -221,6 +248,16 @@ export const isOAuth2Configured = () => {
  */
 export const isRedisConfigured = () => {
   return !!(env.REDIS_URL || (env.REDIS_HOST && env.REDIS_PORT));
+};
+
+/**
+ * Helper to check if PostgreSQL is configured.
+ */
+export const isPostgresConfigured = () => {
+  return env.DB_TYPE === 'postgres' && (
+    !!env.POSTGRES_URL || 
+    !!(env.POSTGRES_HOST && env.POSTGRES_DB && env.POSTGRES_USER && env.POSTGRES_PASSWORD)
+  );
 };
 
 /**

@@ -1,12 +1,12 @@
 services:
-  actual-api-wrapper:
+  actual-rest-api:
     build: .  # Builds Dockerfile (copies from ./src)
-    image: actual-api-wrapper  # Tagged for reuse
-    container_name: actual-api-wrapper
+    image: actual-rest-api  # Tagged for reuse
+    container_name: actual-rest-api
     ports:
       - "3000:3000"
     volumes:
-      - ./data/actual-api:/app/.actual-cache  # Persistent encrypted DB
+      - ./data/prod/actual-api:/app/.actual-cache  # Persistent encrypted DB and SQLite auth.db
     working_dir: /app
     command: >
       sh -c "dotenvx run -- npm start"
@@ -17,6 +17,9 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}  # Optional: Set if Redis password is configured
       # Or use REDIS_URL instead: redis://redis:6379 or redis://password@redis:6379
+      # Database connection (SQLite)
+      DB_TYPE: sqlite
+      # SQLite database will be stored in DATA_DIR/auth.db (default: /app/.actual-cache/auth.db)
     depends_on:
       redis:
         condition: service_healthy
@@ -29,11 +32,11 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: actual-api-redis
+    container_name: actual-rest-api-redis
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
+      - ./data/prod/redis:/data
     # Redis password (set REDIS_PASSWORD env var for production)
     # In production, always use a strong password
     command: >
@@ -52,6 +55,3 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-volumes:
-  auth-data:
-  redis-data:

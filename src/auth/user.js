@@ -3,8 +3,7 @@
  */
 
 import bcrypt from 'bcrypt';
-import { getDb } from '../db/authDb.js';
-import { pruneExpiredTokens } from '../db/authDb.js';
+import { executeQuery, getRow, pruneExpiredTokens } from '../db/authDb.js';
 import logger, { logAuthEvent } from '../logging/logger.js';
 
 /**
@@ -45,7 +44,6 @@ export const validatePasswordComplexity = (password) => {
  * Called on server startup.
  */
 export const ensureAdminUserHash = async () => {
-  const db = getDb();
   const adminUsername = process.env.ADMIN_USER || 'admin';
   const adminPassword = process.env.ADMIN_PASSWORD;
 
@@ -63,14 +61,15 @@ export const ensureAdminUserHash = async () => {
 
   const hash = await bcrypt.hash(adminPassword, 12);
 
-  const upsert = db.prepare(`
+  // Use PostgreSQL or SQLite compatible UPSERT (both support ON CONFLICT)
+  const sql = `
     INSERT INTO users (username, password_hash, is_active)
     VALUES (?, ?, TRUE)
     ON CONFLICT(username) DO UPDATE SET
       password_hash = excluded.password_hash
-  `);
+  `;
 
-  upsert.run(adminUsername, hash);
+  await executeQuery(sql, [adminUsername, hash]);
   logger.info(`Admin user '${adminUsername}' hash created/updated`);
 };
 
@@ -79,10 +78,8 @@ export const ensureAdminUserHash = async () => {
  * Returns userId and username.
  */
 export const authenticateUser = async (username, password) => {
-  pruneExpiredTokens();
-  const db = getDb();
-
-  const user = db.prepare('SELECT * FROM users WHERE username = ? AND is_active = TRUE').get(username);
+  await pruneExpiredTokens();
+  const user = await getRow('SELECT * FROM users WHERE username = ? AND is_active = TRUE', [username]);
   if (!user) {
     logAuthEvent('LOGIN_FAILED', null, { username, reason: 'user_not_found' }, false);
     throw new Error('User not found or inactive');
