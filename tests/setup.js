@@ -22,4 +22,6 @@ process.env.ACTUAL_PASSWORD = 'test';
 process.env.ACTUAL_SYNC_ID = 'test-sync-id';
 process.env.DATA_DIR = './tests/data';
 process.env.SESSION_SECRET = 'test-session-secret-32-characters-long';
+process.env.DB_TYPE = 'sqlite'; // Use SQLite for tests
+process.env.DATABASE_URL = './tests/data/auth.db';
 

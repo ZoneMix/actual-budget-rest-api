@@ -21,8 +21,8 @@ router.get(
   validateParams(AccountIdParamsSchema),
   asyncHandler(async (req, res) => {
     const accountId = req.validatedParams.accountId;
-    const start = req.query.start ?? null; // YYYY-MM-DD per Actual API reference
-    const end = req.query.end ?? null;     // YYYY-MM-DD per Actual API reference
+    const start = req.query.start || undefined; // YYYY-MM-DD per Actual API reference
+    const end = req.query.end || undefined;   // YYYY-MM-DD per Actual API reference
     const transactions = await transactionsList(accountId, start, end);
     res.json({ success: true, accountId, transactions });
   })

@@ -17,6 +17,7 @@ import { issueTokens } from '../auth/jwt.js';
 import { getRow } from '../db/authDb.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { throwBadRequest, throwInternalError } from '../middleware/responseHelpers.js';
+import logger from '../logging/logger.js';
 
 const router = express.Router();
 
@@ -32,38 +33,54 @@ const router = express.Router();
 router.get('/authorize', asyncHandler(async (req, res) => {
   const { client_id, redirect_uri, scope = 'api', state, response_type = 'code' } = req.query;
 
+  logger.debug('[OAuth2] Authorization request', { 
+    client_id, 
+    redirect_uri, 
+    scope, 
+    response_type,
+    hasSession: !!req.session.user,
+    userId: req.session.user?.id
+  });
+
   // Validate OAuth2 parameters
   if (response_type !== 'code') {
+    logger.warn('[OAuth2] Unsupported response_type', { response_type, client_id });
     throwBadRequest('Unsupported response_type');
   }
 
   if (!client_id || !redirect_uri) {
+    logger.warn('[OAuth2] Missing parameters', { hasClientId: !!client_id, hasRedirectUri: !!redirect_uri });
     throwBadRequest('Missing parameters');
   }
 
   // Validate client_id format (alphanumeric, underscore, hyphen, max 255 chars)
   const CLIENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,255}$/;
   if (!CLIENT_ID_PATTERN.test(client_id)) {
+    logger.warn('[OAuth2] Invalid client_id format', { client_id });
     throwBadRequest('Invalid client_id format');
   }
 
   // Verify client exists
   const client = await getRow('SELECT * FROM clients WHERE client_id = ?', [client_id]);
   if (!client) {
+    logger.warn('[OAuth2] Client not found', { client_id });
     throwBadRequest('Invalid client_id');
   }
 
   // Verify redirect URI is allowed for this client
   if (!client.redirect_uris) {
+    logger.warn('[OAuth2] Client has no redirect URIs', { client_id });
     throwBadRequest('Client has no configured redirect URIs');
   }
   const allowedUris = client.redirect_uris.split(',').map(uri => uri.trim()).filter(Boolean);
   if (!allowedUris.includes(redirect_uri)) {
+    logger.warn('[OAuth2] Invalid redirect_uri', { client_id, redirect_uri, allowedUris });
     throwBadRequest('Invalid redirect_uri');
   }
 
   // Require user to be logged in via session
   if (!req.session.user) {
+    logger.debug('[OAuth2] User not logged in, redirecting to login', { client_id });
     const params = new URLSearchParams({ ...req.query, return_to: req.originalUrl });
     return res.redirect(`/login?${params}`);
   }
@@ -75,6 +92,14 @@ router.get('/authorize', asyncHandler(async (req, res) => {
   }
   
   const code = await generateAuthCode(client_id, req.session.user.id, redirect_uri, scope);
+  
+  logger.info('[OAuth2] Authorization code generated', { 
+    client_id, 
+    userId: req.session.user.id,
+    redirect_uri,
+    scope,
+    hasState: !!state
+  });
   
   // Build redirect URL with state parameter
   const redirectUrl = new URL(redirect_uri);
@@ -131,14 +156,23 @@ const extractClientCredentials = (req) => {
 router.post('/token', express.json(), express.urlencoded({ extended: true }), asyncHandler(async (req, res) => {
   const { grant_type, code, redirect_uri } = req.body;
 
+  logger.debug('[OAuth2] Token exchange request', { 
+    grant_type,
+    hasCode: !!code,
+    redirect_uri,
+    hasBasicAuth: !!req.headers.authorization?.startsWith('Basic ')
+  });
+
   // Only support authorization code grant
   if (grant_type !== 'authorization_code') {
+    logger.warn('[OAuth2] Unsupported grant_type', { grant_type });
     throwBadRequest('Unsupported grant_type');
   }
 
   // Extract client credentials (supports Basic Auth or body)
   const credentials = extractClientCredentials(req);
   if (!credentials) {
+    logger.warn('[OAuth2] Missing client credentials');
     throwBadRequest('Client credentials required. Provide via Basic Auth header or request body (client_id, client_secret)');
   }
 
@@ -150,14 +184,25 @@ router.post('/token', express.json(), express.urlencoded({ extended: true }), as
   // Validate and exchange authorization code
   const { userId, scope } = await validateAuthCode(code, clientId, redirect_uri);
 
+  logger.debug('[OAuth2] Authorization code validated', { clientId, userId, scope });
+
   // Get user details for token issuance
   const user = await getRow('SELECT username FROM users WHERE id = ?', [userId]);
   if (!user) {
+    logger.error('[OAuth2] User not found after code validation', { userId, clientId });
     throwInternalError('User not found');
   }
 
   // Issue JWT tokens
   const tokens = await issueTokens(userId, user.username, scope);
+  
+  logger.info('[OAuth2] Tokens issued via authorization code', { 
+    clientId, 
+    userId, 
+    username: user.username,
+    scope 
+  });
+  
   res.json(tokens);
 }));
 

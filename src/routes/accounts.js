@@ -74,7 +74,7 @@ router.post(
   validateBody(CloseAccountSchema),
   asyncHandler(async (req, res) => {
     const { transferAccountId, transferCategoryId } = req.validatedBody;
-    await accountClose(req.validatedParams.id, transferAccountId || null, transferCategoryId || null);
+    await accountClose(req.validatedParams.id, transferAccountId || undefined, transferCategoryId || undefined);
     sendSuccess(res);
   })
 );
@@ -93,7 +93,7 @@ router.get(
   '/:id/balance',
   validateParams(IDSchema),
   asyncHandler(async (req, res) => {
-    const cutoff = req.query.cutoff ? new Date(req.query.cutoff) : null;
+    const cutoff = req.query.cutoff ? new Date(req.query.cutoff) : undefined;
     const balance = await accountBalance(req.validatedParams.id, cutoff);
     sendSuccess(res, { balance });
   })

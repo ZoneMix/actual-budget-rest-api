@@ -4,6 +4,7 @@
 
 import crypto from 'crypto';
 import { executeQuery, getRow, pruneExpiredCodes } from '../../db/authDb.js';
+import logger from '../../logging/logger.js';
 
 /**
  * Generate and store a short-lived authorization code.
@@ -17,6 +18,14 @@ export const generateAuthCode = async (clientId, userId, redirectUri, scope = 'a
     INSERT INTO auth_codes (code, client_id, user_id, redirect_uri, scope, expires_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `, [code, clientId, userId, redirectUri, scope, expiresAt]);
+
+  logger.debug('[OAuth2] Authorization code generated', { 
+    clientId, 
+    userId, 
+    redirectUri, 
+    scope,
+    expiresAt 
+  });
 
   return code;
 };
@@ -35,6 +44,7 @@ const validateAuthCodeFormat = (code) => {
  */
 export const validateAuthCode = async (code, clientId, redirectUri) => {
   if (!validateAuthCodeFormat(code)) {
+    logger.warn('[OAuth2] Invalid authorization code format', { clientId, codeLength: code?.length });
     throw new Error('Invalid authorization code format');
   }
   await pruneExpiredCodes();
@@ -43,10 +53,19 @@ export const validateAuthCode = async (code, clientId, redirectUri) => {
     WHERE code = ? AND client_id = ? AND redirect_uri = ?
   `, [code, clientId, redirectUri]);
 
-  if (!row) throw new Error('Invalid or expired authorization code');
+  if (!row) {
+    logger.warn('[OAuth2] Invalid or expired authorization code', { clientId, redirectUri });
+    throw new Error('Invalid or expired authorization code');
+  }
 
   // One-time use – delete
   await executeQuery('DELETE FROM auth_codes WHERE code = ?', [code]);
+
+  logger.debug('[OAuth2] Authorization code validated and consumed', { 
+    clientId, 
+    userId: row.user_id, 
+    scope: row.scope || 'api' 
+  });
 
   return { userId: row.user_id, scope: row.scope || 'api' };
 };
