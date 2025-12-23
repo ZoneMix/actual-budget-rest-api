@@ -1,5 +1,5 @@
 # Multi-stage build for production
-FROM node:24-alpine AS builder
+FROM node:25.2.1-alpine AS builder
 
 # Install build dependencies needed for native modules (better-sqlite3)
 RUN apk add --no-cache python3 make g++
@@ -14,7 +14,7 @@ RUN npm ci --omit=dev --omit=optional --ignore-scripts && \
     npm cache clean --force
 
 # Production stage
-FROM node:24-alpine
+FROM node:25.2.1-alpine
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
