@@ -58,8 +58,6 @@ services:
     container_name: actual-rest-api-postgres
     ports:
       - "5432:5432"
-    env_file:
-      - .env.postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -67,7 +65,7 @@ services:
     volumes:
       - ./data/prod/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-actual_api}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 3s
       retries: 5
