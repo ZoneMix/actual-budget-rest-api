@@ -17,14 +17,24 @@ export const initActualApi = async () => {
   api = actualApi;
 
   logger.info('Initializing Actual Budget API client...');
-  await api.init({
-    dataDir: DATA_DIR,
-    serverURL: process.env.ACTUAL_SERVER_URL,
-    password: process.env.ACTUAL_PASSWORD,
-  });
+  try {
+    await api.init({
+      dataDir: DATA_DIR,
+      serverURL: process.env.ACTUAL_SERVER_URL,
+      password: process.env.ACTUAL_PASSWORD,
+    });
 
-  await api.downloadBudget(process.env.ACTUAL_SYNC_ID);
-  logger.info('Actual API initialized and budget synced.');
+    logger.info('Downloading budget...', { syncId: process.env.ACTUAL_SYNC_ID });
+    await api.downloadBudget(process.env.ACTUAL_SYNC_ID);
+    logger.info('Actual API initialized and budget downloaded.');
+  } catch (error) {
+    logger.error('Failed to initialize Actual API', { 
+      error: error.message,
+      stack: error.stack 
+    });
+    api = null; // Reset on failure so retry can happen
+    throw error;
+  }
 
   return api;
 };
@@ -52,11 +62,53 @@ const runWithApi = async (label, fn, { syncBefore = true, syncAfter = false } = 
   const instance = await getActualApi();
   const started = Date.now();
 
-  if (syncBefore) await instance.sync();
+  // Sync before operation if requested
+  if (syncBefore) {
+    try {
+      await instance.sync();
+    } catch (error) {
+      logger.error('[Actual] Sync failed before operation', { 
+        label, 
+        error: error.message,
+        stack: error.stack 
+      });
+      
+      // If sync fails with getPrefs null error, the budget might not be loaded
+      // Try to re-download the budget and retry once
+      if (error.message?.includes('getPrefs') || error.message?.includes('Cannot destructure')) {
+        logger.warn('[Actual] Budget may not be loaded, attempting to re-download...');
+        try {
+          await instance.downloadBudget(process.env.ACTUAL_SYNC_ID);
+          await instance.sync(); // Retry sync after re-download
+          logger.info('[Actual] Budget re-downloaded and synced successfully');
+        } catch (retryError) {
+          logger.error('[Actual] Retry failed after re-download', { 
+            error: retryError.message 
+          });
+          throw new Error(`Budget synchronization failed. The budget may not be properly initialized. Please verify ACTUAL_SYNC_ID (${process.env.ACTUAL_SYNC_ID}) is correct and the Actual Budget server is accessible. Original error: ${error.message}`);
+        }
+      } else {
+        throw new Error(`Failed to sync with Actual Budget server: ${error.message}. Ensure the budget is properly initialized and ACTUAL_SYNC_ID is correct.`);
+      }
+    }
+  }
 
   const result = await fn(instance);
 
-  if (syncAfter) await instance.sync();
+  // Sync after operation if requested
+  if (syncAfter) {
+    try {
+      await instance.sync();
+    } catch (error) {
+      logger.error('[Actual] Sync failed after operation', { 
+        label, 
+        error: error.message,
+        stack: error.stack 
+      });
+      // Don't fail the operation if post-sync fails, but log it
+      // The operation itself succeeded, so we don't want to lose that
+    }
+  }
 
   const duration = Date.now() - started;
   logger.info('[Actual] operation completed', { label, durationMs: duration });

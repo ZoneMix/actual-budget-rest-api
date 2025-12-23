@@ -1,11 +1,16 @@
 # Multi-stage build for production
 FROM node:24-alpine AS builder
 
+# Install build dependencies needed for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 # Copy package files for dependency installation
 COPY package.json package-lock.json ./
+# Skip lifecycle scripts (like husky prepare) but then rebuild better-sqlite3 native bindings
 RUN npm ci --omit=dev --omit=optional --ignore-scripts && \
+    npm rebuild better-sqlite3 && \
     npm cache clean --force
 
 # Production stage
@@ -17,7 +22,7 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Copy dependencies from builder
+# Copy dependencies from builder (includes compiled native modules)
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 # Copy application code
@@ -28,9 +33,5 @@ COPY --chown=nodejs:nodejs src ./src
 USER nodejs
 
 EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 CMD ["node", "src/server.js"]

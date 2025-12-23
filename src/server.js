@@ -30,7 +30,7 @@ import { closeDb } from './db/authDb.js';
 import { closeRedis } from './config/redis.js';
 import { PORT, NODE_ENV, TRUST_PROXY, ALLOWED_ORIGINS } from './config/index.js';
 import env from './config/env.js';
-import { swaggerUi, specs } from './config/swagger.js';
+import { swaggerUi, setupDynamicSwaggerUi } from './config/swagger.js';
 import { authenticateForDocs } from './auth/docsAuth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
@@ -68,13 +68,23 @@ app.use(helmet({
 // CORS configuration
 const allowedOrigins = ALLOWED_ORIGINS;
 
+// Log configured origins on startup
+logger.info('CORS configuration', {
+  allowedOrigins,
+  originCount: allowedOrigins.length,
+});
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      logger.warn('CORS blocked request from origin', { origin });
+      logger.warn('CORS blocked request from origin', { 
+        origin,
+        allowedOrigins,
+        hint: 'Add the origin to ALLOWED_ORIGINS environment variable'
+      });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -161,7 +171,8 @@ app.use('/schedules', schedulesRoutes);
 app.use('/query', queryRoutes);
 
 // Swagger API docs (protected with JWT or session auth)
-app.use('/docs', authenticateForDocs, swaggerUi.serve, swaggerUi.setup(specs));
+// Use dynamic specs to get the correct server URL based on the request (works behind proxies)
+app.use('/docs', authenticateForDocs, swaggerUi.serve, setupDynamicSwaggerUi);
 
 // Global error handler (keeps responses consistent)
 app.use(errorHandler);
