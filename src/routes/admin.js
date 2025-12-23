@@ -15,7 +15,7 @@ import { adminLimiter, standardWriteLimiter, deleteLimiter } from '../middleware
 const router = express.Router();
 
 // All admin routes require authentication (JWT or session) and rate limiting
-router.use(authenticateAdminAPI);
+router.use(asyncHandler(authenticateAdminAPI));
 router.use(adminLimiter);
 
 /**
@@ -24,7 +24,7 @@ router.use(adminLimiter);
  * List all OAuth clients (without secrets).
  */
 router.get('/oauth-clients', asyncHandler(async (req, res) => {
-  const clients = listClients();
+  const clients = await listClients();
   sendSuccess(res, { clients });
 }));
 
@@ -35,7 +35,7 @@ router.get('/oauth-clients', asyncHandler(async (req, res) => {
  */
 router.get('/oauth-clients/:clientId', validateParams(ClientIdParamsSchema), asyncHandler(async (req, res) => {
   const { clientId } = req.validatedParams;
-  const client = getClient(clientId);
+  const client = await getClient(clientId);
   
   if (!client) {
     throwNotFound(`OAuth client '${clientId}' not found`);
@@ -110,7 +110,7 @@ router.put('/oauth-clients/:clientId',
  */
 router.delete('/oauth-clients/:clientId', deleteLimiter, validateParams(ClientIdParamsSchema), asyncHandler(async (req, res) => {
   const { clientId } = req.validatedParams;
-  const deleted = deleteClient(clientId);
+  const deleted = await deleteClient(clientId);
   
   if (!deleted) {
     throwNotFound(`OAuth client '${clientId}' not found`);

@@ -11,7 +11,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticateUser } from '../auth/user.js';
 import { issueTokens, revokeToken, isTokenRevoked, authenticateJWT } from '../auth/jwt.js';
-import { insertToken } from '../db/authDb.js';
+import { insertToken, getRow } from '../db/authDb.js';
 import { ACCESS_TTL_SECONDS } from '../config/index.js';
 import { validateBody } from '../middleware/validation-schemas.js';
 import { LoginSchema, LogoutSchema } from '../middleware/validation-schemas.js';
@@ -43,7 +43,6 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
       }
 
       // Get user's current role and scopes from database
-      const { getRow } = await import('../db/authDb.js');
       const user = await getRow('SELECT role, scopes FROM users WHERE id = ?', [decoded.user_id]);
       const role = user?.role || decoded.role || 'user';
       const scopes = user?.scopes || decoded.scope || 'api';

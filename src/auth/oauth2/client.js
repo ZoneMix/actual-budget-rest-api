@@ -7,7 +7,7 @@
 
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import { executeQuery, getRow, pruneExpiredCodes } from '../../db/authDb.js';
+import { executeQuery, getRow, getAllRows, pruneExpiredCodes } from '../../db/authDb.js';
 import logger from '../../logging/logger.js';
 import { AuthenticationError } from '../../errors/index.js';
 
@@ -163,7 +163,7 @@ export const generateClientSecret = () => {
  * Returns safe client information for listing.
  */
 export const listClients = async () => {
-  const clients = await executeQuery(`
+  const clients = await getAllRows(`
     SELECT 
       client_id,
       allowed_scopes,
@@ -173,7 +173,7 @@ export const listClients = async () => {
     ORDER BY created_at DESC
   `);
   
-  return clients.rows || [];
+  return clients || [];
 };
 
 /**

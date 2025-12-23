@@ -6,7 +6,7 @@
 
 import jwt from 'jsonwebtoken';
 import { isTokenRevoked } from './jwt.js';
-import { getDb } from '../db/authDb.js';
+import { getRow } from '../db/authDb.js';
 import { isAdmin } from './permissions.js';
 import { throwUnauthorized, throwForbidden } from '../middleware/responseHelpers.js';
 import logger from '../logging/logger.js';
@@ -16,7 +16,7 @@ import logger from '../logging/logger.js';
  * Verifies the user has admin role or admin scope.
  * Returns 401/403 for API calls, redirects for browser requests.
  */
-export const authenticateAdminAPI = (req, res, next) => {
+export const authenticateAdminAPI = async (req, res, next) => {
   let user = null;
 
   // First try JWT authentication
@@ -36,8 +36,7 @@ export const authenticateAdminAPI = (req, res, next) => {
 
   // Fallback to session authentication
   if (!user && req.session && req.session.user) {
-    const db = getDb();
-    const dbUser = db.prepare('SELECT id, username, role, scopes FROM users WHERE id = ? AND is_active = TRUE').get(req.session.user.id);
+    const dbUser = await getRow('SELECT id, username, role, scopes FROM users WHERE id = ? AND is_active = TRUE', [req.session.user.id]);
     
     if (dbUser) {
       // Parse scopes

@@ -8,6 +8,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticateUser } from '../auth/user.js';
 import { authenticateAdminDashboard } from '../auth/adminDashboard.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ router.get('/login', (req, res) => {
   res.sendFile('./src/public/static/api-login.html', { root: process.cwd() });
 });
 
-router.get('/admin', authenticateAdminDashboard, (req, res) => {
+router.get('/admin', asyncHandler(authenticateAdminDashboard), (req, res) => {
   res.sendFile('./src/public/static/admin.html', { root: process.cwd() });
 });
 
