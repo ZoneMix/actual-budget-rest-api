@@ -239,14 +239,25 @@ export const AccountIdParamsSchema = z.object({
   accountId: z.string().uuid(),
 });
 
+// Schema for transaction objects when adding to a specific account
+// Note: account field is not needed as it's in the URL path
+export const AccountTransactionSchema = z.object({
+  amount: z.number(),
+  date: z.string().optional(),
+  payee: z.string().max(255).optional(),
+  notes: z.string().max(1000).optional(),
+  category: z.string().optional(),
+  cleared: z.boolean().optional(),
+});
+
 export const TransactionsAddSchema = z.object({
-  transactions: z.array(CreateTransactionSchema),
+  transactions: z.array(AccountTransactionSchema),
   runTransfers: z.boolean().optional().default(false),
   learnCategories: z.boolean().optional().default(false),
 });
 
 export const TransactionsImportSchema = z.object({
-  transactions: z.array(CreateTransactionSchema),
+  transactions: z.array(AccountTransactionSchema),
 });
 
 // Rules schemas
@@ -284,12 +295,15 @@ export const ClientIdParamsSchema = z.object({
 export const validateBody = (schema) => (req, res, next) => {
   const result = schema.safeParse(req.body);
   if (!result.success) {
+    const errors = result.error?.errors || [];
     return res.status(400).json({
       error: 'Validation failed',
-      details: result.error.errors.map((err) => ({
-        field: err.path.join('.'),
-        message: err.message,
-      })),
+      details: errors.length > 0
+        ? errors.map((err) => ({
+            field: err.path?.join('.') || 'unknown',
+            message: err.message || 'Validation error',
+          }))
+        : [{ field: 'unknown', message: result.error?.message || 'Validation failed' }],
     });
   }
   req.validatedBody = result.data;
@@ -299,12 +313,15 @@ export const validateBody = (schema) => (req, res, next) => {
 export const validateParams = (schema) => (req, res, next) => {
   const result = schema.safeParse(req.params);
   if (!result.success) {
+    const errors = result.error?.errors || [];
     return res.status(400).json({
       error: 'Invalid parameters',
-      details: result.error.errors.map((err) => ({
-        field: err.path.join('.'),
-        message: err.message,
-      })),
+      details: errors.length > 0
+        ? errors.map((err) => ({
+            field: err.path?.join('.') || 'unknown',
+            message: err.message || 'Validation error',
+          }))
+        : [{ field: 'unknown', message: result.error?.message || 'Invalid parameters' }],
     });
   }
   req.validatedParams = result.data;
@@ -314,12 +331,15 @@ export const validateParams = (schema) => (req, res, next) => {
 export const validateQuery = (schema) => (req, res, next) => {
   const result = schema.safeParse(req.query);
   if (!result.success) {
+    const errors = result.error?.errors || [];
     return res.status(400).json({
       error: 'Invalid query parameters',
-      details: result.error.errors.map((err) => ({
-        field: err.path.join('.'),
-        message: err.message,
-      })),
+      details: errors.length > 0
+        ? errors.map((err) => ({
+            field: err.path?.join('.') || 'unknown',
+            message: err.message || 'Validation error',
+          }))
+        : [{ field: 'unknown', message: result.error?.message || 'Invalid query parameters' }],
     });
   }
   req.validatedQuery = result.data;
