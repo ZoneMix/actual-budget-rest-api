@@ -1,0 +1,119 @@
+services:
+  actual-server:
+    container_name: actual-server
+    image: docker.io/actualbudget/actual-server:latest
+    ports:
+      - '32770:5006'
+    environment:
+      ACTUAL_OPENID_DISCOVERY_URL: ${ACTUAL_OPENID_DISCOVERY_URL}
+      ACTUAL_OPENID_CLIENT_ID: ${ACTUAL_OPENID_CLIENT_ID}
+      ACTUAL_OPENID_CLIENT_SECRET: ${ACTUAL_OPENID_CLIENT_SECRET}
+      ACTUAL_OPENID_SERVER_HOSTNAME: ${ACTUAL_OPENID_SERVER_HOSTNAME}
+      ACTUAL_OPENID_AUTHORIZATION_ENDPOINT: ${ACTUAL_OPENID_AUTHORIZATION_ENDPOINT}
+      ACTUAL_OPENID_TOKEN_ENDPOINT: ${ACTUAL_OPENID_TOKEN_ENDPOINT}
+      ACTUAL_OPENID_USERINFO_ENDPOINT: ${ACTUAL_OPENID_USERINFO_ENDPOINT}
+      ACTUAL_OPENID_AUTH_METHOD: ${ACTUAL_OPENID_AUTH_METHOD}
+      ACTUAL_OPENID_ENFORCE: ${ACTUAL_OPENID_ENFORCE}
+      ACTUAL_ALLOWED_LOGIN_METHODS: ${ACTUAL_ALLOWED_LOGIN_METHODS}
+    volumes:
+      - ./actual-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'node src/scripts/health-check.js']
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    
+  actual-rest-api:
+    user: "0:0"
+    platform: linux/amd64
+    image: docker.io/zonemix063/actual-rest-api:latest
+    container_name: actual-rest-api
+    ports:
+      - "32771:3000"
+    volumes:
+      - ./actual-rest/prod/actual-rest-api:/app/.actual-cache
+    working_dir: /app
+    command: npm start
+    environment:
+      DB_TYPE: postgres
+      ACTUAL_SERVER_URL: http://actual-server:5006
+      ACTUAL_PASSWORD: ${ACTUAL_PASSWORD}
+      ACTUAL_SYNC_ID: ${ACTUAL_SYNC_ID}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${ACTUAL_PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      DATA_DIR: ${DATA_DIR}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ENABLE_CORS: ${ENABLE_CORS}
+      ENABLE_HELMET: ${ENABLE_HELMET}
+      ENABLE_RATE_LIMITING: ${ENABLE_RATE_LIMITING}
+      MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE}
+      TRUST_PROXY: ${TRUST_PROXY}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      actual-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: actual-rest-api-redis
+    volumes:
+      - ./actual-rest/prod/redis:/data
+    command: >
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+        redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\"
+      else
+        redis-server --appendonly yes
+      fi"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: actual-rest-api-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - ./actual-rest/prod/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
