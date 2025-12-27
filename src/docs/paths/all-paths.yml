@@ -165,6 +165,16 @@
 /oauth/token:
   post:
     summary: OAuth2 token endpoint
+    description: |
+      OAuth2 token endpoint supporting two grant types:
+      
+      **authorization_code**: Exchange authorization code for access and refresh tokens.
+      - Requires: `grant_type`, `code`, `redirect_uri`, and client credentials
+      
+      **refresh_token**: Exchange refresh token for new access and refresh tokens (token rotation).
+      - Requires: `grant_type`, `refresh_token`, and client credentials
+      
+      Client credentials can be provided via HTTP Basic Auth or request body.
     tags: [OAuth2]
     requestBody:
       required: true
@@ -172,20 +182,25 @@
         application/x-www-form-urlencoded:
           schema:
             type: object
-            required: [grant_type, code, client_id, client_secret, redirect_uri]
+            required: [grant_type]
             properties:
               grant_type:
                 type: string
-                enum: [authorization_code]
+                enum: [authorization_code, refresh_token]
               code:
                 type: string
+                description: Authorization code (required for authorization_code grant)
+              redirect_uri:
+                type: string
+                format: uri
+                description: Redirect URI (required for authorization_code grant)
+              refresh_token:
+                type: string
+                description: Refresh token (required for refresh_token grant)
               client_id:
                 type: string
               client_secret:
                 type: string
-              redirect_uri:
-                type: string
-                format: uri
     responses:
       200:
         description: Tokens issued
@@ -195,6 +210,12 @@
               $ref: '../components/schemas.yml#/AuthTokens'
       400:
         description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      401:
+        description: Unauthorized (invalid or expired refresh token)
         content:
           application/json:
             schema:

@@ -3,21 +3,26 @@
  *
  * Implements OAuth2 authorization code flow:
  * 1. GET /oauth/authorize - User authorizes client, receives authorization code
- * 2. POST /oauth/token - Client exchanges code for access token
+ * 2. POST /oauth/token - Client exchanges code for access token or refresh token for new tokens
+ *
+ * Supported grant types:
+ * - authorization_code: Exchange authorization code for access and refresh tokens
+ * - refresh_token: Exchange refresh token for new access and refresh tokens (token rotation)
  *
  * Note: This is simplified for internal n8n use - authorization is auto-approved
  * if the user is already logged in via session.
  */
 
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { validateClient } from '../auth/oauth2/client.js';
 import { generateAuthCode } from '../auth/oauth2/code.js';
 import { validateAuthCode } from '../auth/oauth2/code.js';
-import { issueTokens } from '../auth/jwt.js';
+import { issueTokens, isTokenRevoked, revokeToken } from '../auth/jwt.js';
 import { getRow } from '../db/authDb.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { throwBadRequest, throwInternalError } from '../middleware/responseHelpers.js';
-import logger from '../logging/logger.js';
+import { throwBadRequest, throwInternalError, throwUnauthorized } from '../middleware/responseHelpers.js';
+import logger, { logAuthEvent } from '../logging/logger.js';
 
 const router = express.Router();
 
@@ -146,30 +151,34 @@ const extractClientCredentials = (req) => {
 /**
  * POST /oauth/token
  *
- * OAuth2 token endpoint. Exchanges authorization code for access token.
- * Validates client credentials and authorization code before issuing tokens.
+ * OAuth2 token endpoint. Supports two grant types:
+ * 1. authorization_code: Exchanges authorization code for access token
+ * 2. refresh_token: Exchanges refresh token for new access and refresh tokens
  * 
  * Supports client credentials via:
  * - HTTP Basic Authentication (Authorization: Basic <base64(client_id:client_secret)>) - Recommended
  * - Request body (client_id, client_secret) - form-encoded or JSON
  */
 router.post('/token', express.json(), express.urlencoded({ extended: true }), asyncHandler(async (req, res) => {
-  const { grant_type, code, redirect_uri } = req.body;
+  const { grant_type, code, redirect_uri, refresh_token } = req.body;
 
   logger.debug('[OAuth2] Token exchange request', { 
     grant_type,
     hasCode: !!code,
+    hasRefreshToken: !!refresh_token,
     redirect_uri,
     hasBasicAuth: !!req.headers.authorization?.startsWith('Basic ')
   });
 
-  // Only support authorization code grant
-  if (grant_type !== 'authorization_code') {
+  // Support authorization_code and refresh_token grants
+  if (grant_type !== 'authorization_code' && grant_type !== 'refresh_token') {
     logger.warn('[OAuth2] Unsupported grant_type', { grant_type });
     throwBadRequest('Unsupported grant_type');
   }
 
   // Extract client credentials (supports Basic Auth or body)
+  // Note: OAuth2 spec allows optional client credentials for refresh_token grant,
+  // but we require them for security
   const credentials = extractClientCredentials(req);
   if (!credentials) {
     logger.warn('[OAuth2] Missing client credentials');
@@ -180,30 +189,99 @@ router.post('/token', express.json(), express.urlencoded({ extended: true }), as
 
   // Validate client credentials
   await validateClient(clientId, clientSecret);
-  
-  // Validate and exchange authorization code
-  const { userId, scope } = await validateAuthCode(code, clientId, redirect_uri);
 
-  logger.debug('[OAuth2] Authorization code validated', { clientId, userId, scope });
+  // Handle refresh_token grant type
+  if (grant_type === 'refresh_token') {
+    if (!refresh_token) {
+      logger.warn('[OAuth2] Missing refresh_token');
+      throwBadRequest('refresh_token is required for refresh_token grant type');
+    }
 
-  // Get user details for token issuance
-  const user = await getRow('SELECT username FROM users WHERE id = ?', [userId]);
-  if (!user) {
-    logger.error('[OAuth2] User not found after code validation', { userId, clientId });
-    throwInternalError('User not found');
+    try {
+      // Verify and decode the refresh token
+      const decoded = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
+      
+      // Check if token was revoked
+      if (await isTokenRevoked(decoded.jti)) {
+        logAuthEvent('REFRESH_FAILED', decoded.user_id, { reason: 'token_revoked', clientId }, false);
+        throwUnauthorized('Refresh token revoked');
+      }
+
+      // Get user's current role and scopes from database
+      const user = await getRow('SELECT username, role, scopes FROM users WHERE id = ?', [decoded.user_id]);
+      if (!user) {
+        logger.error('[OAuth2] User not found for refresh token', { userId: decoded.user_id, clientId });
+        throwInternalError('User not found');
+      }
+
+      const role = user.role || decoded.role || 'user';
+      const scopes = user.scopes || decoded.scope || 'api';
+
+      // Issue new tokens (both access and refresh for token rotation)
+      const tokens = await issueTokens(decoded.user_id, user.username, scopes, role);
+      
+      // Revoke the old refresh token for proper token rotation security
+      await revokeToken(decoded.jti);
+      
+      logAuthEvent('TOKEN_REFRESHED', decoded.user_id, { 
+        username: user.username, 
+        role, 
+        clientId 
+      }, true);
+
+      logger.info('[OAuth2] Tokens issued via refresh_token', { 
+        clientId, 
+        userId: decoded.user_id, 
+        username: user.username,
+        scope: scopes 
+      });
+      
+      return res.json(tokens);
+    } catch (err) {
+      // Re-throw HTTP errors (like throwUnauthorized above)
+      if (err.status) throw err;
+      
+      // Handle JWT verification errors
+      logAuthEvent('REFRESH_FAILED', null, { 
+        reason: 'invalid_token', 
+        error: err.message, 
+        clientId 
+      }, false);
+      throwUnauthorized('Invalid or expired refresh token');
+    }
   }
 
-  // Issue JWT tokens
-  const tokens = await issueTokens(userId, user.username, scope);
-  
-  logger.info('[OAuth2] Tokens issued via authorization code', { 
-    clientId, 
-    userId, 
-    username: user.username,
-    scope 
-  });
-  
-  res.json(tokens);
+  // Handle authorization_code grant type (existing logic)
+  if (grant_type === 'authorization_code') {
+    if (!code || !redirect_uri) {
+      logger.warn('[OAuth2] Missing code or redirect_uri for authorization_code grant');
+      throwBadRequest('code and redirect_uri are required for authorization_code grant type');
+    }
+
+    // Validate and exchange authorization code
+    const { userId, scope } = await validateAuthCode(code, clientId, redirect_uri);
+
+    logger.debug('[OAuth2] Authorization code validated', { clientId, userId, scope });
+
+    // Get user details for token issuance
+    const user = await getRow('SELECT username FROM users WHERE id = ?', [userId]);
+    if (!user) {
+      logger.error('[OAuth2] User not found after code validation', { userId, clientId });
+      throwInternalError('User not found');
+    }
+
+    // Issue JWT tokens
+    const tokens = await issueTokens(userId, user.username, scope);
+    
+    logger.info('[OAuth2] Tokens issued via authorization code', { 
+      clientId, 
+      userId, 
+      username: user.username,
+      scope 
+    });
+    
+    return res.json(tokens);
+  }
 }));
 
 export default router;

@@ -46,7 +46,17 @@ oauthToken:
   post:
     summary: OAuth2 token endpoint
     description: |
-      Exchanges authorization code for access token.
+      OAuth2 token endpoint supporting two grant types:
+      
+      **authorization_code**: Exchange authorization code for access and refresh tokens.
+      - Requires: `grant_type`, `code`, `redirect_uri`, and client credentials
+      
+      **refresh_token**: Exchange refresh token for new access and refresh tokens (token rotation).
+      - Requires: `grant_type`, `refresh_token`, and client credentials
+      
+      Client credentials can be provided via:
+      - HTTP Basic Authentication header (Authorization: Basic <base64(client_id:client_secret)>) - Recommended
+      - Request body parameters (`client_id`, `client_secret`)
       
       **Note**: Client secrets are validated against bcrypt hashes stored in the database.
     tags: [OAuth2]
@@ -56,29 +66,46 @@ oauthToken:
         application/x-www-form-urlencoded:
           schema:
             type: object
-            required: [grant_type, code, client_id, client_secret, redirect_uri]
+            required: [grant_type]
             properties:
               grant_type:
                 type: string
-                enum: [authorization_code]
+                enum: [authorization_code, refresh_token]
+                description: |
+                  Grant type to use:
+                  - `authorization_code`: Exchange authorization code for tokens (requires `code` and `redirect_uri`)
+                  - `refresh_token`: Exchange refresh token for new tokens (requires `refresh_token`)
               code:
                 type: string
-              client_id:
-                type: string
-              client_secret:
-                type: string
+                description: Authorization code (required for `authorization_code` grant type)
               redirect_uri:
                 type: string
                 format: uri
+                description: Redirect URI used in authorization request (required for `authorization_code` grant type)
+              refresh_token:
+                type: string
+                description: Refresh token (required for `refresh_token` grant type)
+              client_id:
+                type: string
+                description: Client ID (required if not using Basic Auth)
+              client_secret:
+                type: string
+                description: Client secret (required if not using Basic Auth)
     responses:
       200:
-        description: Tokens issued
+        description: Tokens issued (both access_token and refresh_token)
         content:
           application/json:
             schema:
               $ref: '../components/schemas.yml#/AuthTokens'
       400:
         description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      401:
+        description: Unauthorized (invalid or expired refresh token)
         content:
           application/json:
             schema:
