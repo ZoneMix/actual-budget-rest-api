@@ -65,7 +65,7 @@ This section covers production deployment. For development setup, see the [Devel
 
 1. **Clone the repository with submodules**:
    ```bash
-   git clone --recurse-submodules https://github.com/your-username/actual-budget-rest-api.git
+   git clone --recurse-submodules https://github.com/ZoneMix/actual-budget-rest-api.git
    cd actual-budget-rest-api
    ```
    
