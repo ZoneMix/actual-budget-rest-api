@@ -147,28 +147,28 @@ app.use(express.urlencoded({ limit: MAX_REQUEST_SIZE, extended: true }));
 app.use('/static', express.static('./src/public/static'));
 
 // Mount routers
-app.use('/auth', authRoutes);
-app.use('/health', healthRoutes);
-app.use('/metrics', metricsRoutes); // Metrics endpoints (protected in production)
-app.use(loginRoutes); // Root /login GET/POST
-app.use('/admin', adminRoutes); // Admin endpoints (require admin JWT)
-
-// Mount OAuth routes (clients can be created via admin API)
-app.use('/oauth', oauthRoutes);
-
-app.use('/accounts', accountsRoutes);
-app.use('/transactions', transactionsGlobalRoutes); // Global update/delete by ID
+// API v2 routes (prefixed with /v2)
+app.use('/v2/auth', authRoutes);
+app.use('/v2/health', healthRoutes);
+app.use('/v2/metrics', metricsRoutes); // Metrics endpoints (protected in production)
+app.use('/v2/accounts', accountsRoutes);
+app.use('/v2/transactions', transactionsGlobalRoutes); // Global update/delete by ID
 
 // Nested per-account transactions (mounted under accounts)
 accountsRoutes.use('/:accountId/transactions', transactionsNestedRoutes);
 
-app.use('/categories', categoriesRoutes);
-app.use('/category-groups', categoryGroupsRoutes);
-app.use('/payees', payeesRoutes);
-app.use('/budgets', budgetsRoutes);
-app.use('/rules', rulesRoutes);
-app.use('/schedules', schedulesRoutes);
-app.use('/query', queryRoutes);
+app.use('/v2/categories', categoriesRoutes);
+app.use('/v2/category-groups', categoryGroupsRoutes);
+app.use('/v2/payees', payeesRoutes);
+app.use('/v2/budgets', budgetsRoutes);
+app.use('/v2/rules', rulesRoutes);
+app.use('/v2/schedules', schedulesRoutes);
+app.use('/v2/query', queryRoutes);
+
+// Non-versioned routes (no /v2 prefix)
+app.use(loginRoutes); // Root /login GET/POST
+app.use('/admin', adminRoutes); // Admin endpoints (require admin JWT)
+app.use('/oauth', oauthRoutes); // OAuth routes (clients can be created via admin API)
 
 // Swagger API docs (protected with JWT or session auth)
 // Use dynamic specs to get the correct server URL based on the request (works behind proxies)
@@ -232,20 +232,20 @@ process.on('unhandledRejection', (reason, promise) => {
 app.listen(PORT, () => {
   logger.info(`Server running on http://localhost:${PORT}`);
   logger.info('Available endpoints:', {
-    health: 'GET /health',
+    health: 'GET /v2/health',
     login: 'GET/POST /login',
-    auth: 'POST /auth/login, POST /auth/logout',
+    auth: 'POST /v2/auth/login, POST /v2/auth/logout',
     oauth2: 'GET /oauth/authorize, POST /oauth/token',
     admin: 'GET /admin/oauth-clients (requires admin JWT)',
     docs: 'GET /docs',
-    accounts: '/accounts/*',
-    transactions: '/transactions/* and /accounts/:accountId/transactions/*',
-    categories: '/categories/*',
-    categoryGroups: '/category-groups/*',
-    payees: '/payees/*',
-    budgets: '/budgets/*',
-    rules: '/rules/*',
-    schedules: '/schedules/*',
-    query: 'POST /query',
+    accounts: '/v2/accounts/*',
+    transactions: '/v2/transactions/* and /v2/accounts/:accountId/transactions/*',
+    categories: '/v2/categories/*',
+    categoryGroups: '/v2/category-groups/*',
+    payees: '/v2/payees/*',
+    budgets: '/v2/budgets/*',
+    rules: '/v2/rules/*',
+    schedules: '/v2/schedules/*',
+    query: 'POST /v2/query',
   });
 });

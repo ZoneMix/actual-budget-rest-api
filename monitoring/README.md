@@ -4,7 +4,7 @@ This directory contains example configurations for Prometheus and Grafana to mon
 
 ## Overview
 
-The Actual Budget REST API exposes metrics in Prometheus format at the `/metrics/prometheus` endpoint. These configurations allow you to:
+The Actual Budget REST API exposes metrics in Prometheus format at the `/v2/metrics/prometheus` endpoint. These configurations allow you to:
 
 - **Prometheus**: Scrape and store metrics from the API
 - **Grafana**: Visualize metrics with pre-configured dashboards
@@ -154,7 +154,7 @@ For production deployments:
    - Verify the URL is correct
 
 3. Verify API metrics endpoint:
-   - Access http://your-api:3000/metrics/prometheus
+   - Access http://your-api:3000/v2/metrics/prometheus
    - Ensure metrics are being exposed
 
 ### Dashboard not loading

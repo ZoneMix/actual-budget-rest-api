@@ -91,66 +91,6 @@ export const validateClient = async (clientId, clientSecret) => {
 };
 
 /**
- * Ensure the n8n OAuth2 client exists if configured.
- * Only registers if environment variables are provided.
- * Called on startup.
- *
- * Client secrets are hashed before storage for security.
- */
-export const ensureN8NClient = async () => {
-  // Use dynamic import to avoid circular dependency
-  const envModule = await import('../../config/env.js');
-  const env = envModule.default;
-  
-  const clientId = env.N8N_CLIENT_ID;
-  const clientSecret = env.N8N_CLIENT_SECRET;
-  const callbackUrl = env.N8N_OAUTH2_CALLBACK_URL;
-
-  // If not all OAuth2 vars are set, skip n8n OAuth2 setup
-  if (!clientId || !clientSecret || !callbackUrl) {
-    logger.info('n8n OAuth2 not configured (missing N8N_CLIENT_ID, N8N_CLIENT_SECRET, or N8N_OAUTH2_CALLBACK_URL). Skipping n8n client registration.');
-    return false;
-  }
-
-  // Validate secret is not a default/weak value
-  if (clientSecret.length < 32) {
-    logger.warn('N8N_CLIENT_SECRET is too short. Use at least 32 characters for security.');
-  }
-
-  // Validate client_id format
-  const CLIENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,255}$/;
-  if (!CLIENT_ID_PATTERN.test(clientId)) {
-    logger.warn(`Invalid client_id format during n8n client setup: ${clientId}`);
-    throw new Error('Invalid client_id format');
-  }
-
-  const existing = await getRow('SELECT client_secret_hashed FROM clients WHERE client_id = ?', [clientId]);
-
-  // Hash the secret before storage
-  const hashedSecret = await hashClientSecret(clientSecret);
-
-  if (!existing) {
-    // New client - insert with hashed secret
-    await executeQuery(`
-      INSERT INTO clients (client_id, client_secret, client_secret_hashed, allowed_scopes, redirect_uris)
-      VALUES (?, ?, TRUE, 'api', ?)
-    `, [clientId, hashedSecret, callbackUrl]);
-    logger.info(`Registered n8n OAuth2 client: ${clientId} (secret hashed)`);
-  } else {
-    // Update secret and callback in case they changed
-    // Always update to hashed format if it wasn't already
-    await executeQuery(`
-      UPDATE clients
-      SET client_secret = ?, client_secret_hashed = TRUE, redirect_uris = ?
-      WHERE client_id = ?
-    `, [hashedSecret, callbackUrl, clientId]);
-    logger.info(`Updated n8n OAuth2 client: ${clientId} (secret hashed)`);
-  }
-
-  return true;
-};
-
-/**
  * Generate a secure random client secret.
  * Returns a base64-encoded random string of 32 bytes (44 characters).
  */

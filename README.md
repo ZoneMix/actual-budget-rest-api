@@ -11,7 +11,7 @@ A secure Node.js/Express REST API that wraps the Actual Budget SDK (`@actual-app
 
 ## Get Token
 TOKEN=$(
-    curl http://localhost:3000/auth/login \
+    curl http://localhost:3000/v2/auth/login \
     -H "Content-Type: application/json" \
     -X POST \
     -d '{"username":"admin","password":"admin"}' \
@@ -19,17 +19,17 @@ TOKEN=$(
 )
 
 ## Get Accounts
-curl http://localhost:3000/accounts \
+curl http://localhost:3000/v2/accounts \
 -H "Authorization: Bearer $TOKEN"
 
 ## Create 'test' Account
-curl http://localhost:3000/accounts \
+curl http://localhost:3000/v2/accounts \
 -H "Authorization: Bearer $TOKEN" \
 -H "Content-Type: application/json" \
 -d '{"account":{"name":"test","offbudget":true,"closed":true},"initialBalance":500}'
 
 ## Get Accounts, showing 'test'
-curl http://localhost:3000/accounts \
+curl http://localhost:3000/v2/accounts \
 -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -44,7 +44,7 @@ curl http://localhost:3000/accounts \
 - Database Support: PostgreSQL (recommended for production) or SQLite (default, simpler setup)
 - Security: helmet headers, request IDs, token revocation, rate limiting, input validation, bcrypt-hashed OAuth secrets
 - Environment Validation: Automatic validation of all environment variables on startup
-- Metrics: Built-in Prometheus metrics collection at `/metrics/prometheus` endpoint
+- Metrics: Built-in Prometheus metrics collection at `/v2/metrics/prometheus` endpoint
 - Monitoring: Pre-configured Prometheus and Grafana setup for real-time metrics visualization (see [monitoring/](monitoring/))
 - Health Checks: Comprehensive health endpoint with database and API connectivity checks
 - Redis Support: Optional Redis for distributed rate limiting (falls back to memory)
@@ -332,13 +332,13 @@ npm run validate:openapi
 	- GET `/docs` → redirect to `/login`
 	- POST `/login` → create session, then access `/docs`
 - JWT login:
-	- POST `/auth/login` with `{ "username": "admin", "password": "..." }`
+	- POST `/v2/auth/login` with `{ "username": "admin", "password": "..." }`
 	- Response contains `access_token`, `refresh_token`, `expires_in`, `scope`, `token_type`
 	- Tokens include user `role` and `scopes` for authorization
 	- Send `Authorization: Bearer <access_token>` to protected routes
 	- Rate limited: 5 requests per 15 minutes
 - JWT logout:
-	- POST `/auth/logout` with optional `refresh_token` in body
+	- POST `/v2/auth/logout` with optional `refresh_token` in body
 	- Revokes both access and refresh tokens for secure session termination
 - n8n OAuth2 (optional):
   - Configure env vars listed above
@@ -352,7 +352,7 @@ npm run validate:openapi
 
 ## Query Endpoint
 
-The `/query` endpoint allows executing ActualQL queries against Actual Budget data:
+The `/v2/query` endpoint allows executing ActualQL queries against Actual Budget data:
 - **Security**: Table whitelist, filter depth limits, result size limits
 - **Rate Limited**: 20 requests per minute
 - **Audit Logging**: All queries logged with user ID and request context
@@ -383,7 +383,7 @@ The `/query` endpoint allows executing ActualQL queries against Actual Budget da
 ### Alternative: Bearer Token
 
 For development, use JWT bearer tokens:
-1. POST to `/auth/login` → Get `access_token`
+1. POST to `/v2/auth/login` → Get `access_token`
 2. In n8n HTTP node, set header: `Authorization: Bearer <token>`
 
 **Note**: In production behind a reverse proxy, replace `localhost` and Docker hostnames with actual domains.
@@ -409,7 +409,7 @@ The Admin API provides endpoints for managing OAuth clients. All endpoints requi
 
 ```bash
 # Get admin token
-TOKEN=$(curl http://localhost:3000/auth/login \
+TOKEN=$(curl http://localhost:3000/v2/auth/login \
   -H "Content-Type: application/json" \
   -X POST \
   -d '{"username":"admin","password":"admin"}' \

@@ -1,0 +1,14 @@
+# Gitleaks configuration file
+# This file configures what Gitleaks should scan and ignore
+
+title = "Actual Budget REST API"
+
+[allowlist]
+description = "Ignore test directories and files"
+paths = [
+  "tests/",
+  "test/",
+  "**/tests/**",
+  "**/test/**",
+]
+

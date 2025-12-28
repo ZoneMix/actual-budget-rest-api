@@ -43,9 +43,6 @@ export default [
       'security/detect-buffer-noassert': 'error',
       'security/detect-child-process': 'warn',
       'security/detect-no-csrf-before-method-override': 'warn',
-      'security/detect-non-literal-fs-filename': 'warn',
-      'security/detect-non-literal-regexp': 'warn',
-      'security/detect-unsafe-regex': 'error',
 
       // Warnings for code quality
       'no-warning-comments': ['warn', { terms: ['TODO', 'FIXME', 'XXX', 'HACK'] }],

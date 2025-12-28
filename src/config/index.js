@@ -55,6 +55,11 @@ export const parseExpiresInToSeconds = (expiresInStr) => {
 export const ACCESS_TTL_SECONDS = parseExpiresInToSeconds(env.JWT_ACCESS_TTL);
 export const REFRESH_TTL_SECONDS = parseExpiresInToSeconds(env.JWT_REFRESH_TTL);
 
+// Export JWT secrets (auto-generated in development if not set)
+export const JWT_SECRET = env.JWT_SECRET;
+export const JWT_REFRESH_SECRET = env.JWT_REFRESH_SECRET;
+export const SESSION_SECRET = env.SESSION_SECRET;
+
 logger.info('JWT TTL configuration', {
   accessTTL: `${ACCESS_TTL_SECONDS}s`,
   accessTTLSource: env.JWT_ACCESS_TTL,

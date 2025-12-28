@@ -1,7 +1,7 @@
 # Prometheus configuration for Actual Budget REST API
 # 
 # This configuration file is used to scrape metrics from the Actual Budget REST API.
-# The API exposes metrics at the /metrics/prometheus endpoint in Prometheus format.
+# The API exposes metrics at the /v2/metrics/prometheus endpoint in Prometheus format.
 #
 # Usage:
 #   1. Copy this file to your Prometheus configuration directory
@@ -36,7 +36,7 @@ scrape_configs:
   # Scrape the Actual Budget REST API
   - job_name: 'actual-rest-api-dev'
     scrape_interval: 5s      # More frequent scraping for API metrics
-    metrics_path: '/metrics/prometheus'
+    metrics_path: '/v2/metrics/prometheus'
     static_configs:
       - targets: ['actual-rest-api-dev:3000']  # Update hostname/port as needed
         labels:

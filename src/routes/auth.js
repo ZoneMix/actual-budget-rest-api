@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { authenticateUser } from '../auth/user.js';
 import { issueTokens, revokeToken, isTokenRevoked, authenticateJWT } from '../auth/jwt.js';
 import { insertToken, getRow } from '../db/authDb.js';
-import { ACCESS_TTL_SECONDS } from '../config/index.js';
+import { ACCESS_TTL_SECONDS, JWT_SECRET, JWT_REFRESH_SECRET } from '../config/index.js';
 import { validateBody } from '../middleware/validation-schemas.js';
 import { LoginSchema, LogoutSchema } from '../middleware/validation-schemas.js';
 import logger, { logAuthEvent } from '../logging/logger.js';
@@ -34,7 +34,7 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
   // Flow 1: Refresh token exchange
   if (refresh_token && !username && !password) {
     try {
-      const decoded = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
+      const decoded = jwt.verify(refresh_token, JWT_REFRESH_SECRET);
       
       // Check if token was revoked
       if (await isTokenRevoked(decoded.jti)) {
@@ -54,7 +54,7 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
       const accessExpiresAt = new Date(Date.now() + ACCESS_TTL_SECONDS * 1000).toISOString();
       const accessToken = jwt.sign(
         { user_id: decoded.user_id, username: decoded.username, role, scope: scopeString, scopes: scopeArray, iss: 'actual-wrapper', aud: 'n8n' },
-        process.env.JWT_SECRET,
+        JWT_SECRET,
         { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: newJti }
       );
 
@@ -106,7 +106,7 @@ router.post('/logout', authenticateJWT, validateBody(LogoutSchema), async (req, 
   const { refresh_token } = req.validatedBody;
   if (refresh_token) {
     try {
-      const decodedRefresh = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
+      const decodedRefresh = jwt.verify(refresh_token, JWT_REFRESH_SECRET);
       if (decodedRefresh?.jti) {
         await revokeToken(decodedRefresh.jti);
         logAuthEvent('REFRESH_REVOKED', user.user_id, { jti: decodedRefresh.jti }, true);

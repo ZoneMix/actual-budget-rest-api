@@ -1,5 +1,5 @@
 # Development Dockerfile - uses LTS Node but runs as root for easier development
-FROM node:24-alpine
+FROM node:25.2.1-alpine
 
 WORKDIR /app
 

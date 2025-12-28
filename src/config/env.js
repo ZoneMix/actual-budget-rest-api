@@ -46,14 +46,6 @@ const envSchema = z.object({
   DATA_DIR: z.string().default('/app/.actual-cache'),
 
   // ============================================================================
-  // OAuth2 / n8n Integration (Optional)
-  // ============================================================================
-  N8N_CLIENT_ID: z.string().optional(),
-  // N8N_CLIENT_SECRET: Length requirement only enforced in production (validated after parsing)
-  N8N_CLIENT_SECRET: z.string().optional(),
-  N8N_OAUTH2_CALLBACK_URL: z.string().url('N8N_OAUTH2_CALLBACK_URL must be a valid URL').optional(),
-
-  // ============================================================================
   // CORS Configuration
   // ============================================================================
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000,http://localhost:5678'),
@@ -131,7 +123,6 @@ try {
     if (env.SESSION_SECRET && env.SESSION_SECRET.length < 8) {
       logger.warn('⚠️  SESSION_SECRET is very short. Consider using at least 8 characters even in development.');
     }
-    // N8N_CLIENT_SECRET is optional, no validation needed in dev
   }
   
   // Production: Strict validation
@@ -171,12 +162,6 @@ try {
     
     if (env.JWT_SECRET === env.SESSION_SECRET) {
       logger.error('❌ JWT_SECRET and SESSION_SECRET must be different');
-      process.exit(1);
-    }
-    
-    // Production: N8N_CLIENT_SECRET must be 32+ chars if provided
-    if (env.N8N_CLIENT_SECRET && env.N8N_CLIENT_SECRET.length < 32) {
-      logger.error('❌ N8N_CLIENT_SECRET must be at least 32 characters in production');
       process.exit(1);
     }
   }
@@ -235,13 +220,6 @@ try {
  * All values are guaranteed to be valid and typed.
  */
 export default env;
-
-/**
- * Helper to check if OAuth2 is configured.
- */
-export const isOAuth2Configured = () => {
-  return !!(env.N8N_CLIENT_ID && env.N8N_CLIENT_SECRET && env.N8N_OAUTH2_CALLBACK_URL);
-};
 
 /**
  * Helper to check if Redis is configured.

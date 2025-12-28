@@ -36,78 +36,80 @@ tags:
   - name: Metrics
 
 paths:
-  /health:
+  # API v2 endpoints (prefixed with /v2)
+  /v2/health:
     $ref: './paths/health.yml#/health'
-  /metrics:
+  /v2/metrics:
     $ref: './paths/metrics.yml#/metrics'
-  /metrics/summary:
+  /v2/metrics/summary:
     $ref: './paths/metrics.yml#/metricsSummary'
-  /metrics/reset:
+  /v2/metrics/reset:
     $ref: './paths/metrics.yml#/metricsReset'
-  /auth/login:
+  /v2/auth/login:
     $ref: './paths/authentication.yml#/authLogin'
-  /auth/logout:
+  /v2/auth/logout:
     $ref: './paths/authentication.yml#/authLogout'
+  /v2/accounts:
+    $ref: './paths/accounts.yml#/accounts'
+  /v2/accounts/{id}:
+    $ref: './paths/accounts.yml#/accountById'
+  /v2/accounts/{id}/close:
+    $ref: './paths/accounts.yml#/accountClose'
+  /v2/accounts/{id}/reopen:
+    $ref: './paths/accounts.yml#/accountReopen'
+  /v2/accounts/{id}/balance:
+    $ref: './paths/accounts.yml#/accountBalance'
+  /v2/accounts/{accountId}/transactions:
+    $ref: './paths/transactions.yml#/accountTransactions'
+  /v2/accounts/{accountId}/transactions/import:
+    $ref: './paths/transactions.yml#/accountTransactionsImport'
+  /v2/transactions/{id}:
+    $ref: './paths/transactions.yml#/transactionById'
+  /v2/categories:
+    $ref: './paths/categories.yml#/categories'
+  /v2/categories/{id}:
+    $ref: './paths/categories.yml#/categoryById'
+  /v2/category-groups:
+    $ref: './paths/category-groups.yml#/categoryGroups'
+  /v2/category-groups/{id}:
+    $ref: './paths/category-groups.yml#/categoryGroupById'
+  /v2/payees:
+    $ref: './paths/payees.yml#/payees'
+  /v2/payees/{id}:
+    $ref: './paths/payees.yml#/payeeById'
+  /v2/payees/merge:
+    $ref: './paths/payees.yml#/payeesMerge'
+  /v2/budgets/months:
+    $ref: './paths/budgets.yml#/budgetMonths'
+  /v2/budgets/{month}:
+    $ref: './paths/budgets.yml#/budgetByMonth'
+  /v2/budgets/{month}/categories/{categoryId}/budget:
+    $ref: './paths/budgets.yml#/budgetCategoryBudget'
+  /v2/budgets/{month}/categories/{categoryId}/carryover:
+    $ref: './paths/budgets.yml#/budgetCategoryCarryover'
+  /v2/budgets/{month}/hold:
+    $ref: './paths/budgets.yml#/budgetHold'
+  /v2/budgets/{month}/reset-hold:
+    $ref: './paths/budgets.yml#/budgetResetHold'
+  /v2/rules:
+    $ref: './paths/rules.yml#/rules'
+  /v2/rules/payees/{payeeId}:
+    $ref: './paths/rules.yml#/rulesByPayee'
+  /v2/rules/{id}:
+    $ref: './paths/rules.yml#/ruleById'
+  /v2/schedules:
+    $ref: './paths/schedules.yml#/schedules'
+  /v2/schedules/{id}:
+    $ref: './paths/schedules.yml#/scheduleById'
+  /v2/query:
+    $ref: './paths/query.yml#/query'
+  # Non-versioned endpoints (no /v2 prefix)
   /login:
     $ref: './paths/authentication.yml#/loginForm'
   /oauth/authorize:
     $ref: './paths/oauth2.yml#/oauthAuthorize'
   /oauth/token:
     $ref: './paths/oauth2.yml#/oauthToken'
-  /accounts:
-    $ref: './paths/accounts.yml#/accounts'
-  /accounts/{id}:
-    $ref: './paths/accounts.yml#/accountById'
-  /accounts/{id}/close:
-    $ref: './paths/accounts.yml#/accountClose'
-  /accounts/{id}/reopen:
-    $ref: './paths/accounts.yml#/accountReopen'
-  /accounts/{id}/balance:
-    $ref: './paths/accounts.yml#/accountBalance'
-  /accounts/{accountId}/transactions:
-    $ref: './paths/transactions.yml#/accountTransactions'
-  /accounts/{accountId}/transactions/import:
-    $ref: './paths/transactions.yml#/accountTransactionsImport'
-  /transactions/{id}:
-    $ref: './paths/transactions.yml#/transactionById'
-  /categories:
-    $ref: './paths/categories.yml#/categories'
-  /categories/{id}:
-    $ref: './paths/categories.yml#/categoryById'
-  /category-groups:
-    $ref: './paths/category-groups.yml#/categoryGroups'
-  /category-groups/{id}:
-    $ref: './paths/category-groups.yml#/categoryGroupById'
-  /payees:
-    $ref: './paths/payees.yml#/payees'
-  /payees/{id}:
-    $ref: './paths/payees.yml#/payeeById'
-  /payees/merge:
-    $ref: './paths/payees.yml#/payeesMerge'
-  /budgets/months:
-    $ref: './paths/budgets.yml#/budgetMonths'
-  /budgets/{month}:
-    $ref: './paths/budgets.yml#/budgetByMonth'
-  /budgets/{month}/categories/{categoryId}/budget:
-    $ref: './paths/budgets.yml#/budgetCategoryBudget'
-  /budgets/{month}/categories/{categoryId}/carryover:
-    $ref: './paths/budgets.yml#/budgetCategoryCarryover'
-  /budgets/{month}/hold:
-    $ref: './paths/budgets.yml#/budgetHold'
-  /budgets/{month}/reset-hold:
-    $ref: './paths/budgets.yml#/budgetResetHold'
-  /rules:
-    $ref: './paths/rules.yml#/rules'
-  /rules/payees/{payeeId}:
-    $ref: './paths/rules.yml#/rulesByPayee'
-  /rules/{id}:
-    $ref: './paths/rules.yml#/ruleById'
-  /schedules:
-    $ref: './paths/schedules.yml#/schedules'
-  /schedules/{id}:
-    $ref: './paths/schedules.yml#/scheduleById'
-  /query:
-    $ref: './paths/query.yml#/query'
   /admin:
     $ref: './paths/admin.yml#/adminDashboard'
   /admin/oauth-clients:

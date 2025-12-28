@@ -5,19 +5,8 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { insertToken, pruneExpiredTokens, executeQuery, getRow } from '../db/authDb.js';
-import { ACCESS_TTL_SECONDS, REFRESH_TTL_SECONDS } from '../config/index.js';
+import { ACCESS_TTL_SECONDS, REFRESH_TTL_SECONDS, JWT_SECRET, JWT_REFRESH_SECRET } from '../config/index.js';
 import logger, { logAuthEvent, logSuspiciousActivity } from '../logging/logger.js';
-
-// Verify JWT secrets are configured
-if (!process.env.JWT_SECRET) {
-  logger.error('FATAL: JWT_SECRET is required but not set');
-  process.exit(1);
-}
-
-if (!process.env.JWT_REFRESH_SECRET) {
-  logger.error('FATAL: JWT_REFRESH_SECRET is required but not set');
-  process.exit(1);
-}
 
 /**
  * Validate JTI format (UUID v4 or UUID v4 with '-refresh' suffix for refresh tokens).
@@ -54,13 +43,13 @@ export const issueTokens = async (userId, username, scopes = 'api', role = 'user
 
   const accessToken = jwt.sign(
     { user_id: userId, username, role, scope: scopeString, scopes: scopeArray, iss: 'actual-wrapper', aud: 'n8n' },
-    process.env.JWT_SECRET,
+    JWT_SECRET,
     { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: jti }
   );
 
   const refreshToken = jwt.sign(
     { user_id: userId, username, role, iss: 'actual-wrapper', aud: 'n8n' },
-    process.env.JWT_REFRESH_SECRET,
+    JWT_REFRESH_SECRET,
     { expiresIn: `${REFRESH_TTL_SECONDS}s`, jwtid: `${jti}-refresh` }
   );
 
@@ -130,7 +119,7 @@ export const authenticateJWT = async (req, res, next) => {
 
   try {
     // Verify signature FIRST - this prevents tampered tokens
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
 
     // Then check if token is revoked
     if (await isTokenRevoked(payload.jti)) {

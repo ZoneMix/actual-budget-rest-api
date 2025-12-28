@@ -20,6 +20,7 @@ import { generateAuthCode } from '../auth/oauth2/code.js';
 import { validateAuthCode } from '../auth/oauth2/code.js';
 import { issueTokens, isTokenRevoked, revokeToken } from '../auth/jwt.js';
 import { getRow } from '../db/authDb.js';
+import { JWT_REFRESH_SECRET } from '../config/index.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { throwBadRequest, throwInternalError, throwUnauthorized } from '../middleware/responseHelpers.js';
 import logger, { logAuthEvent } from '../logging/logger.js';
@@ -199,7 +200,7 @@ router.post('/token', express.json(), express.urlencoded({ extended: true }), as
 
     try {
       // Verify and decode the refresh token
-      const decoded = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
+      const decoded = jwt.verify(refresh_token, JWT_REFRESH_SECRET);
       
       // Check if token was revoked
       if (await isTokenRevoked(decoded.jti)) {
