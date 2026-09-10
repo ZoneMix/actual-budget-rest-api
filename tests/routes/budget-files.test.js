@@ -134,6 +134,32 @@ describe('POST /v2/budget/export', () => {
     expect(actualApi.exportBudget).not.toHaveBeenCalled();
   });
 
+  // `Buffer.from(undefined)` throws ERR_INVALID_ARG_TYPE, which reaches the
+  // client as an opaque 500 about argument types; a zero-length result is
+  // worse, arriving as a 200 with an empty zip that looks like a successful
+  // backup. Neither is an export, so both must fail loudly and on purpose.
+  it('fails explicitly when the engine returns nothing', async () => {
+    process.env.AUTH_SCOPE_ENFORCEMENT = 'enforce';
+    actualApi.exportBudget.mockResolvedValueOnce(undefined);
+
+    const res = await request(app).post('/v2/budget/export').set(bearer(adminToken));
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/export/i);
+    expect(res.body.error).not.toMatch(/ERR_INVALID_ARG_TYPE|first argument/i);
+  });
+
+  it('fails explicitly rather than returning an empty zip', async () => {
+    process.env.AUTH_SCOPE_ENFORCEMENT = 'enforce';
+    actualApi.exportBudget.mockResolvedValueOnce(new Uint8Array(0));
+
+    const res = await request(app).post('/v2/budget/export').set(bearer(adminToken));
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/export/i);
+    expect(res.headers['content-type']).not.toBe('application/zip');
+  });
+
   it('streams the zip bytes with download headers, never base64 in JSON', async () => {
     process.env.AUTH_SCOPE_ENFORCEMENT = 'enforce';
     actualApi.exportBudget.mockResolvedValueOnce(ZIP_BYTES);

@@ -17,6 +17,7 @@ import { validateBody } from '../middleware/validation-schemas.js';
 import { LoadBudgetSchema } from '../middleware/validation-schemas.js';
 import { adminLimiter } from '../middleware/rateLimiters.js';
 import { sendSuccess } from '../middleware/responseHelpers.js';
+import { InternalServerError } from '../errors/index.js';
 
 // An export is a file download, not a JSON envelope: base64 in JSON would
 // inflate the whole ledger by a third and force the client to decode it.
@@ -54,6 +55,16 @@ router.post(
   adminLimiter,
   asyncHandler(async (req, res) => {
     const bytes = await budgetExport();
+
+    // Checked BEFORE any header is set, so a failure renders as a JSON error
+    // rather than an error body labelled application/zip. `Buffer.from(
+    // undefined)` would otherwise surface as an opaque ERR_INVALID_ARG_TYPE,
+    // and a zero-length result is worse still: a 200 with an empty archive
+    // that looks like a successful backup until someone tries to restore it.
+    if (!bytes || bytes.length === 0) {
+      throw new InternalServerError('Budget export produced no data');
+    }
+
     res.setHeader('Content-Type', EXPORT_CONTENT_TYPE);
     res.setHeader('Content-Disposition', `attachment; filename="${exportFilename()}"`);
     res.end(Buffer.from(bytes));

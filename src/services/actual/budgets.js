@@ -5,6 +5,7 @@
 import logger from '../../logging/logger.js';
 import { runWithApi } from './runner.js';
 import { withEngineExclusive } from './queue.js';
+import { ValidationError } from '../../errors/index.js';
 
 export const budgetMonthsList = async () => {
   return runWithApi('budgetMonthsList', async (apiInstance) => {
@@ -64,12 +65,21 @@ export const budgetHoldNextMonth = async (month, amount) => {
 /**
  * Applies one operation from a batch. Split out so `budgetBatchUpdate` stays
  * readable and the op-type dispatch is testable in isolation.
+ *
+ * Every type is matched explicitly and anything else throws. The route
+ * validates against a discriminated union, so an unknown type cannot arrive
+ * over HTTP today — but treating "not setAmount" as "therefore setCarryover"
+ * is how a third operation type added later becomes silent data corruption
+ * instead of a rejected request.
  */
 const applyBatchOperation = async (apiInstance, operation) => {
   if (operation.type === 'setAmount') {
     return apiInstance.setBudgetAmount(operation.month, operation.categoryId, operation.amount);
   }
-  return apiInstance.setBudgetCarryover(operation.month, operation.categoryId, operation.flag);
+  if (operation.type === 'setCarryover') {
+    return apiInstance.setBudgetCarryover(operation.month, operation.categoryId, operation.flag);
+  }
+  throw new ValidationError(`Unsupported batch budget operation type: ${operation.type}`);
 };
 
 /**

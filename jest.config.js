@@ -34,9 +34,11 @@ export default {
   // payees, categories, category-groups, budget-files, system, lookup, budgets,
   // docs-auth and query-scope route suites plus the tags/files/budgets-batch
   // service suites: 73.45 stmts / 59.94 branches / 75.82 funcs / 73.04 lines.
+  // Phase G fix round 1 (health probe, export guard, batch dispatch, dead-code
+  // removal) took branches past 60: 73.78 / 60.71 / 76.04 / 73.41.
   coverageThreshold: {
     global: {
-      branches: 55,
+      branches: 60,
       functions: 75,
       lines: 70,
       statements: 70,

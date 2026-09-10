@@ -87,9 +87,13 @@ health:
                           nullable: true
                           description: |
                             Version of the Actual server the engine syncs with.
-                            Best-effort: null when the server is unreachable or
-                            the version call fails, since a health check must not
-                            500 over a nice-to-have field.
+                            DEVELOPMENT ONLY — omitted in production, because this
+                            endpoint is unauthenticated and an upstream version
+                            string is CVE-matching input. Use the authenticated
+                            GET /v2/server/version instead.
+                            Best-effort even in development: null when the server
+                            is unreachable or the version call fails, since a
+                            health check must not 500 over a nice-to-have field.
                           example: '25.9.0'
                         error:
                           type: string

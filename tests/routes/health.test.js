@@ -5,7 +5,7 @@
 import request from 'supertest';
 import { buildTestApp } from '../helpers/app.js';
 import { syncPolicy, getQueueDepth, withEngine } from '../../src/services/actualApi.js';
-import { shapeSyncError } from '../../src/routes/health-checks.js';
+import { shapeSyncError, shapeActualApiCheck } from '../../src/routes/health-checks.js';
 import actualApi from '../mocks/actual-api.js';
 
 describe('shapeSyncError', () => {
@@ -35,6 +35,62 @@ describe('shapeSyncError', () => {
       message: failure.message,
       at: failure.at,
     });
+  });
+});
+
+/**
+ * `serverVersion` is the UPSTREAM Actual server's version, and /v2/health has
+ * no auth. A version string is exactly the input needed to match a host against
+ * a CVE list, so it belongs with `lastSyncError`'s message on the
+ * development-only side of the line rather than being handed to anonymous
+ * callers. The authenticated GET /v2/server/version still returns it.
+ *
+ * Tested through the shaping function because `isProduction` is resolved at
+ * import time and the production branch cannot be reached through the route.
+ */
+describe('shapeActualApiCheck', () => {
+  const check = {
+    status: 'ok',
+    message: 'Actual API connection healthy',
+    queueDepth: 0,
+    lastSyncAt: 1766000000000,
+    lastSyncError: null,
+    serverVersion: '25.9.0',
+    error: 'connect ECONNREFUSED 10.42.7.3:5006',
+  };
+
+  it('withholds the server version in production', () => {
+    const shaped = shapeActualApiCheck(check, true);
+
+    expect(shaped.serverVersion).toBeUndefined();
+    expect('serverVersion' in shaped).toBe(false);
+    expect(JSON.stringify(shaped)).not.toContain('25.9.0');
+  });
+
+  it('withholds the raw error in production too', () => {
+    const shaped = shapeActualApiCheck(check, true);
+
+    expect(shaped.error).toBeUndefined();
+    expect(JSON.stringify(shaped)).not.toContain('10.42.7.3');
+  });
+
+  it('still reports the operational fields in production', () => {
+    const shaped = shapeActualApiCheck(check, true);
+
+    expect(shaped).toMatchObject({
+      status: 'ok',
+      message: 'Actual API connection healthy',
+      queueDepth: 0,
+      lastSyncAt: 1766000000000,
+      lastSyncError: null,
+    });
+  });
+
+  it('emits the server version outside production, where it is a debugging aid', () => {
+    const shaped = shapeActualApiCheck(check, false);
+
+    expect(shaped.serverVersion).toBe('25.9.0');
+    expect(shaped.error).toBe('connect ECONNREFUSED 10.42.7.3:5006');
   });
 });
 

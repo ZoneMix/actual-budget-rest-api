@@ -18,6 +18,7 @@ import {
   isProduction,
   checkDatabase,
   checkActualApi,
+  shapeActualApiCheck,
   getSystemInfo,
 } from './health-checks.js';
 
@@ -53,18 +54,9 @@ router.get('/', async (req, res) => {
         // Only include error details in development
         ...(isProduction ? {} : { error: databaseCheck.error }),
       },
-      actualApi: {
-        status: actualApiCheck.status,
-        message: actualApiCheck.message,
-        // Engine queue and sync state; lastSyncError is already redacted for
-        // production by shapeSyncError() in checkActualApi().
-        queueDepth: actualApiCheck.queueDepth,
-        lastSyncAt: actualApiCheck.lastSyncAt,
-        lastSyncError: actualApiCheck.lastSyncError,
-        serverVersion: actualApiCheck.serverVersion,
-        // Only include error details in development
-        ...(isProduction ? {} : { error: actualApiCheck.error }),
-      },
+      // shapeActualApiCheck() decides what is safe to emit: the raw error and
+      // the upstream server version are development-only.
+      actualApi: shapeActualApiCheck(actualApiCheck),
       // System info is already filtered by getSystemInfo()
       ...(isProduction ? {} : { system: systemInfo }),
     },
