@@ -40,7 +40,8 @@ export const errorHandler = (err, req, res, _next) => {
     userId: req.user?.user_id,
     // Request context (safe - no sensitive data)
     bodyKeys: req.body ? Object.keys(req.body) : undefined,
-    query: Object.keys(req.query).length > 0 ? req.query : undefined,
+    // Keys only — query values can carry credentials and must never be logged.
+    queryKeys: Object.keys(req.query || {}).length > 0 ? Object.keys(req.query) : undefined,
     params: Object.keys(req.params).length > 0 ? req.params : undefined,
     ip: req.ip,
     userAgent: req.get('user-agent'),
