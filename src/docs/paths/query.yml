@@ -110,6 +110,10 @@ query:
                   offset:
                     type: integer
                     minimum: 0
+                    description: >-
+                      Rows to skip. SQL requires a LIMIT alongside an OFFSET, so
+                      an offset sent without a limit is given
+                      ACTUAL_QUERY_MAX_RESULTS as its limit.
                   options:
                     type: object
                     description: Table options passed straight to the builder

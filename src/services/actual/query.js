@@ -13,6 +13,7 @@
 
 import { q } from '@actual-app/api';
 import logger from '../../logging/logger.js';
+import { ACTUAL_QUERY_MAX_RESULTS } from '../../config/index.js';
 import { runWithApi } from './runner.js';
 
 // `q(...).select()` with no argument selects nothing; ActualQL's own default
@@ -30,12 +31,28 @@ const filterExpressions = (filter) => {
 };
 
 /**
+ * Resolves the LIMIT clause.
+ *
+ * The engine emits LIMIT and OFFSET independently
+ * (dist/index.js:14011-14012, :14857-14858, :14879) and SQLite rejects an
+ * OFFSET with no LIMIT before it — `near "5": syntax error`. An offset on its
+ * own therefore has to imply one, and the result cap is the only bound that is
+ * already the caller's ceiling anyway.
+ */
+const effectiveLimit = (limit, offset) => {
+  if (limit !== undefined) return limit;
+  return offset !== undefined ? ACTUAL_QUERY_MAX_RESULTS : undefined;
+};
+
+/**
  * Maps a validated query spec onto the ActualQL builder.
  *
  * The call order is fixed: table → filters → select|calculate → groupBy →
  * orderBy → options → limit → offset. `select` and `calculate` are mutually
  * exclusive (QuerySchema rejects both together); `calculate` wins here so a
  * schema change can never produce a query that both selects and calculates.
+ * An `offset` with no `limit` gets the result cap as its limit — see
+ * effectiveLimit above.
  *
  * Every builder method returns a NEW builder, so nothing is mutated.
  *
@@ -57,7 +74,9 @@ export const buildQuery = (spec) => {
   const withGroup = groupBy !== undefined ? withProjection.groupBy(groupBy) : withProjection;
   const withOrder = orderBy !== undefined ? withGroup.orderBy(orderBy) : withGroup;
   const withOptions = options !== undefined ? withOrder.options(options) : withOrder;
-  const withLimit = limit !== undefined ? withOptions.limit(limit) : withOptions;
+
+  const boundedLimit = effectiveLimit(limit, offset);
+  const withLimit = boundedLimit !== undefined ? withOptions.limit(boundedLimit) : withOptions;
 
   return offset !== undefined ? withLimit.offset(offset) : withLimit;
 };
