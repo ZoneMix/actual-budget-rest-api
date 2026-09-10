@@ -74,6 +74,11 @@ describe('/v2/accounts', () => {
         { name: 'Savings', offbudget: true, closed: false, account_group_id: 'grp-1' },
         0
       );
+      // The engine drops account_group_id on create, so the service applies it
+      // with a follow-up update inside the same write operation.
+      expect(actualApi.updateAccount).toHaveBeenCalledWith('new-id', {
+        account_group_id: 'grp-1',
+      });
     });
 
     it('normalises the legacy offBudget alias to the SDK spelling', async () => {
