@@ -4,8 +4,8 @@
 
 import request from 'supertest';
 import { buildTestApp } from '../helpers/app.js';
-import { syncPolicy } from '../../src/services/actualApi.js';
-import { shapeSyncError } from '../../src/routes/health.js';
+import { syncPolicy, getQueueDepth, withEngine } from '../../src/services/actualApi.js';
+import { shapeSyncError } from '../../src/routes/health-checks.js';
 import actualApi from '../mocks/actual-api.js';
 
 describe('shapeSyncError', () => {
@@ -110,5 +110,94 @@ describe('GET /v2/health', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.checks.actualApi.serverVersion).toBeNull();
+  });
+});
+
+/**
+ * A health check must OBSERVE the engine, never drive it.
+ *
+ * Reading the server version through the queued service layer would take the
+ * read path in `runWithApi`, whose pre-read sync calls `syncPolicy.markSynced()`
+ * — and `markSynced` clears `lastSyncError`. A polled health check would then
+ * erase the very diagnostic it exists to report, and would let an anonymous
+ * caller (this endpoint has no auth) push sync traffic at the Actual server and
+ * queue behind a long-running export.
+ */
+describe('GET /v2/health does not drive the engine', () => {
+  // A failed sync leaves the policy BOTH stale and carrying the error
+  // (runner.js syncAfterWrite calls forceStale() then recordSyncError()), so
+  // that is the state to reproduce. With a fresh policy the read path skips its
+  // pre-sync and the bug hides.
+  beforeEach(() => {
+    actualApi.sync.mockClear();
+    syncPolicy.forceStale();
+  });
+
+  it('never syncs, even when the policy says the local copy is behind', async () => {
+    expect(syncPolicy.shouldSyncBefore()).toBe(true);
+
+    const app = buildTestApp();
+    await request(app).get('/v2/health');
+
+    expect(actualApi.sync).not.toHaveBeenCalled();
+  });
+
+  it('does not clear a recorded sync error, however often it is polled', async () => {
+    syncPolicy.recordSyncError(new Error('sync went sideways'));
+
+    const app = buildTestApp();
+    const first = await request(app).get('/v2/health');
+    const second = await request(app).get('/v2/health');
+
+    expect(first.body.checks.actualApi.lastSyncError).toMatchObject({
+      message: 'sync went sideways',
+    });
+    // The regression this pins: a queued read syncs, markSynced() nulls
+    // lastSyncError, and the failure vanishes from monitoring on the next poll.
+    expect(second.body.checks.actualApi.lastSyncError).toMatchObject({
+      message: 'sync went sideways',
+    });
+  });
+
+  it('leaves the sync policy exactly as it found it', async () => {
+    syncPolicy.recordSyncError(new Error('sync went sideways'));
+    const lastSyncAtBefore = syncPolicy.lastSyncAt();
+
+    const app = buildTestApp();
+    await request(app).get('/v2/health');
+
+    expect(syncPolicy.shouldSyncBefore()).toBe(true);
+    expect(syncPolicy.lastSyncAt()).toBe(lastSyncAtBefore);
+    expect(syncPolicy.lastSyncError()).toMatchObject({ message: 'sync went sideways' });
+  });
+
+  // /v2/health has no auth. If it entered the queue its latency would be bounded
+  // by queue depth plus ACTUAL_OP_TIMEOUT_MS, so one slow export would take the
+  // liveness probe down with it. This request must answer while the engine is
+  // held by someone else.
+  it('answers while the engine queue is held by a long-running operation', async () => {
+    let release;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    const holding = withEngine('test-blocker', () => blocked);
+
+    const app = buildTestApp();
+    const res = await request(app).get('/v2/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.checks.actualApi.queueDepth).toBeGreaterThan(0);
+
+    release();
+    await holding;
+    expect(getQueueDepth()).toBe(0);
+  });
+
+  it('still reports the server version it read outside the queue', async () => {
+    actualApi.getServerVersion.mockResolvedValueOnce({ version: '25.9.0' });
+
+    const app = buildTestApp();
+    const res = await request(app).get('/v2/health');
+
+    expect(res.body.checks.actualApi.serverVersion).toBe('25.9.0');
+    expect(actualApi.sync).not.toHaveBeenCalled();
   });
 });
