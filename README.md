@@ -517,7 +517,9 @@ The `/v2/query` endpoint allows executing ActualQL queries against Actual Budget
    ```
    Save the returned `client_secret` — it is shown once. `allowed_scopes` caps
    what any token issued to this client can carry, and the grant is further
-   intersected with the authorizing user's own scopes.
+   intersected with the authorizing user's own scopes. A request that omits
+   `scope` asks for exactly `allowed_scopes` (RFC 6749 §3.3), so a client
+   registered for one scope need not name it every time.
 
 2. **In n8n, create OAuth2 credential**:
    - Type: **OAuth2**

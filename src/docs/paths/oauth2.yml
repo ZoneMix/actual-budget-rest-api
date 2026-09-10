@@ -21,7 +21,10 @@ oauthAuthorize:
       - in: query
         name: scope
         description: |
-          Space- or comma-separated scopes to request; defaults to `api`.
+          Space- or comma-separated scopes to request. Omitting it requests
+          the client's own registered `allowed_scopes` (RFC 6749 §3.3), so a
+          client registered for a single scope does not have to name it on
+          every request.
           Must be within the client's registered `allowed_scopes`, where
           `admin` implies `write` implies `read`, and legacy `api` implies
           `write` and `read` but never `admin`. Anything outside that set

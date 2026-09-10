@@ -26,6 +26,7 @@ import {
   formatScopes,
   intersectScopes,
   parseRequestedScopes,
+  clientDefaultScopes,
   userHeldScopes,
 } from '../auth/oauth2/scopes.js';
 import { getRow } from '../db/authDb.js';
@@ -128,7 +129,9 @@ router.get('/authorize', asyncHandler(async (req, res) => {
   }
 
   // A scope the client may not grant is refused outright (RFC 6749 §4.1.2.1).
-  const requested = parseRequestedScopes(scope);
+  // With no `scope` in the query the client's own registration is the default
+  // (RFC 6749 §3.3); a global default it may not hold would be refused below.
+  const requested = parseRequestedScopes(scope, clientDefaultScopes(client));
   const refused = disallowedScopes(requested, clientAllowedScopes(client));
   if (refused.length > 0) {
     logger.warn('[OAuth2] Requested scope not allowed for client', {
