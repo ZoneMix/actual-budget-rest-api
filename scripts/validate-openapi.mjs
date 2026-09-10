@@ -7,7 +7,7 @@ const packagePath = path.resolve(process.cwd(), 'package.json');
 
 (async () => {
   try {
-    // The spec on disk has no info.version — it comes from package.json, the
+    // The spec on disk only carries a 0.0.0 placeholder — the real version comes from package.json, the
     // one place the version is maintained (src/config/swagger.js does the same
     // when it serves /docs). Dereferencing first resolves every relative $ref
     // against the spec's own directory, so the object handed to validate() no
