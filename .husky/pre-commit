@@ -42,13 +42,34 @@ fi
 echo "${GREEN}✓ ESLint checks passed${NC}"
 
 # Check 4: Ensure package-lock.json is in sync
+#
+# Only a change to a dependency block can invalidate the lock. Demanding a
+# staged lock for ANY package.json edit blocked commits that touch a script,
+# the lint-staged config or a field like "engines" — npm install produces no
+# lock diff for those, so there was nothing to stage and no way to satisfy the
+# check short of skipping the hook. The blocks are compared between the staged
+# version and HEAD rather than grepped out of the diff, because a diff hunk
+# does not say which block it fell inside.
 echo "${YELLOW}4. Checking package-lock.json sync...${NC}"
-if git diff --cached --name-only | grep -E 'package\.json$' > /dev/null; then
-  if ! git diff --cached --name-only | grep -E 'package-lock\.json$' > /dev/null; then
-    echo "${RED}❌ ERROR: package.json was modified but package-lock.json was not updated${NC}"
-    echo "   Run: npm install"
-    echo "   Then stage the package-lock.json changes"
-    exit 1
+
+# Takes a full git object spec: ":package.json" is the staged copy,
+# "HEAD:package.json" the committed one.
+dependency_blocks() {
+  git show "$1" 2>/dev/null | awk '
+    /^  "(dependencies|devDependencies|optionalDependencies|peerDependencies|overrides)"[[:space:]]*:/ { inblock = 1 }
+    inblock { print }
+    inblock && /^  \}/ { inblock = 0 }
+  '
+}
+
+if git diff --cached --name-only | grep -E '(^|/)package\.json$' > /dev/null; then
+  if [ "$(dependency_blocks :package.json)" != "$(dependency_blocks HEAD:package.json)" ]; then
+    if ! git diff --cached --name-only | grep -E '(^|/)package-lock\.json$' > /dev/null; then
+      echo "${RED}❌ ERROR: package.json dependencies changed but package-lock.json was not updated${NC}"
+      echo "   Run: npm install"
+      echo "   Then stage the package-lock.json changes"
+      exit 1
+    fi
   fi
 fi
 echo "${GREEN}✓ package-lock.json in sync${NC}"
