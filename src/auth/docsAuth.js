@@ -6,29 +6,46 @@
 import jwt from 'jsonwebtoken';
 import { isTokenRevoked, JWT_VERIFY_OPTIONS } from './jwt.js';
 import { JWT_SECRET } from '../config/index.js';
+import { throwUnauthorized } from '../middleware/responseHelpers.js';
+
+/**
+ * Verifies a Bearer token and returns its payload, or null when the token is
+ * missing, unverifiable or revoked.
+ *
+ * `await` on isTokenRevoked is load-bearing: it is async, so an un-awaited call
+ * returns an always-truthy Promise, `!promise` is always false, and this branch
+ * never assigned a user — no Bearer token could open /docs at all.
+ */
+const verifyBearer = async (token) => {
+  if (!token) return null;
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET, JWT_VERIFY_OPTIONS);
+    if (payload && !(await isTokenRevoked(payload.jti))) {
+      return payload;
+    }
+  } catch {
+    // JWT invalid or expired, fall through to the session check
+  }
+
+  return null;
+};
 
 /**
  * Custom middleware for docs that accepts JWT or session auth.
- * Redirects to login if neither is present.
+ *
+ * A caller that presented a Bearer token gets a 401 when it does not check
+ * out; only a caller with no credentials at all is redirected to the login
+ * page. Bouncing a programmatic client to an HTML form tells it nothing.
  */
-export const authenticateForDocs = (req, res, next) => {
-  // First try JWT authentication
+export const authenticateForDocs = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (token) {
-    // Use existing JWT middleware logic
-    try {
-      // Verify token first (decode doesn't verify signature)
-      const payload = jwt.verify(token, JWT_SECRET, JWT_VERIFY_OPTIONS);
-      // Then check if token is revoked
-      if (payload && !isTokenRevoked(payload.jti)) {
-        req.user = payload;
-        return next();
-      }
-    } catch {
-      // JWT invalid or expired, continue to session check
-    }
+  const payload = await verifyBearer(token);
+  if (payload) {
+    req.user = payload;
+    return next();
   }
 
   // Fallback to session authentication
@@ -37,6 +54,10 @@ export const authenticateForDocs = (req, res, next) => {
     return next();
   }
 
-  // Neither JWT nor session - redirect to consolidated login with return_to parameter
+  if (token) {
+    throwUnauthorized('Invalid or revoked token');
+  }
+
+  // No credentials at all - redirect to consolidated login with return_to
   res.redirect(`/login?return_to=${encodeURIComponent(req.originalUrl)}`);
 };

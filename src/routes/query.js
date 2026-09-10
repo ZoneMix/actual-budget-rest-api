@@ -13,7 +13,7 @@
 
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
-import { requireScopeByMethod } from '../auth/permissions.js';
+import { requireScope, SCOPES } from '../auth/permissions.js';
 import { runActualQuery } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody } from '../middleware/validation-schemas.js';
@@ -25,7 +25,12 @@ import { queryBodyParser } from '../middleware/bodyParser.js';
 import logger from '../logging/logger.js';
 
 const router = express.Router();
-router.use(authenticateJWT, requireScopeByMethod());
+// A READ over POST. `requireScopeByMethod()` classifies anything that is not
+// GET/HEAD/OPTIONS as a write, which would demand the write scope for a
+// query that cannot mutate anything — the table whitelist and
+// secureQueryMiddleware below enforce that. So the scope is named explicitly
+// rather than derived from the verb.
+router.use(authenticateJWT, requireScope(SCOPES.READ));
 router.use(queryBodyParser); // Smaller limit for queries
 
 router.post(

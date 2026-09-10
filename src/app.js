@@ -39,6 +39,7 @@ import env from './config/env.js';
 import { swaggerUi, setupDynamicSwaggerUi } from './config/swagger.js';
 import { authenticateForDocs } from './auth/docsAuth.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { asyncHandler } from './middleware/asyncHandler.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { metricsMiddleware } from './middleware/metrics.js';
 import metricsRoutes from './routes/metrics.js';
@@ -173,10 +174,8 @@ export const createApp = () => {
   app.use('/v2/notes', notesRoutes);
   app.use('/v2/preferences', preferencesRoutes);
   app.use('/v2/account-groups', accountGroupsRoutes);
-  app.use('/v2/budgets', budgetsRoutes);
-  // Singular '/v2/budget' is the budget FILE router (list/load/export); the
-  // plural '/v2/budgets' above is the budget MONTH router. Separate mounts.
-  app.use('/v2/budget', budgetFilesRoutes);
+  app.use('/v2/budgets', budgetsRoutes); // budget MONTHS
+  app.use('/v2/budget', budgetFilesRoutes); // budget FILES — a separate mount
   app.use('/v2/sync', syncRoutes);
   app.use('/v2/server', systemRoutes);
   app.use('/v2/lookup', lookupRoutes);
@@ -189,9 +188,10 @@ export const createApp = () => {
   app.use('/admin', adminRoutes); // Admin endpoints (require admin JWT)
   app.use('/oauth', oauthRoutes); // OAuth routes (clients can be created via admin API)
 
-  // Swagger API docs (protected with JWT or session auth)
-  // Use dynamic specs to get the correct server URL based on the request (works behind proxies)
-  app.use('/docs', authenticateForDocs, swaggerUi.serve, setupDynamicSwaggerUi);
+  // Swagger API docs (JWT or session auth). Dynamic specs so the server URL
+  // matches the request, which matters behind a reverse proxy.
+  // authenticateForDocs is async (it awaits the revocation check) → asyncHandler.
+  app.use('/docs', asyncHandler(authenticateForDocs), swaggerUi.serve, setupDynamicSwaggerUi);
 
   // Global error handler (keeps responses consistent)
   app.use(errorHandler);

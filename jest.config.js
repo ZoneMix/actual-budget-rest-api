@@ -29,12 +29,17 @@ export default {
   // permissions, jwt, oauth2-scopes, route-scope, admin-auth, auth-refresh and
   // logger suites. Re-measured on the merged codebase after the rebase onto
   // main: 67.96 stmts / 57.66 branches / 67.01 funcs / 67.23 lines.
+  //
+  // Phase G (new endpoints) adds the tags, notes, preferences, account-groups,
+  // payees, categories, category-groups, budget-files, system, lookup, budgets,
+  // docs-auth and query-scope route suites plus the tags/files/budgets-batch
+  // service suites: 73.45 stmts / 59.94 branches / 75.82 funcs / 73.04 lines.
   coverageThreshold: {
     global: {
       branches: 55,
-      functions: 65,
-      lines: 65,
-      statements: 65,
+      functions: 75,
+      lines: 70,
+      statements: 70,
     },
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],

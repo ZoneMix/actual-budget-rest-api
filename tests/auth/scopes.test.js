@@ -134,13 +134,22 @@ describe('hasScope', () => {
 });
 
 describe('isAdmin', () => {
-  it('is true for the admin role', () => {
-    expect(isAdmin({ role: 'admin', scopes: ['read'] })).toBe(true);
-  });
-
   it('is true for the admin scope', () => {
     expect(isAdmin({ role: 'user', scopes: ['admin'] })).toBe(true);
     expect(isAdmin({ role: 'user', scope: 'api,admin' })).toBe(true);
+  });
+
+  it('is true for an admin-role user whose grant carries the admin scope', () => {
+    expect(isAdmin({ role: 'admin', scopes: ['api', 'admin'] })).toBe(true);
+  });
+
+  // The role claim alone is NOT sufficient. An admin user can deliberately
+  // issue a narrow token — through an `api`-only OAuth client, say — and that
+  // token must not reach an admin-gated route just because the person behind
+  // it happens to be an admin. The grant is what is being checked, not who.
+  it('is false for an admin-role user holding a deliberately narrow token', () => {
+    expect(isAdmin({ role: 'admin', scopes: ['read'] })).toBe(false);
+    expect(isAdmin({ role: 'admin', scope: 'api' })).toBe(false);
   });
 
   it('is false for a legacy api token and for no user', () => {
