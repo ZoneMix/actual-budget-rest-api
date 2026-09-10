@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const specPath = path.join(__dirname, '../docs/openapi.yml');
 const packagePath = path.join(__dirname, '../../package.json');
 
-// src/docs/openapi.yml deliberately carries no info.version: a second copy of
+// src/docs/openapi.yml carries only a 0.0.0 placeholder for info.version: a second copy of
 // the version drifts from package.json the first time one of them is bumped
 // alone. It is injected here and in scripts/validate-openapi.mjs instead.
 const { version } = JSON.parse(readFileSync(packagePath, 'utf8'));
