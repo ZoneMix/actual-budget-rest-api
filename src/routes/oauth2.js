@@ -118,8 +118,16 @@ router.get('/authorize', asyncHandler(async (req, res) => {
 
   const client = await resolveAuthorizeClient(client_id, redirect_uri);
 
-  // Scope check before the login redirect: no point sending a user through a
-  // login round-trip for a grant the client can never receive (RFC 6749 §4.1.2.1).
+  // Require user to be logged in via session. Every scope decision below comes
+  // after this on purpose: answering invalid_scope to an anonymous caller would
+  // let anyone enumerate any client's allowed_scopes one request at a time.
+  if (!req.session.user) {
+    logger.debug('[OAuth2] User not logged in, redirecting to login', { client_id });
+    const params = new URLSearchParams({ ...req.query, return_to: req.originalUrl });
+    return res.redirect(`/login?${params}`);
+  }
+
+  // A scope the client may not grant is refused outright (RFC 6749 §4.1.2.1).
   const requested = parseRequestedScopes(scope);
   const refused = disallowedScopes(requested, clientAllowedScopes(client));
   if (refused.length > 0) {
@@ -133,13 +141,6 @@ router.get('/authorize', asyncHandler(async (req, res) => {
       error: 'invalid_scope',
       error_description: `Client is not allowed the requested scope(s): ${refused.join(' ')}`,
     }, state);
-  }
-
-  // Require user to be logged in via session
-  if (!req.session.user) {
-    logger.debug('[OAuth2] User not logged in, redirecting to login', { client_id });
-    const params = new URLSearchParams({ ...req.query, return_to: req.originalUrl });
-    return res.redirect(`/login?${params}`);
   }
 
   // A client may be registered for more than the person signing in holds; the

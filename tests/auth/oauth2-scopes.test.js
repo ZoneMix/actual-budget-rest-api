@@ -105,6 +105,23 @@ describe('GET /oauth/authorize — requested scope vs allowed_scopes', () => {
     expect(location.searchParams.get('code')).toBeNull();
   });
 
+  it('tells an unauthenticated caller nothing about the client scopes', async () => {
+    // Answering invalid_scope before the login redirect would let anyone probe
+    // any client's allowed_scopes one request at a time, without an account.
+    const clientId = await registerClient('api');
+
+    const res = await request(app).get('/oauth/authorize').query({
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      scope: 'admin',
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toMatch(/^\/login\?/);
+    expect(res.headers.location).not.toContain('invalid_scope');
+  });
+
   it('issues a code for an allowed scope and carries state through', async () => {
     const clientId = await registerClient('api');
 
