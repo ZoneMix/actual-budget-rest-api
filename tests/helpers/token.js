@@ -14,6 +14,7 @@ export const signTestToken = ({
   username = 'tester',
   scopes = 'api',
   role = 'user',
+  jti = crypto.randomUUID(),
 } = {}) => {
   const scopeString = Array.isArray(scopes) ? scopes.join(',') : scopes;
   const scopeArray = Array.isArray(scopes) ? scopes : scopes.split(',').map((s) => s.trim()).filter(Boolean);
@@ -29,6 +30,6 @@ export const signTestToken = ({
       aud: 'n8n',
     },
     process.env.JWT_SECRET,
-    { expiresIn: '1h', jwtid: crypto.randomUUID() }
+    { expiresIn: '1h', jwtid: jti }
   );
 };
