@@ -478,6 +478,35 @@ export const pruneExpiredCodes = async () => {
 };
 
 /**
+ * Read an authorization code that is still within its lifetime.
+ *
+ * The expiry predicate lives HERE rather than in the caller: expiry is a
+ * security property of the grant, and leaving it to `pruneExpiredCodes()`
+ * having deleted the row first makes a housekeeping job load-bearing. The
+ * lifetime is checked by the same statement that reads the row.
+ *
+ * The comparison is dialect-specific for the same reason pruneExpiredCodes'
+ * is: PostgreSQL compares a TIMESTAMP column against the ISO parameter
+ * directly, while SQLite needs both sides normalised through `datetime()`
+ * rather than compared as text.
+ *
+ * @param {string} code - the authorization code
+ * @param {string} clientId - the client the code was issued to
+ * @param {string} redirectUri - the redirect_uri the code was issued for
+ * @returns {Promise<object|null>} `{ user_id, scope }`, or null
+ */
+export const getUnexpiredAuthCode = async (code, clientId, redirectUri) => {
+  const notExpired = isPostgresConfigured()
+    ? 'expires_at > ?'
+    : 'datetime(expires_at) > datetime(?)';
+
+  return getRow(`
+    SELECT user_id, scope FROM auth_codes
+    WHERE code = ? AND client_id = ? AND redirect_uri = ? AND ${notExpired}
+  `, [code, clientId, redirectUri, new Date().toISOString()]);
+};
+
+/**
  * Close the database connection (used on shutdown).
  */
 export const closeDb = async () => {
