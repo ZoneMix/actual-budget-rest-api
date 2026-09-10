@@ -76,6 +76,46 @@ export const JWT_SECRET = env.JWT_SECRET;
 export const JWT_REFRESH_SECRET = env.JWT_REFRESH_SECRET;
 export const SESSION_SECRET = env.SESSION_SECRET;
 
+// JWT identity claims — pinned on both sign and verify so a token minted for
+// another issuer/audience (or with another algorithm) is rejected outright.
+export const JWT_ISSUER = env.JWT_ISSUER;
+export const JWT_AUDIENCE = env.JWT_AUDIENCE;
+
+/** Scope enforcement rollout modes. */
+export const SCOPE_ENFORCEMENT_MODES = Object.freeze({
+  OFF: 'off',
+  WARN: 'warn',
+  ENFORCE: 'enforce',
+});
+
+const VALID_ENFORCEMENT_MODES = new Set(Object.values(SCOPE_ENFORCEMENT_MODES));
+const warnedEnforcementValues = new Set();
+
+/**
+ * Current scope enforcement mode, read at *request* time.
+ *
+ * env.js validates AUTH_SCOPE_ENFORCEMENT once on startup; this accessor
+ * re-reads process.env on every call so the mode can be flipped in a test (or
+ * by a supervisor restarting with a new value) without re-importing the
+ * middleware. An unparseable runtime value is reported once and then ignored
+ * in favour of the startup-validated one — never silently.
+ */
+export const getScopeEnforcementMode = () => {
+  const runtimeValue = process.env.AUTH_SCOPE_ENFORCEMENT;
+  if (!runtimeValue) return env.AUTH_SCOPE_ENFORCEMENT;
+  if (VALID_ENFORCEMENT_MODES.has(runtimeValue)) return runtimeValue;
+
+  if (!warnedEnforcementValues.has(runtimeValue)) {
+    warnedEnforcementValues.add(runtimeValue);
+    logger.warn('Invalid AUTH_SCOPE_ENFORCEMENT value; using the validated startup mode', {
+      invalid: runtimeValue,
+      using: env.AUTH_SCOPE_ENFORCEMENT,
+      valid: [...VALID_ENFORCEMENT_MODES],
+    });
+  }
+  return env.AUTH_SCOPE_ENFORCEMENT;
+};
+
 logger.info('JWT TTL configuration', {
   accessTTL: `${ACCESS_TTL_SECONDS}s`,
   accessTTLSource: env.JWT_ACCESS_TTL,

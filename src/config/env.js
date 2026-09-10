@@ -40,6 +40,17 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.string().default('1h'),
   JWT_REFRESH_TTL: z.string().default('24h'),
 
+  // ---------------------------------------------------------------- scopes --
+  // Scope enforcement rollout switch. `warn` (the default) only logs what a
+  // deny *would* have been, so no existing caller starts getting 403s; flip to
+  // `enforce` once the SCOPE_WOULD_DENY log is quiet. `off` disables the checks.
+  AUTH_SCOPE_ENFORCEMENT: z.enum(['off', 'warn', 'enforce']).default('warn'),
+  // JWT identity claims. Defaults are the literals tokens were already signed
+  // with, so every token issued before these became configurable still verifies.
+  JWT_ISSUER: z.string().min(1).default('actual-wrapper'),
+  JWT_AUDIENCE: z.string().min(1).default('n8n'),
+  // -------------------------------------------------------------- /scopes ---
+
   // ============================================================================
   // Actual Budget Integration
   // ============================================================================
