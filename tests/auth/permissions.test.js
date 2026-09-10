@@ -103,6 +103,24 @@ describe('requireScopeByMethod — enforcement modes', () => {
     });
   });
 
+  it('never logs the query string, which can carry a credential', () => {
+    setMode('warn');
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    const req = {
+      method: 'POST',
+      baseUrl: '/v2/accounts',
+      path: '/',
+      originalUrl: '/v2/accounts?token=super-secret-value',
+      user: readOnlyUser,
+    };
+
+    requireScopeByMethod()(req, {}, jest.fn());
+
+    const [, meta] = spy.mock.calls[0];
+    expect(meta.path).toBe('/v2/accounts/');
+    expect(JSON.stringify(meta)).not.toContain('super-secret-value');
+  });
+
   it('warn is the default when AUTH_SCOPE_ENFORCEMENT is unset', () => {
     setMode(undefined);
     const spy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
@@ -209,6 +227,24 @@ describe('requireAdminRole', () => {
     } catch (err) {
       expect(err.status).toBe(403);
     }
+  });
+
+  it('logs a denial without the query string', () => {
+    setMode('enforce');
+    const spy = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    const req = {
+      method: 'POST',
+      baseUrl: '/v2/metrics',
+      path: '/reset',
+      originalUrl: '/v2/metrics/reset?token=super-secret-value',
+      user: legacyUser,
+    };
+
+    expect(() => requireAdminRole()(req, {}, jest.fn())).toThrow();
+
+    const [, meta] = spy.mock.calls[0];
+    expect(meta.path).toBe('/v2/metrics/reset');
+    expect(JSON.stringify(meta)).not.toContain('super-secret-value');
   });
 
   it('accepts the admin role and rejects an anonymous request', () => {

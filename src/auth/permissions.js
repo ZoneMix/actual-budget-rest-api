@@ -31,11 +31,18 @@ const asList = (requiredScopes) => (Array.isArray(requiredScopes) ? requiredScop
 /** What the caller actually holds, for the audit record. */
 const grantedList = (user) => [...expandScopes(Array.isArray(user.scopes) ? user.scopes : user.scope)].sort();
 
+/**
+ * Mounted path of the request, without the query string. `req.originalUrl`
+ * would carry it, and a caller that puts a token in a query parameter would
+ * write that token into the audit log.
+ */
+const pathOf = (req) => `${req.baseUrl || ''}${req.path || ''}`;
+
 const denialDetails = (req, required) => ({
   required: required.join(','),
   actual: grantedList(req.user).join(','),
   method: req.method,
-  path: req.originalUrl || req.path,
+  path: pathOf(req),
 });
 
 /**
@@ -96,7 +103,7 @@ export const requireAdminRole = () => (req, res, next) => {
   if (!isAdmin(req.user)) {
     logAuthEvent('ADMIN_DENIED', req.user.user_id, {
       method: req.method,
-      path: req.originalUrl || req.path,
+      path: pathOf(req),
     }, false);
     throwForbidden('Admin access required');
   }
