@@ -70,7 +70,8 @@ src/
 │   ├── paths/        # One file per resource
 │   └── components/   # Shared schemas and securitySchemes
 ├── errors/            # Custom error classes
-│   └── index.js      # Error type definitions
+│   ├── index.js      # createHttpError: normalises anything thrown
+│   └── httpErrors.js # One class per status the API answers with
 ├── logging/           # Logging infrastructure
 │   └── logger.js     # Winston logger configuration
 ├── middleware/        # Express middleware
