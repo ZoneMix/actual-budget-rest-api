@@ -1,4 +1,5 @@
 import { QuerySchema } from '../../src/validation/query.js';
+import { ACTUAL_QUERY_MAX_RESULTS } from '../../src/config/index.js';
 
 describe('QuerySchema', () => {
   it('accepts a valid query with a filter and select array', () => {
@@ -69,6 +70,18 @@ describe('QuerySchema', () => {
 
   it('rejects limit above 10000', () => {
     expect(QuerySchema.safeParse({ query: { table: 'transactions', limit: 10001 } }).success).toBe(false);
+  });
+
+  // The schema's ceiling is the same knob the service truncates at, so the two
+  // cannot drift apart when an operator retunes ACTUAL_QUERY_MAX_RESULTS.
+  it('takes its limit ceiling from ACTUAL_QUERY_MAX_RESULTS', () => {
+    expect(QuerySchema.safeParse({
+      query: { table: 'transactions', limit: ACTUAL_QUERY_MAX_RESULTS },
+    }).success).toBe(true);
+
+    expect(QuerySchema.safeParse({
+      query: { table: 'transactions', limit: ACTUAL_QUERY_MAX_RESULTS + 1 },
+    }).success).toBe(false);
   });
 
   it('rejects a negative offset', () => {
