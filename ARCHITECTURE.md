@@ -74,8 +74,9 @@ src/
 ├── logging/           # Logging infrastructure
 │   └── logger.js     # Winston logger configuration
 ├── middleware/        # Express middleware
+│   ├── accessLog.js         # One structured line per request, path only
 │   ├── asyncHandler.js      # Async error handling
-│   ├── bodyParser.js        # Per-route body size limits (bulk larger, query smaller)
+│   ├── bodyParser.js        # Per-router body size limits (bulk larger, query smaller)
 │   ├── errorHandler.js      # Global error handler
 │   ├── metrics.js           # Metrics collection
 │   ├── queryExpressions.js  # ActualQL expression mapping
