@@ -4,9 +4,17 @@
 
 import request from 'supertest';
 import { buildTestApp } from '../helpers/app.js';
-import { syncPolicy, getQueueDepth, withEngine } from '../../src/services/actualApi.js';
-import { shapeSyncError, shapeActualApiCheck } from '../../src/routes/health-checks.js';
+import { initActualApi, syncPolicy, getQueueDepth, withEngine } from '../../src/services/actualApi.js';
+import { shapeSyncError } from '../../src/routes/health-checks.js';
+import { checkActualApi, shapeActualApiCheck } from '../../src/routes/health-engine.js';
 import actualApi from '../mocks/actual-api.js';
+
+// Every probe below asserts on a READY engine. The probe no longer initialises
+// one for us — see tests/routes/health-engine-not-ready.test.js for the case
+// where it has not been initialised.
+beforeAll(async () => {
+  await initActualApi();
+});
 
 describe('shapeSyncError', () => {
   // The message is the raw error from instance.sync(), so it can name the
@@ -227,27 +235,7 @@ describe('GET /v2/health does not drive the engine', () => {
     expect(syncPolicy.lastSyncError()).toMatchObject({ message: 'sync went sideways' });
   });
 
-  // /v2/health has no auth. If it entered the queue its latency would be bounded
-  // by queue depth plus ACTUAL_OP_TIMEOUT_MS, so one slow export would take the
-  // liveness probe down with it. This request must answer while the engine is
-  // held by someone else.
-  it('answers while the engine queue is held by a long-running operation', async () => {
-    let release;
-    const blocked = new Promise((resolve) => { release = resolve; });
-    const holding = withEngine('test-blocker', () => blocked);
-
-    const app = buildTestApp();
-    const res = await request(app).get('/v2/health');
-
-    expect(res.status).toBe(200);
-    expect(res.body.checks.actualApi.queueDepth).toBeGreaterThan(0);
-
-    release();
-    await holding;
-    expect(getQueueDepth()).toBe(0);
-  });
-
-  it('still reports the server version it read outside the queue', async () => {
+  it('still reports the server version, without syncing for it', async () => {
     actualApi.getServerVersion.mockResolvedValueOnce({ version: '25.9.0' });
 
     const app = buildTestApp();
@@ -255,5 +243,43 @@ describe('GET /v2/health does not drive the engine', () => {
 
     expect(res.body.checks.actualApi.serverVersion).toBe('25.9.0');
     expect(actualApi.sync).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The probe runs its two engine calls THROUGH the queue, so an anonymous
+ * caller cannot interleave `getAccounts()` with someone else's mutation — but
+ * under a short dedicated budget (ACTUAL_HEALTH_TIMEOUT_MS), so a queue held by
+ * a long export cannot hang the liveness probe behind it.
+ *
+ * `timeoutMs` is a parameter for the same reason `hideDetails` is: the config
+ * value is resolved at import time, so the expiry cannot be reached through the
+ * route inside a test without waiting the full default.
+ */
+describe('checkActualApi under a held queue', () => {
+  it('answers busy within its own timeout instead of waiting for the queue', async () => {
+    let release;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    const holding = withEngine('test-blocker', () => blocked);
+
+    const started = Date.now();
+    const check = await checkActualApi({ timeoutMs: 50 });
+
+    expect(check.status).toBe('busy');
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(check.queueDepth).toBeGreaterThan(0);
+
+    release();
+    await holding;
+    // The probe's own task is still queued behind the blocker; drain it.
+    await withEngine('test-drain', async () => undefined);
+    expect(getQueueDepth()).toBe(0);
+  });
+
+  it('is an engine failure, so /v2/health renders it as 503', () => {
+    const shaped = shapeActualApiCheck({ status: 'busy', message: 'busy', queueDepth: 3 }, true);
+
+    expect(shaped.status).toBe('busy');
+    expect(shaped.queueDepth).toBe(3);
   });
 });

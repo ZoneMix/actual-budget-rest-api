@@ -431,6 +431,7 @@ variables abort startup with a message naming the variable.
 |---|---|---|
 | `ACTUAL_QUEUE_MAX_DEPTH` | `100` | Pending engine operations above this are rejected with 503. |
 | `ACTUAL_OP_TIMEOUT_MS` | `60000` | Per-operation caller timeout; on expiry the caller gets 504 and the engine call keeps its slot. |
+| `ACTUAL_HEALTH_TIMEOUT_MS` | `5000` | Budget for the engine calls `GET /v2/health` makes. On expiry the probe reports `busy` instead of waiting for the queue. |
 | `ACTUAL_LOAD_TIMEOUT_MS` | `300000` | Caller timeout for `POST /v2/budget/load` and `POST /v2/budget/export`, which move the whole ledger and outrun the ordinary one. |
 | `ACTUAL_SYNC_MIN_INTERVAL_MS` | `5000` | Minimum age of the last sync before a read triggers another. `0` syncs before every read. See [Sync semantics](#sync-semantics). |
 
@@ -629,7 +630,7 @@ Also changing in 3.0.0:
 
 - **Logging**: Structured JSON logs (winston), respects `LOG_LEVEL`. Each request includes `X-Request-ID` for tracing.
 - **Metrics**: Prometheus endpoint at `/v2/metrics/prometheus`, JSON at `/v2/metrics` and `/v2/metrics/summary`. All of them require a bearer token in production, so a scrape job needs one. Pre-configured Grafana dashboards in [monitoring/](monitoring/).
-- **Health**: `GET /v2/health` returns 200 (healthy) or 503 (degraded), unauthenticated. It probes the database and Actual connectivity without entering the engine queue, so a health poll cannot be made to drive sync traffic. In production it hides the upstream server version and raw error text, which would otherwise let an anonymous caller fingerprint the host.
+- **Health**: `GET /v2/health` returns 200 (healthy) or 503 (degraded), unauthenticated. It observes the engine but never drives it: it takes the instance only once startup has finished (reporting `not-initialised` otherwise, never triggering `init()` itself) and never syncs, so a health poll cannot drive sync traffic or erase a recorded sync error. Its engine calls do go through the queue, under the shorter `ACTUAL_HEALTH_TIMEOUT_MS`, so a queue held by a long export makes it answer `busy` rather than hang. In production it hides the upstream server version and raw error text, which would otherwise let an anonymous caller fingerprint the host.
 
 ## CI / Security
 

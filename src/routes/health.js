@@ -14,13 +14,8 @@
  */
 
 import express from 'express';
-import {
-  isProduction,
-  checkDatabase,
-  checkActualApi,
-  shapeActualApiCheck,
-  getSystemInfo,
-} from './health-checks.js';
+import { isProduction, checkDatabase, getSystemInfo } from './health-checks.js';
+import { checkActualApi, shapeActualApiCheck } from './health-engine.js';
 
 const router = express.Router();
 
@@ -39,8 +34,12 @@ router.get('/', async (req, res) => {
   const actualApiCheck = await checkActualApi();
   const systemInfo = getSystemInfo();
 
-  // Determine overall status
-  const hasErrors = databaseCheck.status === 'error' || actualApiCheck.status === 'error';
+  // Anything but `ok` is degraded. The engine probe has three failure answers
+  // — `error` (it refused), `busy` (it did not answer inside the health budget)
+  // and `not-initialised` (startup has not finished) — and all three mean this
+  // instance cannot serve requests, so all three must reach the orchestrator as
+  // a 503 rather than only the first.
+  const hasErrors = databaseCheck.status !== 'ok' || actualApiCheck.status !== 'ok';
   const overallStatus = hasErrors ? 'degraded' : 'ok';
 
   // Build response based on environment

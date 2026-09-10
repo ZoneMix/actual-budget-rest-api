@@ -94,8 +94,9 @@ src/
 │   └── static/        # CSS, HTML for login and admin pages
 ├── routes/            # Express route handlers — thin: validate, call, respond
 │   ├── accounts.js          # Also mounts transactions-nested at :accountId
-│   ├── health.js            # Thin assembler over health-checks.js
-│   ├── health-checks.js     # The probes themselves
+│   ├── health.js            # Thin assembler over the two probe modules
+│   ├── health-checks.js     # Database and system probes, sync-error redaction
+│   ├── health-engine.js     # Actual engine probe: observes, never drives
 │   ├── query.js             # ActualQL endpoint (read scope, over POST)
 │   └── ... (one router per resource)
 └── services/          # Business logic layer
@@ -127,10 +128,15 @@ concurrently. Everything funnels through `runner.js`:
   takes the queue slot, applies the sync policy for the mode, and records
   timing metrics under the label.
 
-Health probes deliberately bypass all of this. `/v2/health` is unauthenticated,
-so routing it through the queue would let an anonymous caller drive outbound
-sync traffic and make health latency a function of queue depth. It calls the
-engine instance directly instead.
+The health probe uses the queue but not the sync policy. `/v2/health` is
+unauthenticated, so it must neither drive outbound sync traffic nor start the
+engine: it takes the instance only once initialisation has finished
+(`getActualApiIfReady`) and reports `not-initialised` otherwise, and it calls
+the engine directly rather than through `runWithApi`, so no pre-read sync can
+clear the `lastSyncError` it exists to report. Its calls still go through the
+queue — an anonymous caller must not interleave with a mutation — but under
+`ACTUAL_HEALTH_TIMEOUT_MS` (5 s) rather than the ordinary budget, so a queue
+held by a long export makes the probe answer `busy` instead of hanging.
 
 ## Request Flow
 

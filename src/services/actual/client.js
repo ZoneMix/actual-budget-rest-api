@@ -16,6 +16,10 @@ import {
 import logger from '../../logging/logger.js';
 
 let api = null;
+// `api` is assigned before init() runs, so it is NOT a readiness signal on its
+// own. This flips only once init() AND the budget download have succeeded, and
+// back on failure or shutdown.
+let ready = false;
 
 /**
  * Downloads the budget, passing the E2E encryption password only when one is
@@ -48,6 +52,7 @@ export const initActualApi = async () => {
 
     logger.info('Downloading budget...', { syncId: ACTUAL_SYNC_ID });
     await downloadBudget(api);
+    ready = true;
     logger.info('Actual API initialized and budget downloaded.');
   } catch (error) {
     logger.error('Failed to initialize Actual API', {
@@ -55,6 +60,7 @@ export const initActualApi = async () => {
       stack: error.stack,
     });
     api = null; // Reset on failure so retry can happen
+    ready = false;
     throw error;
   }
 
@@ -62,7 +68,7 @@ export const initActualApi = async () => {
 };
 
 /**
- * Get the initialized API instance.
+ * Get the initialized API instance, initializing it if it is not up yet.
  */
 export const getActualApi = async () => {
   if (!api) await initActualApi();
@@ -70,10 +76,23 @@ export const getActualApi = async () => {
 };
 
 /**
+ * The instance ONLY if initialization already completed, otherwise null.
+ *
+ * For callers that must observe the engine without driving it — GET /v2/health
+ * above all, which is unauthenticated and polled by the Dockerfile HEALTHCHECK
+ * every 30 s. Calling `getActualApi()` there would let an anonymous request
+ * trigger `init()` and a full budget download.
+ *
+ * @returns {object|null} the engine instance, or null when it is not ready
+ */
+export const getActualApiIfReady = () => (ready ? api : null);
+
+/**
  * Graceful shutdown.
  */
 export const shutdownActualApi = async () => {
   if (api) {
+    ready = false;
     await api.shutdown();
     logger.info('Actual API shutdown complete.');
     api = null;
