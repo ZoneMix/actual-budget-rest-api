@@ -2,8 +2,9 @@
  * runWithApi: the one path every domain function takes into the engine.
  *
  * Reads sync only when the policy says the local copy may be behind; writes
- * never sync first and always sync afterwards, absorbing a post-write sync
- * failure so a completed mutation is never reported as an error.
+ * always sync afterwards, absorbing a post-write sync failure so a completed
+ * mutation is never reported as an error. A write syncs first only when it
+ * asks to with `syncBefore`, which read-modify-write operations need.
  */
 
 import { jest } from '@jest/globals';
@@ -84,6 +85,56 @@ describe('runWithApi', () => {
         actualApi.sync.mock.invocationCallOrder[0]
       );
       expect(syncPolicy.shouldSyncBefore()).toBe(false);
+    });
+
+    // A read-modify-write has to read a copy that is level with the server, or
+    // the post-write sync pushes a merge built on stale data back upstream.
+    describe('syncBefore', () => {
+      it('syncs before the operation and again after it', async () => {
+        const operation = jest.fn(async () => 'written');
+
+        await runWithApi('write-rmw', operation, { mode: 'write', syncBefore: true });
+
+        expect(actualApi.sync).toHaveBeenCalledTimes(2);
+        expect(actualApi.sync.mock.invocationCallOrder[0]).toBeLessThan(
+          operation.mock.invocationCallOrder[0]
+        );
+        expect(operation.mock.invocationCallOrder[0]).toBeLessThan(
+          actualApi.sync.mock.invocationCallOrder[1]
+        );
+      });
+
+      it('syncs first even when the policy says the copy is fresh', async () => {
+        await runWithApi('write-warm', async () => 'ok', { mode: 'write' });
+        expect(syncPolicy.shouldSyncBefore()).toBe(false);
+        actualApi.sync.mockClear();
+
+        await runWithApi('write-rmw', async () => 'ok', { mode: 'write', syncBefore: true });
+
+        expect(actualApi.sync).toHaveBeenCalledTimes(2);
+      });
+
+      it('never runs the operation when the pre-write sync fails', async () => {
+        actualApi.sync.mockRejectedValueOnce(new Error('server unreachable'));
+        const operation = jest.fn(async () => 'never');
+
+        await expect(
+          runWithApi('write-sync-fail', operation, { mode: 'write', syncBefore: true })
+        ).rejects.toThrow(/Failed to sync with Actual Budget server: server unreachable/);
+
+        expect(operation).not.toHaveBeenCalled();
+      });
+
+      it('leaves an ordinary write syncing only afterwards', async () => {
+        const operation = jest.fn(async () => 'written');
+
+        await runWithApi('write-plain', operation, { mode: 'write' });
+
+        expect(actualApi.sync).toHaveBeenCalledTimes(1);
+        expect(operation.mock.invocationCallOrder[0]).toBeLessThan(
+          actualApi.sync.mock.invocationCallOrder[0]
+        );
+      });
     });
 
     it('absorbs a post-write sync failure: no throw, same result, policy left stale', async () => {

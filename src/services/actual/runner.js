@@ -1,11 +1,15 @@
 /**
  * The single path every domain function takes into the Actual engine.
  *
- * `runWithApi(label, fn, { mode, force })` serialises the call through the
- * engine queue and applies the sync policy around it:
+ * `runWithApi(label, fn, { mode, force, syncBefore })` serialises the call
+ * through the engine queue and applies the sync policy around it:
  *   - read  → sync first only if the local copy may be behind, then run fn
  *   - write → run fn first, then sync; a failed post-write sync is logged and
  *             absorbed, because the mutation itself already succeeded
+ *   - write + syncBefore → sync first as well, unconditionally. For a
+ *             read-modify-write, whose fn reads the state it is about to
+ *             overwrite, a pre-sync failure aborts before fn runs rather than
+ *             letting a merge built on a stale copy be pushed upstream.
  */
 
 import { Histogram, Gauge, Counter } from 'prom-client';
@@ -40,10 +44,12 @@ const syncFailures = getOrCreate('actual_engine_sync_failures_total', Counter, {
 });
 
 /**
- * Syncs before a read, recovering from an unloaded budget.
- * Throws a wrapped, actionable error when the sync cannot be recovered.
+ * Syncs before an operation runs, recovering from an unloaded budget.
+ * Throws a wrapped, actionable error when the sync cannot be recovered — the
+ * caller is about to read, so proceeding on a copy that may be behind is worse
+ * than failing.
  */
-const syncBeforeRead = async (instance, label) => {
+const syncBeforeOperation = async (instance, label) => {
   try {
     await instance.sync();
   } catch (error) {
@@ -93,8 +99,10 @@ const syncAfterWrite = async (instance, label) => {
  * @param {object} [options]
  * @param {'read'|'write'} [options.mode] - read syncs before, write syncs after
  * @param {boolean} [options.force] - force a pre-read sync regardless of interval
+ * @param {boolean} [options.syncBefore] - write mode only: also sync before fn,
+ *   for a read-modify-write that must not merge onto a stale copy
  */
-export const runWithApi = async (label, fn, { mode = 'read', force = false } = {}) =>
+export const runWithApi = async (label, fn, { mode = 'read', force = false, syncBefore = false } = {}) =>
   withEngine(label, async () => {
     const started = Date.now();
     queueDepth.set(getQueueDepth());
@@ -105,8 +113,15 @@ export const runWithApi = async (label, fn, { mode = 'read', force = false } = {
     try {
       const instance = await getActualApi();
 
-      if (mode === 'read' && syncPolicy.shouldSyncBefore({ force })) {
-        await syncBeforeRead(instance, label);
+      // A read gates on the policy interval; an opted-in write syncs
+      // unconditionally, since "recent enough" is not good enough when fn is
+      // about to read the rows it will overwrite.
+      const needsPreSync = mode === 'read'
+        ? syncPolicy.shouldSyncBefore({ force })
+        : syncBefore;
+
+      if (needsPreSync) {
+        await syncBeforeOperation(instance, label);
       }
 
       const result = await fn(instance);

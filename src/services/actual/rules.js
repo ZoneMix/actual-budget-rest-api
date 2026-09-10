@@ -48,7 +48,10 @@ export const ruleCreate = async (rule) => {
  * replaces it (@actual-app/api/@types/methods.d.ts:115, dist/index.js:130640).
  * A partial update therefore has to be merged onto the current rule first.
  * The read and the write share one runWithApi call so the engine queue cannot
- * interleave another operation between them.
+ * interleave another operation between them, and `syncBefore` forces a sync
+ * ahead of the read so the merge is never built on a copy that is behind the
+ * server — the post-write sync would otherwise push the clobbered rule
+ * upstream.
  */
 export const ruleUpdate = async (id, fields) => {
   return runWithApi(
@@ -76,7 +79,7 @@ export const ruleUpdate = async (id, fields) => {
       logger.info('[Actual] ruleUpdate completed', { ruleId: id, stage: merged.stage });
       return result;
     },
-    { mode: 'write' }
+    { mode: 'write', syncBefore: true }
   );
 };
 
