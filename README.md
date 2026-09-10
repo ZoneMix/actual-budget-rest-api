@@ -1,6 +1,6 @@
 # Actual Budget REST API (Actual Budget API wrapper)
 
-A secure Node.js/Express REST API that wraps the Actual Budget SDK (`@actual-app/api`). It provides JWT-based auth with role-based access control, optional OAuth2 for n8n, admin API for OAuth client management, PostgreSQL or SQLite database support, Swagger documentation, and a hardened runtime (helmet, CORS, structured logging, rate limits per route).
+A secure Node.js/Express REST API that wraps the Actual Budget SDK (`@actual-app/api`). It provides JWT-based auth with nested scopes (read/write/admin), optional OAuth2 for n8n, admin API for OAuth client management, PostgreSQL or SQLite database support, Swagger documentation, and a hardened runtime (helmet, CORS, structured logging, rate limits per route).
 
 ![Actual REST API Login](images/login.png)
 
@@ -23,10 +23,12 @@ curl http://localhost:3000/v2/accounts \
 -H "Authorization: Bearer $TOKEN"
 
 ## Create 'test' Account
+## An account has name / offbudget / closed / account_group_id — Actual has no
+## account "type" field; on-budget vs off-budget is the only distinction.
 curl http://localhost:3000/v2/accounts \
 -H "Authorization: Bearer $TOKEN" \
 -H "Content-Type: application/json" \
--d '{"account":{"name":"test","offbudget":true,"closed":true},"initialBalance":500}'
+-d '{"account":{"name":"test","offbudget":true},"initialBalance":500}'
 
 ## Get Accounts, showing 'test'
 curl http://localhost:3000/v2/accounts \
@@ -36,11 +38,11 @@ curl http://localhost:3000/v2/accounts \
 ![Test Account Creation](images/test_account.png)
 
 ## Features
-- Authentication: JWT access/refresh tokens, session login for docs, role-based access control (RBAC)
+- Authentication: JWT access/refresh tokens, session login for docs, scope-based authorization
 - Optional OAuth2: first-party flow for n8n (`/oauth/authorize`, `/oauth/token`)
 - Admin API: OAuth client management endpoints (`/admin/oauth-clients`) with secure secret hashing
-- Endpoints: accounts, transactions, budgets, categories, payees, rules, schedules, query
-- API Docs: protected Swagger UI at `/docs` with OpenAPI source in [src/docs/openapi.yml](src/docs/openapi.yml)
+- Endpoints: accounts, transactions, budgets, categories, category groups, payees, tags, notes, preferences, account groups, budget files, rules, schedules, sync, lookup, query
+- API Docs: protected Swagger UI at `/docs` with OpenAPI source in [src/docs/openapi.yml](src/docs/openapi.yml), guarded against drift by `tests/docs/openapi-routes.test.js`
 - Database Support: PostgreSQL (recommended for production) or SQLite (default, simpler setup)
 - Security: helmet headers, request IDs, token revocation, rate limiting, input validation, bcrypt-hashed OAuth secrets
 - Environment Validation: Automatic validation of all environment variables on startup
@@ -49,6 +51,85 @@ curl http://localhost:3000/v2/accounts \
 - Health Checks: Comprehensive health endpoint with database and API connectivity checks
 - Redis Support: Optional Redis for distributed rate limiting (falls back to memory)
 - Docker: production image + dev `docker compose` stack (Actual Server + n8n + Redis + Prometheus + Grafana)
+
+## Endpoints
+
+Every `/v2` route needs `Authorization: Bearer <access_token>`. The scope column
+is the minimum a token must carry; see [Scopes](#scopes) below.
+
+| Route group | Operations | Scope |
+|---|---|---|
+| `/v2/auth` | `POST /login`, `POST /logout` | none / any |
+| `/v2/accounts` | `GET`, `POST`, `PUT /:id`, `DELETE /:id`, `POST /:id/close`, `POST /:id/reopen`, `GET /:id/balance?cutoff=`, `POST /:id/bank-sync` | read / write |
+| `/v2/accounts/:id/transactions` | `GET ?start=&end=`, `POST`, `POST /import` | read / write |
+| `/v2/transactions` | `PUT /:id`, `DELETE /:id` | write |
+| `/v2/categories` | `GET ?hidden=`, `POST`, `PUT /:id`, `DELETE /:id?transferCategoryId=` | read / write |
+| `/v2/category-groups` | `GET ?hidden=`, `POST`, `PUT /:id`, `DELETE /:id?transferCategoryId=` | read / write |
+| `/v2/payees` | `GET`, `GET /common`, `POST`, `PUT /:id`, `DELETE /:id`, `POST /merge` | read / write |
+| `/v2/tags` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | read / write |
+| `/v2/notes` | `GET /:entityId`, `PUT /:entityId` | read / write |
+| `/v2/preferences` | `GET` (read-only; the SDK exposes no writer) | read |
+| `/v2/account-groups` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | read / write |
+| `/v2/budgets` | `GET /months`, `GET /:month`, `POST /batch`, `POST /:month/categories/:categoryId/budget`, `POST /:month/categories/:categoryId/carryover`, `POST /:month/hold`, `POST /:month/reset-hold` | read / write |
+| `/v2/budget` (files) | `GET /files` | read |
+| `/v2/budget` (files) | `POST /load`, `POST /export` | **admin** |
+| `/v2/rules` | `GET`, `GET /payees/:payeeId`, `POST`, `PUT /:id`, `DELETE /:id` | read / write |
+| `/v2/schedules` | `GET`, `POST`, `PUT /:id?resetNextDate=`, `DELETE /:id` | read / write |
+| `/v2/query` | `POST` — ActualQL, a read over POST | read |
+| `/v2/sync` | `POST` | write |
+| `/v2/server` | `GET /version` | read |
+| `/v2/lookup` | `GET /:type/:name` — resolve a name to an id | read |
+| `/v2/health` | `GET` — unauthenticated | none |
+| `/v2/metrics` | `GET`, `GET /summary`, `GET /prometheus` | authenticated in production |
+| `/v2/metrics` | `POST /reset` | **admin** |
+| `/admin` | dashboard `GET /`, `GET|POST /oauth-clients`, `GET|PUT|DELETE /oauth-clients/:clientId` | **admin** |
+| `/oauth` | `GET /authorize`, `POST /token` | n/a |
+| root | `GET /login`, `POST /login`, `POST /logout`, `GET /docs` | session |
+
+## Scopes
+
+Scopes nest, so a wider one grants everything a narrower one does:
+
+| Scope | Grants |
+|---|---|
+| `read` | Every GET, plus `POST /v2/query` |
+| `write` | Everything `read` grants, plus creates, updates and deletes |
+| `admin` | Everything `write` grants, plus the admin-only operations |
+
+The legacy scope `api` is still issued and accepted; it expands to `read` +
+`write`. A token from `POST /v2/auth/login` for an admin user carries
+`api,admin`.
+
+`AUTH_SCOPE_ENFORCEMENT` controls how a scope check behaves:
+
+| Mode | Behaviour |
+|---|---|
+| `off` | Scope checks are skipped |
+| `warn` (default) | A would-be denial logs `auth:SCOPE_WOULD_DENY` and the request proceeds |
+| `enforce` | A denial is a 403 |
+
+Rows marked **admin** in the endpoint table sit outside that rollout: they check
+the admin scope directly and answer 403 in every mode. Being an admin user is
+not enough — the token must carry the `admin` scope, so a narrow token minted
+for an admin through an api-only OAuth client is refused.
+
+## Sync semantics
+
+Reads do not sync with the Actual server every time. A read syncs only when the
+last successful sync is at least `ACTUAL_SYNC_MIN_INTERVAL_MS` old (default
+`5000`), so **a response may reflect data up to that interval stale**. Set it to
+`0` to restore sync-before-every-read at the cost of a round trip per request.
+
+Writes always sync afterwards, so a write followed by a read is consistent
+regardless of the interval. `POST /v2/sync` forces one immediately, and
+`POST /v2/budget/load` forces the next read to sync because the freshness it
+had was measured against a file that is no longer open.
+
+Every call into the embedded engine is serialised through one queue. Pending
+operations beyond `ACTUAL_QUEUE_MAX_DEPTH` are rejected with 503 rather than
+queued forever, and a caller waiting longer than `ACTUAL_OP_TIMEOUT_MS` gets
+504 — the engine call itself is not cancelled and keeps its slot until it
+settles.
 
 ## Requirements
 - Node.js 22+ and npm
@@ -222,6 +303,25 @@ docker run -d \
 
 **Note**: In production, retrieve secrets from your secrets manager and pass them as environment variables. Never hardcode secrets in scripts or commit them to version control.
 
+### How this image is actually released
+
+The maintainer's own deployment, for reference:
+
+1. Tag a release. Pushing a `v*` tag runs
+   [`docker-publish.yml`](.github/workflows/docker-publish.yml), which builds
+   `linux/amd64` and pushes `zonemix063/actual-rest-api` tagged `vX.Y.Z`,
+   `X.Y.Z` and `latest`. The `DOCKERHUB_TOKEN` secret must be a valid Docker Hub
+   personal access token; an expired one fails the job at the login step.
+2. The image is mirrored into a private Harbor registry and **pinned by
+   digest**, so a deployment cannot silently pick up a re-pushed tag.
+3. It runs on Proxmox container CT100, deployed from the homelab repository's
+   `deploy/ledger/docker-compose.yml` via `pct push` and a compose recreate.
+
+The build never happens on the maintainer's laptop — there is no Docker there —
+so a locally-built image is not a supported path. `@actual-app/api` and the
+actual-server it talks to move in lockstep; upgrading one without the other
+fails at sync time rather than at startup, so both are cut over together.
+
 **Production Checklist**:
 - ✅ Use secrets manager (GitHub Secrets, AWS Secrets Manager, etc.) for all sensitive environment variables
 - ✅ Use HTTPS with reverse proxy (nginx, Traefik, etc.)
@@ -285,38 +385,76 @@ The dashboard shows request rates, error rates, response times, and more. See [m
 
 ## Environment Variables
 
-All variables are validated on startup. Invalid or missing required variables cause the application to exit with clear error messages.
+Every variable below is validated on startup by [src/config/env.js](src/config/env.js).
+Anything not listed here is not read by the app. Invalid or missing required
+variables abort startup with a message naming the variable.
 
-### Required (Production)
-- `ADMIN_USER`: Admin username (default: `admin`)
-- `ADMIN_PASSWORD`: Admin password (12+ chars, complexity required)
-- `JWT_SECRET`: JWT signing key (32+ chars in production)
-- `JWT_REFRESH_SECRET`: Refresh token key (32+ chars, different from `JWT_SECRET`)
-- `SESSION_SECRET`: Session encryption key (32+ chars, different from JWT secrets)
-- `ACTUAL_SERVER_URL`: Actual Budget Server URL
-- `ACTUAL_PASSWORD`: Actual Budget Server password
-- `ACTUAL_SYNC_ID`: Budget sync ID
+### Server
 
-### Optional
-- `PORT`: Server port (default: `3000`)
-- `NODE_ENV`: Environment mode (`development` | `production` | `test`)
-- `JWT_ACCESS_TTL`: Access token TTL (default: `1h`)
-- `JWT_REFRESH_TTL`: Refresh token TTL (default: `24h`)
-- `ALLOWED_ORIGINS`: CORS origins (CSV, default: `http://localhost:3000,http://localhost:5678`)
-- `TRUST_PROXY`: Trust proxy headers (default: `false`)
-- `LOG_LEVEL`: Log level (default: `info`)
-- `DATA_DIR`: Data directory (default: `/app/.actual-cache`)
-- `REDIS_URL` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD`: Redis connection
-- `N8N_CLIENT_ID` / `N8N_CLIENT_SECRET` / `N8N_OAUTH2_CALLBACK_URL`: OAuth2 for n8n
-- `ENABLE_CORS` / `ENABLE_HELMET` / `ENABLE_RATE_LIMITING`: Feature toggles (default: `true`)
-- `MAX_REQUEST_SIZE`: Max request body size (default: `10kb`)
-- `DB_TYPE`: Database type (`sqlite` | `postgres`, default: `postgres`)
-- `POSTGRES_URL`: PostgreSQL connection URL (format: `postgresql://user:password@host:port/database`)
-- `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`: PostgreSQL connection details (alternative to `POSTGRES_URL`)
+| Variable | Default | Purpose |
+|---|---|---|
+| `NODE_ENV` | `development` | `development` / `production` / `test`. Production tightens secret validation, cookie flags and error detail. |
+| `PORT` | `3000` | TCP port to listen on. |
+| `TRUST_PROXY` | unset | Trust `X-Forwarded-*`. Set behind a reverse proxy; implied by `NODE_ENV=production`. |
 
-**Development Mode**: In `NODE_ENV=development`, secrets can be shorter and missing secrets are auto-generated with warnings.
+### Authentication and security
 
-See [.env.example](.env.example) for complete reference.
+| Variable | Default | Purpose |
+|---|---|---|
+| `ADMIN_USER` | `admin` | Bootstrap admin username, created on first start. |
+| `ADMIN_PASSWORD` | **required** | Password for that account. |
+| `JWT_SECRET` | dev: generated | Access-token signing key. Required in production, 32+ chars. |
+| `JWT_REFRESH_SECRET` | dev: generated | Refresh-token key. Required in production, 32+ chars, different from `JWT_SECRET`. |
+| `SESSION_SECRET` | dev: generated | Session cookie key. Required in production, 32+ chars, different from both JWT secrets. |
+| `JWT_ACCESS_TTL` | `1h` | Access-token lifetime. |
+| `JWT_REFRESH_TTL` | `24h` | Refresh-token lifetime. |
+| `AUTH_SCOPE_ENFORCEMENT` | `warn` | `off` / `warn` / `enforce` — see [Scopes](#scopes). |
+| `JWT_ISSUER` | `actual-wrapper` | `iss` claim, pinned on sign and verify. Changing it invalidates every issued token. |
+| `JWT_AUDIENCE` | `n8n` | `aud` claim, same caveat. |
+
+### Actual Budget
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ACTUAL_SERVER_URL` | **required** | URL of the actual-server instance. |
+| `ACTUAL_PASSWORD` | **required** | Password for that server. |
+| `ACTUAL_SYNC_ID` | **required** | Sync id of the budget file to open (Actual: Settings → Advanced). |
+| `ACTUAL_FILE_PASSWORD` | unset | End-to-end encryption password. Set only when the budget file is E2E encrypted. |
+| `DATA_DIR` | `/app/.actual-cache` | Local engine cache. Must be a persistent, writable volume — losing it forces a full re-sync. |
+
+### Engine queue and sync policy
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ACTUAL_QUEUE_MAX_DEPTH` | `100` | Pending engine operations above this are rejected with 503. |
+| `ACTUAL_OP_TIMEOUT_MS` | `60000` | Per-operation caller timeout; on expiry the caller gets 504 and the engine call keeps its slot. |
+| `ACTUAL_SYNC_MIN_INTERVAL_MS` | `5000` | Minimum age of the last sync before a read triggers another. `0` syncs before every read. See [Sync semantics](#sync-semantics). |
+
+### Database (auth: users, tokens, OAuth clients — not the budget)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DB_TYPE` | `postgres` | `postgres` or `sqlite`. SQLite stores the DB at `$DATA_DIR/auth.db`. |
+| `POSTGRES_URL` | unset | `postgresql://user:password@host:port/database`. |
+| `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | unset | Alternative to `POSTGRES_URL`; all four of host/db/user/password are needed together. |
+
+### Redis, CORS, logging and limits
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `REDIS_URL` / `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | unset | Shared rate-limit store. Without it limits are per-process, which is wrong with more than one instance. |
+| `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5678` | Comma-separated browser origins. Requests with no `Origin` are always allowed. |
+| `LOG_LEVEL` | `info` | `error` / `warn` / `info` / `debug`. |
+| `ENABLE_CORS` / `ENABLE_HELMET` / `ENABLE_RATE_LIMITING` | `true` | Middleware toggles. |
+| `MAX_REQUEST_SIZE` | `10kb` | Body limit for ordinary routes; bulk and query routes set their own. |
+| `ACTUAL_QUERY_MAX_RESULTS` | `10000` | Rows `POST /v2/query` returns before truncating (`truncated: true`). |
+| `ACTUAL_QUERY_MAX_FILTER_DEPTH` | `5` | Maximum `$and`/`$or` nesting before a query is rejected with 400. |
+
+**Development mode**: with `NODE_ENV=development` the three secrets are
+auto-generated at startup with a warning, so tokens and sessions do not survive
+a restart.
+
+See [.env.example](.env.example) for the same list with inline commentary.
 
 ## API Docs & Validation
 - OpenAPI source: [src/docs/openapi.yml](src/docs/openapi.yml)
@@ -345,7 +483,7 @@ npm run validate:openapi
   - Endpoints available: `/oauth/authorize`, `/oauth/token`
   - Client secrets are hashed with bcrypt before storage
   - See [Connecting n8n](#connecting-n8n) for setup details.
-- Admin API (requires admin role):
+- Admin API (requires an admin user AND a token carrying the `admin` scope):
   - Access admin dashboard at `/admin` (HTML interface)
   - Manage OAuth clients via `/admin/oauth-clients` endpoints
   - Requires JWT token with `admin` role and `admin` scope
@@ -362,19 +500,26 @@ The `/v2/query` endpoint allows executing ActualQL queries against Actual Budget
 
 ### OAuth2 Flow (Recommended)
 
-1. **Configure environment variables**:
+1. **Create the OAuth client** through the admin API — there are no
+   `N8N_CLIENT_ID`/`N8N_CLIENT_SECRET` environment variables; clients live in
+   the database. See [Admin API](#admin-api) below:
    ```bash
-   N8N_CLIENT_ID=example-n8n
-   N8N_CLIENT_SECRET=<32+ character secret>
-   N8N_OAUTH2_CALLBACK_URL=http://localhost:5678/rest/oauth2-credential/callback
+   curl http://localhost:3000/admin/oauth-clients \
+     -H "Authorization: Bearer $ADMIN_TOKEN" \
+     -H "Content-Type: application/json" \
+     -X POST \
+     -d '{"client_id":"example-n8n","allowed_scopes":"api","redirect_uris":"http://localhost:5678/rest/oauth2-credential/callback"}'
    ```
+   Save the returned `client_secret` — it is shown once. `allowed_scopes` caps
+   what any token issued to this client can carry, and the grant is further
+   intersected with the authorizing user's own scopes.
 
 2. **In n8n, create OAuth2 credential**:
    - Type: **OAuth2**
    - Authorization URL: `http://localhost:3000/oauth/authorize` (or your API URL)
    - Token URL: `http://actual-rest-api-dev:3000/oauth/token` (use Docker service name)
-   - Client ID & Secret: Match your env vars
-   - Redirect URL: Match `N8N_OAUTH2_CALLBACK_URL`
+   - Client ID & Secret: the values from step 1
+   - Redirect URL: must match a `redirect_uris` entry on the client
 
 3. **Use in workflows**: Select the OAuth2 credential in HTTP request nodes.
 
@@ -390,7 +535,7 @@ For development, use JWT bearer tokens:
 
 ## Admin API
 
-The Admin API provides endpoints for managing OAuth clients. All endpoints require authentication with an admin role.
+The Admin API provides endpoints for managing OAuth clients. All endpoints require a bearer token for an admin user whose scope claim includes `admin`. An admin user holding a narrower token is refused — the scope is checked, not just the role.
 
 ### Accessing the Admin Dashboard
 
@@ -445,7 +590,27 @@ docker compose -f docker-compose.dev.yml up --build
 docker compose -f docker-compose.dev.yml logs -f actual-rest-api-dev
 ```
 
-See [PRECOMMIT_SETUP.md](PRECOMMIT_SETUP.md) for pre-commit hooks setup.
+See [docs/PRE_COMMIT.md](docs/PRE_COMMIT.md) for the pre-commit hooks.
+
+## Breaking in 3.0.0
+
+Everything below still works today and is marked `deprecated` in the OpenAPI
+spec. Migrate before 3.0.0, when they are removed.
+
+| Deprecated | Replacement |
+|---|---|
+| `addedCount` on `POST /v2/accounts/:id/transactions` | `submittedCount`. Responses already carry `Deprecation` and `Warning` headers. |
+| `addedIds` on the same response | Already removed. Actual's `addTransactions` resolves with the string `"ok"` and returns no ids, so the field never held real data. |
+| `result` on `POST /v2/query` | `data`. Check `truncated` to detect a capped result set. |
+| `_date` in schedule bodies | `date`. Note `date` is a calendar string *or* a recurrence object — there is no separate `recur` or `frequency` field. |
+| `offBudget` in account bodies | `offbudget`, the SDK's own spelling. |
+
+Also changing in 3.0.0:
+
+- `AUTH_SCOPE_ENFORCEMENT` will default to `enforce`. Watch for
+  `auth:SCOPE_WOULD_DENY` in the logs and widen or re-mint those tokens first.
+- `src/middleware/validation-schemas.js` is a re-export shim for
+  `src/validation/`; it will be removed. Import from `src/validation/` directly.
 
 ## Data & Persistence
 - **Database Options**:
@@ -459,33 +624,57 @@ See [PRECOMMIT_SETUP.md](PRECOMMIT_SETUP.md) for pre-commit hooks setup.
 ## Observability
 
 - **Logging**: Structured JSON logs (winston), respects `LOG_LEVEL`. Each request includes `X-Request-ID` for tracing.
-- **Metrics**: Prometheus endpoint at `/metrics/prometheus`. Pre-configured Grafana dashboards in [monitoring/](monitoring/).
-- **Health**: `/health` endpoint returns 200 (healthy) or 503 (degraded). Checks database, Actual API, and system resources.
+- **Metrics**: Prometheus endpoint at `/v2/metrics/prometheus`, JSON at `/v2/metrics` and `/v2/metrics/summary`. All of them require a bearer token in production, so a scrape job needs one. Pre-configured Grafana dashboards in [monitoring/](monitoring/).
+- **Health**: `GET /v2/health` returns 200 (healthy) or 503 (degraded), unauthenticated. It probes the database and Actual connectivity without entering the engine queue, so a health poll cannot be made to drive sync traffic. In production it hides the upstream server version and raw error text, which would otherwise let an anonymous caller fingerprint the host.
 
 ## CI / Security
-GitHub Actions run dependency and image security checks:
-- npm audit, ESLint, Docker build test
-- Snyk (requires `SNYK_TOKEN` secret)
-- Container scan via Trivy (SARIF uploaded to code scanning)
-- Secret scanning via Gitleaks
-- OWASP Dependency-Check (SARIF upload)
 
-Workflow tips:
-- SARIF uploads require `permissions: { security-events: write, actions: read }`
-- Forked PRs skip uploads to avoid permission errors
+Three workflows, every `uses:` pinned to a full commit SHA and kept current by
+Dependabot. No workflow pipes a remote installer into a shell.
+
+**[`ci.yml`](.github/workflows/ci.yml)** — on pull request and push to `main`:
+
+- lint, `npm test` and `npm run validate:openapi` on a Node 22 and Node 24 matrix
+- `npm audit --omit=dev --audit-level=high`
+- a Docker build of the production image, smoke-tested with `node --check`
+
+**[`security.yml`](.github/workflows/security.yml)** — on push, pull request,
+and weekly on Sunday 00:00 UTC:
+
+- npm audit: production deps at `high` block, the full tree at `moderate` reports
+- ESLint with `eslint-plugin-security`
+- gitleaks over full history
+- Trivy against the built image (`CRITICAL,HIGH`, `ignore-unfixed`), SARIF
+  uploaded to code scanning
+
+**[`docker-publish.yml`](.github/workflows/docker-publish.yml)** — on a `v*` tag
+(or `workflow_dispatch` for an existing tag): builds and pushes
+`zonemix063/actual-rest-api` as `vX.Y.Z`, `X.Y.Z` and `latest`. Needs the
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets, the latter a valid Docker
+Hub personal access token.
+
+Snyk and OWASP Dependency-Check were removed: Snyk needed a token the project
+does not have, and Dependency-Check duplicated npm audit while adding minutes to
+every run.
+
+SARIF uploads need `permissions: { security-events: write, actions: read }`, and
+are skipped for pull requests from forks, which cannot hold those permissions.
 
 ## Project Structure
-- App: [src](src)
-- Routes: [src/routes](src/routes)
-- Auth: [src/auth](src/auth)
-- Config: [src/config](src/config) - includes environment validation
-- Docs: [src/docs](src/docs)
-- Logging: [src/logging](src/logging)
-- Errors: [src/errors](src/errors) - custom error classes
-- Middleware: [src/middleware](src/middleware) - rate limiting, validation, metrics, etc.
-- Tests: [tests](tests) - Jest test suite
+- App builder: [src/app.js](src/app.js); process bootstrap: [src/server.js](src/server.js)
+- Routes: [src/routes](src/routes) — one router per resource, thin handlers
+- Services: [src/services/actual](src/services/actual) — the engine wrapper: client, queue, sync policy, and one module per domain
+- Validation: [src/validation](src/validation) — Zod schemas, one file per domain
+- Auth: [src/auth](src/auth) — JWT, scopes, permissions, OAuth2
+- Config: [src/config](src/config) — environment validation and the Swagger loader
+- Docs: [src/docs](src/docs) — OpenAPI source
+- Errors: [src/errors](src/errors); middleware: [src/middleware](src/middleware); logging: [src/logging](src/logging)
+- Tests: [tests](tests) — Jest, mirroring the source layout
 
 ## Documentation
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and design patterns
-- [SECURITY.md](SECURITY.md) - Security model and threat analysis
+- [SECURITY.md](SECURITY.md) - Threat model, scopes, scanning, secret rotation
+- [docs/PRE_COMMIT.md](docs/PRE_COMMIT.md) - Git hooks
+- [CHANGELOG.md](CHANGELOG.md) - Release history
+- [AGENTS.md](AGENTS.md) - Working notes for coding agents
 - [.env.example](.env.example) - Complete environment variable reference
