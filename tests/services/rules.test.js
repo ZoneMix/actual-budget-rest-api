@@ -44,6 +44,24 @@ describe('rule service call shapes', () => {
     });
   });
 
+  it('syncs before reading, so the merge is never built on a stale copy', async () => {
+    actualApi.getRules.mockResolvedValue([existingRule()]);
+
+    await ruleUpdate('r-1', { stage: 'post' });
+
+    expect(actualApi.sync.mock.invocationCallOrder[0]).toBeLessThan(
+      actualApi.getRules.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('does not write when the pre-read sync fails', async () => {
+    actualApi.getRules.mockResolvedValue([existingRule()]);
+    actualApi.sync.mockRejectedValueOnce(new Error('server unreachable'));
+
+    await expect(ruleUpdate('r-1', { stage: 'post' })).rejects.toThrow(/Failed to sync/);
+    expect(actualApi.updateRule).not.toHaveBeenCalled();
+  });
+
   it('throws NotFoundError and never writes when the rule is absent', async () => {
     actualApi.getRules.mockResolvedValue([existingRule({ id: 'r-2' })]);
 
