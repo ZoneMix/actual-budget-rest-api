@@ -22,15 +22,14 @@ export default {
   ],
   // Ratchet: the largest multiple of 5 currently met by each metric.
   // Raise these as coverage grows; never lower them to make a run pass.
-  // (Merged from main's post-Phase-C ratchet and the Phase E validation
-  // rewrite's own — functions took the higher of the two per-branch values,
-  // 35 vs 30; re-verified against the combined codebase's actual coverage.)
+  // Phase D (call-shape fixes) took the measured figures from
+  // 40/25/35/40 to 55.99 stmts / 44.06 branches / 54.44 funcs / 55.63 lines.
   coverageThreshold: {
     global: {
-      branches: 25,
-      functions: 35,
-      lines: 40,
-      statements: 40,
+      branches: 40,
+      functions: 50,
+      lines: 55,
+      statements: 55,
     },
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
