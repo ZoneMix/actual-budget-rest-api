@@ -85,7 +85,9 @@ query:
                   calculate:
                     description: |
                       Reduces the result to a single value instead of rows.
-                      Cannot be combined with `select`; `data` is then the
+                      Cannot be combined with `select` or `offset` (an
+                      aggregate yields exactly one row, so an offset would skip
+                      it and the engine returns `null`); `data` is then the
                       scalar result rather than a row array.
 
                       Two forms, and the difference matters:
