@@ -6,6 +6,25 @@ import { z } from 'zod';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import { ValidationError, AuthenticationError, InternalServerError } from '../../src/errors/index.js';
 import { formatZodError } from '../../src/validation/errors.js';
+import logger from '../../src/logging/logger.js';
+
+describe('errorHandler log hygiene', () => {
+  it('never writes the query string (which can carry a credential) to the error log', () => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    const req = {
+      id: 'rid', method: 'GET', originalUrl: '/v2/accounts?token=super-secret-value',
+      user: null, body: {}, query: {}, params: {}, ip: '127.0.0.1', get: jest.fn(() => 'ua'),
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis(), setHeader: jest.fn() };
+
+    errorHandler(new ValidationError('Invalid input'), req, res, jest.fn());
+
+    const [, meta] = warn.mock.calls[0];
+    expect(meta.url).toBe('/v2/accounts');
+    expect(JSON.stringify(meta)).not.toContain('super-secret-value');
+    warn.mockRestore();
+  });
+});
 
 describe('errorHandler', () => {
   let req, res, next;
