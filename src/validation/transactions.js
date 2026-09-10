@@ -2,9 +2,8 @@
  * Transaction schemas.
  */
 import { z } from 'zod';
+import { atLeastOneKey, DateStringSchema } from './common.js';
 import { PAYEE_NAME_NORMALIZATIONS } from './constants.js';
-
-const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
 
 const SubtransactionSchema = z.object({
   amount: z.number(),
@@ -43,8 +42,7 @@ export const CreateTransactionSchema = z.object({
 });
 
 export const UpdateTransactionSchema = z.object({
-  fields: z.object(transactionFields(z.number().optional()))
-    .refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be updated' }),
+  fields: atLeastOneKey(z.object(transactionFields(z.number().optional()))),
 });
 
 export const TransactionsAddSchema = z.object({

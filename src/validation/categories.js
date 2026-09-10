@@ -2,6 +2,7 @@
  * Category schemas.
  */
 import { z } from 'zod';
+import { atLeastOneKey } from './common.js';
 
 export const CreateCategorySchema = z.object({
   category: z.object({
@@ -12,11 +13,11 @@ export const CreateCategorySchema = z.object({
 });
 
 export const UpdateCategorySchema = z.object({
-  fields: z.object({
+  fields: atLeastOneKey(z.object({
     name: z.string().min(1).max(255).optional(),
     group_id: z.string().optional(),
     hidden: z.boolean().optional(),
-  }).refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be updated' }),
+  })),
 });
 
 // Shared by both the category and category-group delete endpoints — defined

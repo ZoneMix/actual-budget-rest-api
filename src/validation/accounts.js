@@ -5,6 +5,7 @@
  * accepted one but it was silently dropped (never forwarded to the SDK).
  */
 import { z } from 'zod';
+import { atLeastOneKey } from './common.js';
 
 // `offBudget` (camelCase) is a legacy alias some clients still send; the
 // SDK field is `offbudget`. Returns a NEW object (never mutates the parsed
@@ -32,10 +33,7 @@ export const CreateAccountSchema = z.object({
 });
 
 export const UpdateAccountSchema = z.object({
-  fields: withOffbudgetAlias(updateFields).refine(
-    (obj) => Object.keys(obj).length > 0,
-    { message: 'At least one field must be updated' }
-  ),
+  fields: atLeastOneKey(withOffbudgetAlias(updateFields)),
 });
 
 export const CloseAccountSchema = z.object({

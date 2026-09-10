@@ -15,6 +15,9 @@ export const UuidSchema = z.uuid();
 // YYYY-MM budget month.
 export const MonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format');
 
+// YYYY-MM-DD calendar date — shared by transactions and schedules.
+export const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
+
 // z.coerce.boolean() is a trap here: Boolean('false') === true, so it would
 // treat the literal query string "false" as truthy. Map the two accepted
 // string spellings explicitly and let z.boolean() reject anything else.
@@ -24,9 +27,13 @@ const booleanFromQueryString = (value) => {
   return value;
 };
 
-// `?hidden=true|false` query param, coerced from string to boolean.
+// A `?flag=true|false` query param coerced from string to boolean. Bare
+// (not `.optional()`) so callers compose it: `BooleanQuerySchema.optional()`.
+export const BooleanQuerySchema = z.preprocess(booleanFromQueryString, z.boolean());
+
+// `?hidden=true|false` query param.
 export const HiddenQuerySchema = z.object({
-  hidden: z.preprocess(booleanFromQueryString, z.boolean()).optional(),
+  hidden: BooleanQuerySchema.optional(),
 });
 
 // Generic name-based lookup (e.g. resolving an id via the SDK's getIDByName).
@@ -41,3 +48,13 @@ export const AccountIdParamsSchema = z.object({
 export const PayeeIdParamsSchema = z.object({
   payeeId: UuidSchema,
 });
+
+/**
+ * Every `fields`/update schema in this wrapper requires at least one key —
+ * a partial update with nothing to update is a client error. Wrap the
+ * object schema with this instead of repeating the refine inline.
+ */
+export const atLeastOneKey = (schema) => schema.refine(
+  (obj) => Object.keys(obj).length > 0,
+  { message: 'At least one field must be updated' }
+);

@@ -2,6 +2,7 @@
  * Tag schemas.
  */
 import { z } from 'zod';
+import { atLeastOneKey } from './common.js';
 
 const tagValue = z.string().min(1).max(255);
 const colorValue = z.string().nullable();
@@ -16,9 +17,9 @@ export const CreateTagSchema = z.object({
 });
 
 export const UpdateTagSchema = z.object({
-  fields: z.object({
+  fields: atLeastOneKey(z.object({
     tag: tagValue.optional(),
     color: colorValue.optional(),
     description: descriptionValue.optional(),
-  }).refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be updated' }),
+  })),
 });

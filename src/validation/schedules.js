@@ -2,16 +2,16 @@
  * Schedule schemas.
  */
 import { z } from 'zod';
-
-const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
+import { atLeastOneKey, DateStringSchema, BooleanQuerySchema } from './common.js';
+import { SCHEDULE_FREQUENCIES, SCHEDULE_WEEKEND_SOLVE_MODES, SCHEDULE_AMOUNT_OPS } from './constants.js';
 
 const RecurringDateSchema = z.object({
   start: z.string(),
-  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  frequency: z.enum(SCHEDULE_FREQUENCIES),
   interval: z.number().int().min(1).optional(),
   patterns: z.array(z.unknown()).optional(),
   skipWeekend: z.boolean().optional(),
-  weekendSolveMode: z.enum(['before', 'after']).optional(),
+  weekendSolveMode: z.enum(SCHEDULE_WEEKEND_SOLVE_MODES).optional(),
   endMode: z.string().optional(),
   endOccurrences: z.number().int().optional(),
   endDate: z.string().optional(),
@@ -20,7 +20,7 @@ const RecurringDateSchema = z.object({
 export const ScheduleDateSchema = z.union([DateStringSchema, RecurringDateSchema]);
 
 const AmountRangeSchema = z.object({ num1: z.number(), num2: z.number() });
-const AmountOpSchema = z.enum(['is', 'isapprox', 'isbetween']);
+const AmountOpSchema = z.enum(SCHEDULE_AMOUNT_OPS);
 
 // `_date` is the legacy key some clients still send for `date`. Only rename
 // it when `date` itself is absent, and never mutate the input object.
@@ -47,7 +47,7 @@ export const CreateScheduleSchema = z.object({
 });
 
 export const UpdateScheduleSchema = z.object({
-  fields: z.preprocess(withDateAlias, z.object({
+  fields: z.preprocess(withDateAlias, atLeastOneKey(z.object({
     name: z.string().min(1).max(255).optional(),
     date: ScheduleDateSchema.optional(),
     amount: z.union([z.number(), AmountRangeSchema]).optional(),
@@ -55,15 +55,9 @@ export const UpdateScheduleSchema = z.object({
     account: z.string().optional(),
     payee: z.string().optional(),
     posts_transaction: z.boolean().optional(),
-  }).refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be updated' })),
+  }))),
 });
 
-const booleanFromQueryString = (value) => {
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return value;
-};
-
 export const ScheduleUpdateQuerySchema = z.object({
-  resetNextDate: z.preprocess(booleanFromQueryString, z.boolean()).optional(),
+  resetNextDate: BooleanQuerySchema.optional(),
 });

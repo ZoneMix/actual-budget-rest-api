@@ -2,7 +2,7 @@
  * Payee schemas.
  */
 import { z } from 'zod';
-import { UuidSchema } from './common.js';
+import { UuidSchema, atLeastOneKey } from './common.js';
 
 export const CreatePayeeSchema = z.object({
   payee: z.object({
@@ -11,9 +11,9 @@ export const CreatePayeeSchema = z.object({
 });
 
 export const UpdatePayeeSchema = z.object({
-  fields: z.object({
+  fields: atLeastOneKey(z.object({
     name: z.string().min(1).max(255).optional(),
-  }).refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be updated' }),
+  })),
 });
 
 export const MergePayeesSchema = z.object({
