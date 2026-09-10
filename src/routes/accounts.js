@@ -25,6 +25,7 @@ import { validateBody, validateParams } from '../middleware/validation-schemas.j
 import { IDSchema, CreateAccountSchema, UpdateAccountSchema, CloseAccountSchema } from '../middleware/validation-schemas.js';
 import { standardWriteLimiter, deleteLimiter } from '../middleware/rateLimiters.js';
 import { sendSuccess, sendCreated } from '../middleware/responseHelpers.js';
+import transactionsNestedRoutes from './transactions-nested.js';
 
 const router = express.Router();
 router.use(authenticateJWT);
@@ -98,5 +99,12 @@ router.get(
     sendSuccess(res, { balance });
   })
 );
+
+// Nested per-account transactions. Mounted once here at module load —
+// NOT inside createApp() — since accountsRoutes is a module-singleton
+// shared across every createApp() call; mounting it there would stack a
+// duplicate layer on this router each time createApp() runs (e.g. once
+// per test in a test file).
+router.use('/:accountId/transactions', transactionsNestedRoutes);
 
 export default router;
