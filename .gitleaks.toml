@@ -1,14 +1,12 @@
-# Gitleaks configuration file
-# This file configures what Gitleaks should scan and ignore
+# Gitleaks configuration — https://github.com/gitleaks/gitleaks#configuration
+# NOTE: `paths` entries are Go RE2 regular expressions, NOT globs. A `**` glob here
+# crashes gitleaks ("missing argument to repetition operator") and fails the scan.
 
 title = "Actual Budget REST API"
 
-[allowlist]
-description = "Ignore test directories and files"
-paths = [
-  "tests/",
-  "test/",
-  "**/tests/**",
-  "**/test/**",
-]
+[extend]
+useDefault = true
 
+[[allowlists]]
+description = "Test fixtures, mocks and helpers"
+paths = ['''^tests?/''']
