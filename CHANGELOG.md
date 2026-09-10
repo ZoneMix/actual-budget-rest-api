@@ -19,10 +19,17 @@ schedules were non-functional, not merely inaccurate.
 - `POST /v2/accounts/:id/transactions` — `addTransactions` takes an options
   object; `importTransactions` takes `opts`.
 - `GET /v2/lookup/:type/:name` — `getIDByName` takes `(type, name)`
-  positionally.
+  positionally, and a miss answers the documented **404**. The engine never
+  resolves null for one: it rejects with `APIError("Not found: ...")`, which
+  used to surface as a 400.
 - `POST /v2/accounts` — `account_group_id` is applied with a follow-up update,
   because the engine's create ignores it.
 - Read-modify-write paths sync first, so a merge is not built on stale data.
+- **Body size limits are per router again.** An app-wide `express.json()` read
+  every request first, and body-parser then skipped the parser mounted on the
+  router — so the 1 mb bulk limit and the 10 kb query limit were both silently
+  capped at `MAX_REQUEST_SIZE`. `POST /v2/budgets/batch` answered 413 above
+  roughly 96 operations while the schema and the spec promise 500.
 
 ### Fixed — engine rejections were 500s
 
@@ -38,6 +45,10 @@ wording and its `meta` as `details`. `VALIDATION_ERROR` still means this
 wrapper's schemas rejected the request before the engine saw it; `ENGINE_ERROR`
 means the engine saw it and refused. Genuine faults are still 500s.
 
+Two engine messages are not 400s, because rephrasing cannot fix either: a
+missing row (`Not found: ...`) is **404 `NOT_FOUND`**, and a process with no
+ledger loaded (`No budget file is open`) is **503 `SERVICE_UNAVAILABLE`**.
+
 ### Added — engine queue and sync policy
 
 Every call into the embedded engine is serialised through one FIFO queue.
@@ -48,11 +59,24 @@ Every call into the embedded engine is serialised through one FIFO queue.
   cancelled and keeps its slot.
 - `ACTUAL_SYNC_MIN_INTERVAL_MS` (5000) — **reads may be up to this stale.**
   Writes always sync afterwards. `0` restores sync-before-every-read.
+- `ACTUAL_LOAD_TIMEOUT_MS` (300000) — `POST /v2/budget/load` and
+  `POST /v2/budget/export` move the whole ledger over the network and run under
+  this instead. A timeout cancels nothing, so timing them out at 60 s would
+  just leave the queue blocked behind a call still running.
+- `ACTUAL_HEALTH_TIMEOUT_MS` (5000) — budget for the engine calls
+  `GET /v2/health` makes.
 - Also new: `ACTUAL_FILE_PASSWORD`, `ACTUAL_QUERY_MAX_RESULTS`,
   `ACTUAL_QUERY_MAX_FILTER_DEPTH`, `AUTH_SCOPE_ENFORCEMENT`, `JWT_ISSUER`,
   `JWT_AUDIENCE`.
-- `GET /v2/health` reports queue depth and last sync state, without entering
-  the queue itself.
+- `GET /v2/health` reports queue depth and last sync state. It **observes** the
+  engine and never drives it: it takes the instance only once startup has
+  finished, so an anonymous poll can no longer trigger `init()` and a full
+  budget download, and it never syncs, so polling cannot erase a recorded
+  `lastSyncError`. Its engine calls do go through the queue — an anonymous
+  caller must not interleave with a mutation — under `ACTUAL_HEALTH_TIMEOUT_MS`,
+  so a queue held by a long export makes it answer `busy` rather than hang.
+  `checks.actualApi.status` therefore has four values: `ok`, `not-initialised`,
+  `busy` and `error`, and anything but `ok` is a 503.
 
 ### Added — endpoints
 
@@ -75,6 +99,19 @@ their deletes, and `?resetNextDate=` on schedule update.
 - **JWT pinning.** Algorithm, `iss` and `aud` are pinned on every verify.
 - **OAuth2 grants** are intersected with the client's `allowed_scopes` *and* the
   user's own scopes; a refresh keeps its granted scope and cannot widen it.
+- **A refresh through `POST /v2/auth/login` checks the account is still live.**
+  It read `role, scopes` with no `is_active` filter and no missing-row guard, so
+  a deactivated or deleted user kept minting access tokens — with the legacy
+  `api` grant, since a missing row expanded to it. Both now answer 401.
+- **Authorization-code expiry is enforced by the lookup**, not by
+  `pruneExpiredCodes()` having deleted the row first.
+- **An OAuth request with no `scope` asks for the client's own
+  `allowed_scopes`** (RFC 6749 §3.3). The default was hard-coded to `api`, so a
+  client registered `allowed_scopes=read` was refused with `invalid_scope`
+  unless it named `read` every time.
+- **The access log records the path, not `req.originalUrl`.** Access logs are
+  shipped and retained, and the query string is where a `?token=` or an OAuth
+  redirect's credentials end up.
 - `/admin/*` Bearer auth was broken by an un-awaited revocation check — an
   always-truthy Promise meant no token could authenticate. Same bug fixed in
   `/docs` auth.
@@ -116,6 +153,11 @@ their deletes, and `?resetNextDate=` on schedule update.
 `@actual-app/api` 26.9.0 exports neither `setPreference` nor
 `mergeTransactions`, so `/v2/preferences` is read-only and there is no
 transaction-merge endpoint. Both are candidates once 26.10.0 lands.
+
+A caller-side timeout does not cancel the engine call, so a queue slot stays
+held until that call settles. `ACTUAL_LOAD_TIMEOUT_MS` keeps the slow
+whole-ledger operations from timing out spuriously, but nothing yet detects a
+slot held far past any budget and reports or recycles it.
 
 ## 2.2.2
 
