@@ -27,6 +27,17 @@ const compareClientSecret = async (plainSecret, hashedSecret) => {
 };
 
 /**
+ * `clients.allowed_scopes` is a TEXT column bound through a plain `?`/`$1`
+ * placeholder. CreateClientSchema/UpdateClientSchema (src/validation/admin.js)
+ * parse it into a string array; better-sqlite3 cannot bind an array value
+ * (it throws or, worse, silently mis-binds depending on argument position)
+ * and pg would happily write a Postgres array literal into the TEXT column.
+ * Normalise back to the storage format — a comma-joined string — here, at
+ * the DB boundary, same idiom already used for redirect_uris below.
+ */
+const normalizeAllowedScopes = (value) => (Array.isArray(value) ? value.join(',') : value);
+
+/**
  * Migrate existing plain-text secrets to hashed format.
  * This is a one-time migration for existing clients.
  */
@@ -141,7 +152,7 @@ export const getClient = async (clientId) => {
  * @param {Object} options - Client creation options
  * @param {string} options.clientId - Client identifier (required)
  * @param {string} [options.clientSecret] - Client secret (auto-generated if not provided)
- * @param {string} [options.allowedScopes] - Allowed scopes (default: 'api')
+ * @param {string|string[]} [options.allowedScopes] - Allowed scopes (default: 'api'; array is joined to a comma string for storage)
  * @param {string|string[]} [options.redirectUris] - Redirect URIs (comma-separated string or array)
  * @returns {Object} Created client with plain secret (only returned once)
  */
@@ -158,16 +169,17 @@ export const createClient = async ({ clientId, clientSecret, allowedScopes = 'ap
 
   // Generate secret if not provided
   const plainSecret = clientSecret || generateClientSecret();
-  
+
   // Validate secret length
   if (plainSecret.length < 32) {
     throw new Error('Client secret must be at least 32 characters long');
   }
 
-  // Normalize redirect URIs
-  const redirectUrisStr = Array.isArray(redirectUris) 
-    ? redirectUris.join(',') 
+  // Normalize redirect URIs and allowed scopes to their storage format
+  const redirectUrisStr = Array.isArray(redirectUris)
+    ? redirectUris.join(',')
     : redirectUris;
+  const allowedScopesStr = normalizeAllowedScopes(allowedScopes);
 
   // Hash the secret before storage
   const hashedSecret = await hashClientSecret(plainSecret);
@@ -176,15 +188,16 @@ export const createClient = async ({ clientId, clientSecret, allowedScopes = 'ap
   await executeQuery(`
     INSERT INTO clients (client_id, client_secret, client_secret_hashed, allowed_scopes, redirect_uris)
     VALUES (?, ?, TRUE, ?, ?)
-  `, [clientId, hashedSecret, allowedScopes, redirectUrisStr]);
+  `, [clientId, hashedSecret, allowedScopesStr, redirectUrisStr]);
 
   logger.info(`Created OAuth client: ${clientId}`);
 
-  // Return client info with plain secret (only time it's available)
+  // Return client info with plain secret (only time it's available) — the
+  // *normalised* (stored) values, not the raw request shape.
   return {
     client_id: clientId,
     client_secret: plainSecret, // Only returned on creation
-    allowed_scopes: allowedScopes,
+    allowed_scopes: allowedScopesStr,
     redirect_uris: redirectUrisStr,
     created_at: new Date().toISOString(),
   };
@@ -192,15 +205,21 @@ export const createClient = async ({ clientId, clientSecret, allowedScopes = 'ap
 
 /**
  * Update an existing OAuth client.
- * 
+ *
+ * `updates` is the route's validated request body as-is (see
+ * src/routes/admin.js's PUT /oauth-clients/:clientId, which — unlike POST —
+ * forwards `req.validatedBody` directly rather than remapping it) — so the
+ * keys here are the same snake_case names UpdateClientSchema validates
+ * (src/validation/admin.js), not the camelCase createClient() uses.
+ *
  * @param {string} clientId - Client identifier
  * @param {Object} updates - Fields to update
- * @param {string} [updates.clientSecret] - New client secret (will be hashed)
- * @param {string} [updates.allowedScopes] - New allowed scopes
- * @param {string|string[]} [updates.redirectUris] - New redirect URIs
+ * @param {string} [updates.client_secret] - New client secret (will be hashed)
+ * @param {string|string[]} [updates.allowed_scopes] - New allowed scopes (array is joined to a comma string for storage)
+ * @param {string|string[]} [updates.redirect_uris] - New redirect URIs
  * @returns {Object} Updated client info (without secret)
  */
-export const updateClient = async (clientId, { clientSecret, allowedScopes, redirectUris }) => {
+export const updateClient = async (clientId, { client_secret, allowed_scopes, redirect_uris }) => {
   // Check if client exists
   const existing = await getRow('SELECT client_id FROM clients WHERE client_id = ?', [clientId]);
   if (!existing) {
@@ -210,24 +229,24 @@ export const updateClient = async (clientId, { clientSecret, allowedScopes, redi
   const updates = [];
   const values = [];
 
-  if (clientSecret !== undefined) {
-    if (clientSecret.length < 32) {
+  if (client_secret !== undefined) {
+    if (client_secret.length < 32) {
       throw new Error('Client secret must be at least 32 characters long');
     }
-    const hashedSecret = await hashClientSecret(clientSecret);
+    const hashedSecret = await hashClientSecret(client_secret);
     updates.push('client_secret = ?', 'client_secret_hashed = TRUE');
     values.push(hashedSecret, true);
   }
 
-  if (allowedScopes !== undefined) {
+  if (allowed_scopes !== undefined) {
     updates.push('allowed_scopes = ?');
-    values.push(allowedScopes);
+    values.push(normalizeAllowedScopes(allowed_scopes));
   }
 
-  if (redirectUris !== undefined) {
-    const redirectUrisStr = Array.isArray(redirectUris) 
-      ? redirectUris.join(',') 
-      : redirectUris;
+  if (redirect_uris !== undefined) {
+    const redirectUrisStr = Array.isArray(redirect_uris)
+      ? redirect_uris.join(',')
+      : redirect_uris;
     updates.push('redirect_uris = ?');
     values.push(redirectUrisStr);
   }
