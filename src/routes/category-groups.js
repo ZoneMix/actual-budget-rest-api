@@ -9,6 +9,7 @@ import {
   categoryGroupDelete
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validation-schemas.js';
 import {
   IDSchema,
@@ -21,6 +22,7 @@ import { categoryGroupLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT, requireScopeByMethod());
+router.use(standardBodyParser);
 
 router.get(
   '/',

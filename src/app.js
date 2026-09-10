@@ -34,7 +34,7 @@ import schedulesRoutes from './routes/schedules.js';
 import queryRoutes from './routes/query.js';
 import healthRoutes from './routes/health.js';
 import loginRoutes from './routes/login.js';
-import { NODE_ENV, TRUST_PROXY, ALLOWED_ORIGINS, MAX_REQUEST_SIZE } from './config/index.js';
+import { NODE_ENV, TRUST_PROXY, ALLOWED_ORIGINS } from './config/index.js';
 import env from './config/env.js';
 import { swaggerUi, setupDynamicSwaggerUi } from './config/swagger.js';
 import { authenticateForDocs } from './auth/docsAuth.js';
@@ -149,10 +149,10 @@ export const createApp = () => {
     name: 'sessionId', // Don't use default 'connect.sid'
   }));
 
-  // Body parsing with size limits
-  // Default limit for most routes (can be overridden per-route)
-  app.use(express.json({ limit: MAX_REQUEST_SIZE }));
-  app.use(express.urlencoded({ limit: MAX_REQUEST_SIZE, extended: true }));
+  // NO app-wide body parser. body-parser sets `req._body` once it has read a
+  // request and every later parser then bails out, so a global parser silently
+  // demotes the bulk (1 mb) and query (10 kb) limits to its own. Each router
+  // that reads a body mounts exactly one parser from middleware/bodyParser.js.
 
   // Serve static files (CSS, JS, HTML)
   app.use('/static', express.static('./src/public/static'));

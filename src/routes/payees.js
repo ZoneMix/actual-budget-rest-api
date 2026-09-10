@@ -11,12 +11,14 @@ import {
   payeesMerge
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
 import { IDSchema, CreatePayeeSchema, UpdatePayeeSchema, MergePayeesSchema } from '../middleware/validation-schemas.js';
 import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT, requireScopeByMethod());
+router.use(standardBodyParser);
 
 router.get('/', asyncHandler(async (req, res) => {
   const payees = await payeesList();

@@ -23,6 +23,7 @@ import {
   bankSync
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validation-schemas.js';
 import {
   IDSchema,
@@ -47,6 +48,7 @@ router.get('/', asyncHandler(async (req, res) => {
 router.post(
   '/',
   standardWriteLimiter,
+  standardBodyParser,
   validateBody(CreateAccountSchema),
   asyncHandler(async (req, res) => {
     const { account, initialBalance } = req.validatedBody;
@@ -58,6 +60,7 @@ router.post(
 router.put(
   '/:id',
   standardWriteLimiter,
+  standardBodyParser,
   validateParams(IDSchema),
   validateBody(UpdateAccountSchema),
   asyncHandler(async (req, res) => {
@@ -80,6 +83,7 @@ router.delete(
 router.post(
   '/:id/close',
   standardWriteLimiter,
+  standardBodyParser,
   validateParams(IDSchema),
   validateBody(CloseAccountSchema),
   asyncHandler(async (req, res) => {
@@ -126,7 +130,12 @@ router.post(
   })
 );
 
-// Nested per-account transactions. Mounted once here at module load —
+// Nested per-account transactions. The parsers above are mounted per ROUTE,
+// not with router.use(): this router owns the nested transactions router below,
+// which mounts the 1 mb bulk parser, and a router-level parser here would read
+// those bodies first and cap them at the ordinary limit.
+//
+// Mounted once here at module load —
 // NOT inside createApp() — since accountsRoutes is a module-singleton
 // shared across every createApp() call; mounting it there would stack a
 // duplicate layer on this router each time createApp() runs (e.g. once

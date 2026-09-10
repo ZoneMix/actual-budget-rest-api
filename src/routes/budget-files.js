@@ -13,6 +13,7 @@ import { authenticateJWT } from '../auth/jwt.js';
 import { requireScopeByMethod, requireAdminRole } from '../auth/permissions.js';
 import { budgetFilesList, budgetLoad, budgetExport } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody } from '../middleware/validation-schemas.js';
 import { LoadBudgetSchema } from '../middleware/validation-schemas.js';
 import { adminLimiter } from '../middleware/rateLimiters.js';
@@ -31,6 +32,7 @@ const exportFilename = () =>
 
 const router = express.Router();
 router.use(authenticateJWT, requireScopeByMethod());
+router.use(standardBodyParser);
 
 router.get('/files', asyncHandler(async (req, res) => {
   const files = await budgetFilesList();

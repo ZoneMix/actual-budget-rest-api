@@ -4,12 +4,14 @@ import { authenticateJWT } from '../auth/jwt.js';
 import { requireScopeByMethod } from '../auth/permissions.js';
 import { transactionUpdate, transactionDelete } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
 import { IDSchema, UpdateTransactionSchema } from '../middleware/validation-schemas.js';
 import { highFrequencyLimiter, standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT, requireScopeByMethod());
+router.use(standardBodyParser);
 
 router.put(
   '/:id',

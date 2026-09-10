@@ -4,6 +4,7 @@ import { authenticateJWT } from '../auth/jwt.js';
 import { requireScopeByMethod } from '../auth/permissions.js';
 import { tagsList, tagCreate, tagUpdate, tagDelete } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
 import { IDSchema, CreateTagSchema, UpdateTagSchema } from '../middleware/validation-schemas.js';
 import { standardWriteLimiter, deleteLimiter } from '../middleware/rateLimiters.js';
@@ -11,6 +12,7 @@ import { sendSuccess, sendCreated } from '../middleware/responseHelpers.js';
 
 const router = express.Router();
 router.use(authenticateJWT, requireScopeByMethod());
+router.use(standardBodyParser);
 
 router.get('/', asyncHandler(async (req, res) => {
   const tags = await tagsList();

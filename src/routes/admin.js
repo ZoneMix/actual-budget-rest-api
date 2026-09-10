@@ -8,6 +8,7 @@ import express from 'express';
 import { authenticateAdminAPI } from '../auth/adminApi.js';
 import { listClients, getClient, createClient, updateClient, deleteClient } from '../auth/oauth2/client.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { sendSuccess, sendCreated, throwBadRequest, throwNotFound } from '../middleware/responseHelpers.js';
 import { validateBody, validateParams, CreateClientSchema, UpdateClientSchema, ClientIdParamsSchema } from '../middleware/validation-schemas.js';
 import { adminLimiter, standardWriteLimiter, deleteLimiter } from '../middleware/rateLimiters.js';
@@ -18,6 +19,7 @@ const router = express.Router();
 // All admin routes require authentication (JWT or session) and rate limiting
 router.use(asyncHandler(authenticateAdminAPI));
 router.use(adminLimiter);
+router.use(standardBodyParser);
 
 /**
  * GET /admin/oauth-clients

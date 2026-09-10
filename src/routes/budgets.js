@@ -12,6 +12,7 @@ import {
   budgetBatchUpdate
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { bulkBodyParser, standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
 import {
   SetBudgetSchema,
@@ -33,9 +34,13 @@ router.get('/months', asyncHandler(async (req, res) => {
 
 // Registered before the '/:month' routes so Express cannot read "batch" as a
 // month. Applies every operation under one engine transaction, in order.
+// The bulk parser, not the standard one: 500 operations (the documented
+// maximum, BatchBudgetSchema) is ~53 kB of JSON. Mounted per route so the
+// smaller parser on the routes below cannot read this body first.
 router.post(
   '/batch',
   budgetLimiter,
+  bulkBodyParser,
   validateBody(BatchBudgetSchema),
   asyncHandler(async (req, res) => {
     const { operations } = req.validatedBody;
@@ -56,6 +61,7 @@ router.get(
 router.post(
   '/:month/categories/:categoryId/budget',
   budgetLimiter,
+  standardBodyParser,
   validateParams(BudgetCategoryParamsSchema),
   validateBody(SetBudgetSchema),
   asyncHandler(async (req, res) => {
@@ -68,6 +74,7 @@ router.post(
 router.post(
   '/:month/categories/:categoryId/carryover',
   budgetLimiter,
+  standardBodyParser,
   validateParams(BudgetCategoryParamsSchema),
   validateBody(BudgetCarryoverSchema),
   asyncHandler(async (req, res) => {
@@ -80,6 +87,7 @@ router.post(
 router.post(
   '/:month/hold',
   budgetLimiter,
+  standardBodyParser,
   validateParams(BudgetMonthParamsSchema),
   validateBody(BudgetHoldSchema),
   asyncHandler(async (req, res) => {

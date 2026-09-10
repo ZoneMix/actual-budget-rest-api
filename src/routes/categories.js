@@ -4,6 +4,7 @@ import { authenticateJWT } from '../auth/jwt.js';
 import { requireScopeByMethod } from '../auth/permissions.js';
 import { categoriesList, categoryCreate, categoryUpdate, categoryDelete } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validation-schemas.js';
 import {
   IDSchema,
@@ -16,6 +17,7 @@ import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT, requireScopeByMethod());
+router.use(standardBodyParser);
 
 router.get(
   '/',

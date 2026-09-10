@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { authenticateUser } from '../auth/user.js';
 import { authenticateAdminDashboard } from '../auth/adminDashboard.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { standardBodyParser, standardUrlParser } from '../middleware/bodyParser.js';
 import logger, { logAuthEvent } from '../logging/logger.js';
 
 const router = express.Router();
@@ -54,7 +55,7 @@ const validateReturnTo = (returnTo, baseUrl = '') => {
   return '/';
 };
 
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, standardBodyParser, standardUrlParser, async (req, res) => {
   const { username, password, return_to } = req.body;
 
   logger.debug('[Session] Login attempt', { username, hasReturnTo: !!return_to, ip: req.ip });
