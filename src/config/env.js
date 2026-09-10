@@ -20,7 +20,10 @@ const envSchema = z.object({
   // Server Configuration
   // ============================================================================
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().transform(Number).pipe(z.number().int().positive()).default('3000'),
+  // Zod 4: .default() short-circuits parsing, so the default value must already
+  // be the OUTPUT type. `.default('3000')` here would hand the app the STRING
+  // '3000' whenever PORT is unset, because the transform never runs.
+  PORT: z.string().transform(Number).pipe(z.number().int().positive()).default(3000),
   TRUST_PROXY: z.string().transform(v => v === 'true').optional(),
 
   // ============================================================================
@@ -93,10 +96,19 @@ const envSchema = z.object({
   // ============================================================================
   // Security Features (Optional flags)
   // ============================================================================
-  ENABLE_CORS: z.string().transform(v => v === 'true').default('true'),
-  ENABLE_HELMET: z.string().transform(v => v === 'true').default('true'),
-  ENABLE_RATE_LIMITING: z.string().transform(v => v === 'true').default('true'),
+  // Same .default() rule as PORT above: boolean out, boolean default.
+  ENABLE_CORS: z.string().transform(v => v === 'true').default(true),
+  ENABLE_HELMET: z.string().transform(v => v === 'true').default(true),
+  ENABLE_RATE_LIMITING: z.string().transform(v => v === 'true').default(true),
   MAX_REQUEST_SIZE: z.string().default('10kb'),
+
+  // ============================================================================
+  // ActualQL Query Limits
+  // ============================================================================
+  // Maximum number of rows returned from POST /v2/query before truncation
+  ACTUAL_QUERY_MAX_RESULTS: z.string().transform(Number).pipe(z.number().int().positive()).default(10000),
+  // Maximum nesting depth of $and/$or filter conditions accepted by POST /v2/query
+  ACTUAL_QUERY_MAX_FILTER_DEPTH: z.string().transform(Number).pipe(z.number().int().positive()).default(5),
 });
 
 /**
