@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { formatZodError } from '../validation/errors.js';
 
 /**
  * Base HTTP error class.
@@ -134,10 +135,10 @@ export const createHttpError = (error, _defaultStatus = 500) => {
     return error;
   }
 
-  // Handle Zod errors specifically
+  // Handle Zod errors specifically. Zod 4 renamed ZodError#errors to
+  // ZodError#issues — formatZodError reads the right property.
   if (error instanceof z.ZodError) {
-    const details = error.errors.map(e => ({ path: e.path.join('.'), message: e.message }));
-    return new ValidationError('Validation failed', null, details);
+    return new ValidationError('Validation failed', null, formatZodError(error));
   }
 
   // Handle errors with a 'status' property (e.g., from 'http-errors' or similar)

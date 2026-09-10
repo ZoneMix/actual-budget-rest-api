@@ -62,48 +62,33 @@ describe('Validation Schemas', () => {
 
   describe('QuerySchema', () => {
     it('should validate valid query', () => {
-      try {
-        const result = QuerySchema.safeParse({
-          query: {
-            table: 'transactions',
-            filter: { date: { $gte: '2024-01-01' } },
-            select: ['id', 'amount'],
-          },
-        });
-        expect(result.success).toBe(true);
-      } catch {
-        // If Zod v4 has issues, skip this test for now
-        expect(true).toBe(true);
-      }
+      const result = QuerySchema.safeParse({
+        query: {
+          table: 'transactions',
+          filter: { date: { $gte: '2024-01-01' } },
+          select: ['id', 'amount'],
+        },
+      });
+      expect(result.success).toBe(true);
     });
 
     it('should reject invalid table name', () => {
-      try {
-        const result = QuerySchema.safeParse({
-          query: {
-            table: 'invalid_table',
-          },
-        });
-        expect(result.success).toBe(false);
-      } catch {
-        // If Zod v4 has issues, skip this test for now
-        expect(true).toBe(true);
-      }
+      const result = QuerySchema.safeParse({
+        query: {
+          table: 'invalid_table',
+        },
+      });
+      expect(result.success).toBe(false);
     });
 
     it('should validate with select *', () => {
-      try {
-        const result = QuerySchema.safeParse({
-          query: {
-            table: 'transactions',
-            select: '*',
-          },
-        });
-        expect(result.success).toBe(true);
-      } catch {
-        // If Zod v4 has issues, skip this test for now
-        expect(true).toBe(true);
-      }
+      const result = QuerySchema.safeParse({
+        query: {
+          table: 'transactions',
+          select: '*',
+        },
+      });
+      expect(result.success).toBe(true);
     });
   });
 });

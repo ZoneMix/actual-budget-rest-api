@@ -22,6 +22,9 @@ export default {
   ],
   // Ratchet: the largest multiple of 5 currently met by each metric.
   // Raise these as coverage grows; never lower them to make a run pass.
+  // (Merged from main's post-Phase-C ratchet and the Phase E validation
+  // rewrite's own — functions took the higher of the two per-branch values,
+  // 35 vs 30; re-verified against the combined codebase's actual coverage.)
   coverageThreshold: {
     global: {
       branches: 25,

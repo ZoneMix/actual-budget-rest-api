@@ -2,8 +2,10 @@
  * Error handler middleware tests.
  */
 
+import { z } from 'zod';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import { ValidationError, AuthenticationError, InternalServerError } from '../../src/errors/index.js';
+import { formatZodError } from '../../src/validation/errors.js';
 
 describe('errorHandler', () => {
   let req, res, next;
@@ -74,12 +76,29 @@ describe('errorHandler', () => {
 
   it('should include request context in error logs', () => {
     const error = new ValidationError('Test error');
-    
+
     errorHandler(error, req, res, next);
-    
+
     // Verify response was sent (error was handled)
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalled();
+  });
+
+  it('should render formatZodError-shaped details for a thrown ValidationError', () => {
+    const details = formatZodError(
+      z.object({ name: z.string() }).safeParse({ name: 5 }).error
+    );
+    const error = new ValidationError('Validation failed', null, details);
+
+    errorHandler(error, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'Validation failed',
+        details: [expect.objectContaining({ field: 'name', code: 'invalid_type' })],
+      })
+    );
   });
 });
 

@@ -241,13 +241,13 @@ describe('Extended Validation Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should use default allowed_scopes', () => {
+    it('should default allowed_scopes to ["api"] (now an array, not a comma string)', () => {
       const result = CreateClientSchema.safeParse({
         client_id: 'test-client',
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.allowed_scopes).toBe('api');
+        expect(result.data.allowed_scopes).toEqual(['api']);
       }
     });
 
