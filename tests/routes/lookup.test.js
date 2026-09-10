@@ -72,20 +72,46 @@ describe('GET /v2/lookup/:type/:name', () => {
     expect(actualApi.getIDByName).not.toHaveBeenCalled();
   });
 
-  it('answers 404 when the engine finds no match', async () => {
-    actualApi.getIDByName.mockResolvedValueOnce(null);
+  // The SDK handler never resolves null for a miss: it throws
+  // APIError(`Not found: ${type} with name ${name}`) — a PLAIN OBJECT, not an
+  // Error (dist/index.js:14068, 112711). The old null/undefined branch in the
+  // route was therefore unreachable and every miss surfaced as a 400.
+  it('answers 404 when the engine rejects with its Not found APIError', async () => {
+    actualApi.getIDByName.mockRejectedValueOnce({
+      type: 'APIError',
+      message: 'Not found: categories with name Nonexistent',
+      meta: undefined,
+    });
 
     const res = await request(app).get('/v2/lookup/categories/Nonexistent').set(bearer(token));
 
     expect(res.status).toBe(404);
+    expect(res.body.code).toBe('NOT_FOUND');
+    expect(res.body.error).toContain('categories with name Nonexistent');
     expect(actualApi.getIDByName).toHaveBeenCalledWith('categories', 'Nonexistent');
   });
 
-  it('answers 404 when the engine returns undefined', async () => {
-    actualApi.getIDByName.mockResolvedValueOnce(undefined);
+  it('answers 404 for an accounts miss too', async () => {
+    actualApi.getIDByName.mockRejectedValueOnce({
+      type: 'APIError',
+      message: 'Not found: accounts with name Nonexistent',
+    });
 
     const res = await request(app).get('/v2/lookup/accounts/Nonexistent').set(bearer(token));
 
     expect(res.status).toBe(404);
+  });
+
+  // Any other engine rejection is still the caller's mistake, not a miss.
+  it('keeps a non-miss APIError a 400', async () => {
+    actualApi.getIDByName.mockRejectedValueOnce({
+      type: 'APIError',
+      message: 'Provide a valid type',
+    });
+
+    const res = await request(app).get('/v2/lookup/payees/Anything').set(bearer(token));
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('ENGINE_ERROR');
   });
 });

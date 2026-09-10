@@ -13,7 +13,6 @@ import { getIdByName } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateParams } from '../middleware/validation-schemas.js';
 import { LookupParamsSchema } from '../middleware/validation-schemas.js';
-import { NotFoundError } from '../errors/index.js';
 import { sendSuccess } from '../middleware/responseHelpers.js';
 
 const router = express.Router();
@@ -24,11 +23,9 @@ router.get(
   validateParams(LookupParamsSchema),
   asyncHandler(async (req, res) => {
     const { type, name } = req.validatedParams;
+    // A miss never comes back as null: the engine rejects with its own
+    // "Not found" APIError and the service turns that into a NotFoundError.
     const id = await getIdByName(type, name);
-
-    if (id === null || id === undefined) {
-      throw new NotFoundError(`No ${type} named "${name}"`);
-    }
 
     sendSuccess(res, { type, name, id });
   })
