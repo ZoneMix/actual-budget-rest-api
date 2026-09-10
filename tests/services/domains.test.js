@@ -110,11 +110,12 @@ describe('domain services', () => {
   });
 
   describe('query', () => {
-    // Known wrong shape: the SDK takes the serialised query directly.
-    it('runActualQuery(query) calls runQuery({ query })', async () => {
-      const query = { table: 'transactions' };
-      await runActualQuery(query);
-      expect(actualApi.runQuery).toHaveBeenCalledWith({ query });
+    it('runActualQuery(spec) hands aqlQuery a built ActualQL query', async () => {
+      actualApi.aqlQuery.mockResolvedValueOnce({ data: [], dependencies: [] });
+      await runActualQuery({ table: 'transactions' });
+      const [built] = actualApi.aqlQuery.mock.calls[0];
+      expect(built.serialize().table).toBe('transactions');
+      expect(actualApi.runQuery).not.toHaveBeenCalled();
     });
   });
 

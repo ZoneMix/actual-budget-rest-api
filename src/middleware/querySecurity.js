@@ -11,6 +11,7 @@
 
 import logger from '../logging/logger.js';
 import { ValidationError } from '../errors/index.js';
+import { ACTUAL_QUERY_MAX_RESULTS, ACTUAL_QUERY_MAX_FILTER_DEPTH } from '../config/index.js';
 
 /**
  * Allowed table names for queries.
@@ -29,15 +30,57 @@ const ALLOWED_TABLES = new Set([
 ]);
 
 /**
- * Maximum number of results allowed per query.
- * Prevents resource exhaustion attacks.
+ * Query limits. Both come from the validated environment
+ * (ACTUAL_QUERY_MAX_RESULTS / ACTUAL_QUERY_MAX_FILTER_DEPTH) so an operator
+ * can tune them without editing code.
  */
-const MAX_RESULTS = 10000;
+const MAX_RESULTS = ACTUAL_QUERY_MAX_RESULTS;
+const MAX_FILTER_DEPTH = ACTUAL_QUERY_MAX_FILTER_DEPTH;
 
 /**
- * Maximum depth for nested filter conditions.
+ * Substrings that must never appear in a field name reaching the engine.
  */
-const MAX_FILTER_DEPTH = 5;
+const UNSAFE_FIELD_SUBSTRINGS = ['..', '/', '\\'];
+
+/**
+ * Rejects a single field name containing a path-traversal sequence.
+ */
+const assertSafeFieldName = (name, label) => {
+  if (UNSAFE_FIELD_SUBSTRINGS.some((unsafe) => name.includes(unsafe))) {
+    throw new ValidationError(`Invalid ${label} field name: ${name}`);
+  }
+};
+
+/**
+ * Applies the field-name check to a whole expression.
+ *
+ * orderBy / groupBy / calculate each accept a string, an array, or an object
+ * form such as `{ $sum: 'amount' }` or `{ date: 'desc' }`, so both the keys and
+ * the values of object forms are field names and both are checked. Non-string
+ * leaves (booleans, numbers, null) carry no field name and are ignored.
+ */
+const validateFieldExpression = (value, label, depth = 0) => {
+  if (depth > MAX_FILTER_DEPTH) {
+    throw new ValidationError(`${label} exceeds maximum allowed depth`);
+  }
+
+  if (typeof value === 'string') {
+    assertSafeFieldName(value, label);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry) => validateFieldExpression(entry, label, depth + 1));
+    return;
+  }
+
+  if (value !== null && typeof value === 'object') {
+    Object.entries(value).forEach(([key, nested]) => {
+      assertSafeFieldName(key, label);
+      validateFieldExpression(nested, label, depth + 1);
+    });
+  }
+};
 
 /**
  * Validates filter object structure and depth.
@@ -90,9 +133,7 @@ const validateSelect = (select) => {
         throw new ValidationError('Select fields must be strings');
       }
       // Prevent path traversal in field names
-      if (field.includes('..') || field.includes('/') || field.includes('\\')) {
-        throw new ValidationError(`Invalid field name: ${field}`);
-      }
+      assertSafeFieldName(field, 'select');
     });
   } else if (typeof select === 'string') {
     if (select !== '*') {
@@ -108,7 +149,7 @@ const validateSelect = (select) => {
  * Throws ValidationError if query is invalid or dangerous.
  */
 export const validateQuery = (queryObj) => {
-  const { table, filter, select, options } = queryObj;
+  const { table, filter, select, options, orderBy, groupBy, calculate } = queryObj;
 
   // Validate table name
   if (!ALLOWED_TABLES.has(table)) {
@@ -126,6 +167,12 @@ export const validateQuery = (queryObj) => {
   if (select !== undefined) {
     validateSelect(select);
   }
+
+  // orderBy / groupBy / calculate are field expressions too, and reach the
+  // engine on the same path select does.
+  if (orderBy !== undefined) validateFieldExpression(orderBy, 'orderBy');
+  if (groupBy !== undefined) validateFieldExpression(groupBy, 'groupBy');
+  if (calculate !== undefined) validateFieldExpression(calculate, 'calculate');
 
   // Validate options
   if (options) {

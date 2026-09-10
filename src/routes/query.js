@@ -34,17 +34,19 @@ router.post(
   secureQueryMiddleware,
   asyncHandler(async (req, res) => {
     const { query } = req.validatedBody;
-    
+
     try {
       // Execute query through Actual API
-      const result = await runActualQuery(query);
-      
+      const data = await runActualQuery(query);
+
       // Limit results to prevent resource exhaustion
-      const limitedResult = limitQueryResults(result);
-      
-      sendSuccess(res, { 
-        result: limitedResult,
-        truncated: Array.isArray(result) && result.length > limitedResult.length,
+      const limited = limitQueryResults(data);
+
+      sendSuccess(res, {
+        data: limited,
+        truncated: Array.isArray(data) && data.length > limited.length,
+        // Deprecated alias for `data`; removed in 3.0.0.
+        result: limited,
       });
     } catch (error) {
       // Sanitize query object for logging (don't log full filter data which may contain sensitive info)

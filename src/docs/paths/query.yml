@@ -4,10 +4,17 @@ query:
     description: |
       Execute ActualQL queries against Actual Budget data.
       
+      The JSON body is mapped onto Actual's own query builder in a fixed order:
+      table, then each filter, then select or calculate, then groupBy, orderBy,
+      options, limit and offset.
+
       **Security Restrictions:**
       - Only read-only tables are allowed (transactions, accounts, categories, etc.)
-      - Filter depth is limited to 5 levels
-      - Result size is limited to 10,000 records
+      - Filter depth is limited to ACTUAL_QUERY_MAX_FILTER_DEPTH levels (default 5)
+      - Result size is limited to ACTUAL_QUERY_MAX_RESULTS records (default 10,000)
+      - select, orderBy, groupBy and calculate field names are rejected if they
+        contain a path-traversal sequence
+      - select and calculate cannot be combined
       - Query structure is validated for security
       - All queries are audit logged
       
@@ -45,12 +52,21 @@ query:
                     description: Table to query (whitelist enforced)
                     example: transactions
                   filter:
-                    type: object
-                    description: Filter conditions (max depth 5 levels)
+                    description: >-
+                      One filter expression, or an array of them applied in
+                      order. Nesting is capped by ACTUAL_QUERY_MAX_FILTER_DEPTH.
+                    oneOf:
+                      - type: object
+                      - type: array
+                        items:
+                          type: object
                     example:
                       date:
                         $gte: '2024-01-01'
                   select:
+                    description: >-
+                      Defaults to "*" when omitted. Cannot be combined with
+                      calculate.
                     oneOf:
                       - type: string
                         enum: ['*']
@@ -60,21 +76,48 @@ query:
                           type: string
                         description: Select specific fields
                     example: ['id', 'amount', 'date']
+                  calculate:
+                    description: >-
+                      An aggregate expression such as { "$sum": "amount" }.
+                      Cannot be combined with select; the response data is then
+                      the scalar result rather than a row array.
+                    oneOf:
+                      - type: string
+                      - type: object
+                    example:
+                      $sum: amount
+                  groupBy:
+                    oneOf:
+                      - type: string
+                      - type: array
+                        items:
+                          type: string
+                    example: ['category']
+                  orderBy:
+                    oneOf:
+                      - type: string
+                      - type: array
+                        items:
+                          oneOf:
+                            - type: string
+                            - type: object
+                    example:
+                      - date: desc
+                  limit:
+                    type: integer
+                    minimum: 1
+                    maximum: 10000
+                  offset:
+                    type: integer
+                    minimum: 0
                   options:
                     type: object
-                    description: Query options
+                    description: Table options passed straight to the builder
+                    additionalProperties: false
                     properties:
-                      limit:
-                        type: integer
-                        maximum: 10000
-                        description: Maximum number of results
-                      orderBy:
+                      splits:
                         type: string
-                        description: Field to order by
-                      order:
-                        type: string
-                        enum: [asc, desc]
-                        description: Sort order
+                        enum: [inline, grouped, all]
     responses:
       '200':
         description: Query executed successfully
@@ -86,11 +129,37 @@ query:
                 success:
                   type: boolean
                   example: true
+                data:
+                  description: >-
+                    Query results, capped at ACTUAL_QUERY_MAX_RESULTS rows. A
+                    calculate query returns the scalar aggregate instead.
+                  oneOf:
+                    - type: array
+                      items:
+                        type: object
+                    - type: number
+                truncated:
+                  type: boolean
+                  description: True when rows were dropped to meet the cap.
                 result:
-                  type: array
-                  description: Query results (max 10,000 records)
-                  items:
-                    type: object
+                  deprecated: true
+                  description: Deprecated alias for data; removed in 3.0.0.
+                  oneOf:
+                    - type: array
+                      items:
+                        type: object
+                    - type: number
+            examples:
+              rows:
+                value:
+                  success: true
+                  data:
+                    - id: tx-1
+                      amount: -4599
+                  truncated: false
+                  result:
+                    - id: tx-1
+                      amount: -4599
       '400':
         description: Invalid query (validation failed)
         content:

@@ -1,0 +1,80 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`buildQuery builds a calculate query and never also selects 1`] = `
+{
+  "calculation": true,
+  "filterExpressions": [],
+  "groupExpressions": [],
+  "limit": null,
+  "offset": null,
+  "orderExpressions": [],
+  "selectExpressions": [
+    {
+      "result": {
+        "$sum": "amount",
+      },
+    },
+  ],
+  "table": "transactions",
+  "tableOptions": {},
+}
+`;
+
+exports[`buildQuery builds a table-only query with an implicit select * 1`] = `
+{
+  "calculation": false,
+  "filterExpressions": [],
+  "groupExpressions": [],
+  "limit": null,
+  "offset": null,
+  "orderExpressions": [],
+  "selectExpressions": [
+    "*",
+  ],
+  "table": "transactions",
+  "tableOptions": {},
+}
+`;
+
+exports[`buildQuery builds filter + select 1`] = `
+{
+  "calculation": false,
+  "filterExpressions": [
+    {
+      "date": {
+        "$gte": "2026-01-01",
+      },
+    },
+  ],
+  "groupExpressions": [],
+  "limit": null,
+  "offset": null,
+  "orderExpressions": [],
+  "selectExpressions": [
+    "id",
+    "amount",
+  ],
+  "table": "transactions",
+  "tableOptions": {},
+}
+`;
+
+exports[`buildQuery builds orderBy + limit + offset 1`] = `
+{
+  "calculation": false,
+  "filterExpressions": [],
+  "groupExpressions": [],
+  "limit": 25,
+  "offset": 50,
+  "orderExpressions": [
+    {
+      "date": "desc",
+    },
+  ],
+  "selectExpressions": [
+    "*",
+  ],
+  "table": "transactions",
+  "tableOptions": {},
+}
+`;
