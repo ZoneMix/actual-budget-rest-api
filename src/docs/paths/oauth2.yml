@@ -20,8 +20,16 @@ oauthAuthorize:
           format: uri
       - in: query
         name: scope
+        description: |
+          Space- or comma-separated scopes to request; defaults to `api`.
+          Must be within the client's registered `allowed_scopes`, where
+          `admin` implies `write` implies `read`, and legacy `api` implies
+          `write` and `read` but never `admin`. Anything outside that set
+          redirects back to `redirect_uri` with `error=invalid_scope`
+          (RFC 6749 §4.1.2.1) instead of an authorization code.
         schema:
           type: string
+          example: read write
       - in: query
         name: state
         schema:
@@ -34,7 +42,11 @@ oauthAuthorize:
           enum: [code]
     responses:
       302:
-        description: Redirect with authorization code
+        description: |
+          Redirect back to `redirect_uri` with either `code` (and `state`, when
+          supplied) or, when the requested scope exceeds the client's
+          `allowed_scopes`, `error=invalid_scope` and `error_description`.
+          An unauthenticated browser is redirected to `/login` instead.
       400:
         description: Invalid request
         content:
