@@ -30,7 +30,8 @@ export const errorHandler = (err, req, res, _next) => {
   const errorLog = {
     requestId,
     method: req.method,
-    url: req.originalUrl,
+    // Path only: the query string can carry a credential and must never be logged.
+    url: String(req.originalUrl || '').split('?')[0],
     status,
     errorName: httpErr.name,
     errorCode: httpErr.code,
