@@ -86,6 +86,39 @@ describe('createEngineQueue', () => {
     });
   });
 
+  describe('per-call timeout', () => {
+    // POST /v2/budget/load is network-bound and legitimately slower than
+    // ACTUAL_OP_TIMEOUT_MS. A timeout there holds the queue slot forever by
+    // design, so the wedge is avoided by giving the slow call a longer budget
+    // rather than by shortening everything else.
+    it('honours a per-call timeoutMs over the queue default', async () => {
+      const queue = createEngineQueue({ timeoutMs: 5000 });
+
+      const slow = queue.withEngine('slow', () => sleep(40), { timeoutMs: 20 });
+
+      await expect(slow).rejects.toBeInstanceOf(GatewayTimeoutError);
+      await expect(slow).rejects.toMatchObject({ status: 504 });
+    });
+
+    it('lets a per-call timeoutMs raise the budget above the queue default', async () => {
+      const queue = createEngineQueue({ timeoutMs: 20 });
+
+      await expect(
+        queue.withEngine('slow-but-allowed', async () => {
+          await sleep(40);
+          return 'finished';
+        }, { timeoutMs: 500 })
+      ).resolves.toBe('finished');
+    });
+
+    it('leaves the default path on the queue timeout when no option is given', async () => {
+      const queue = createEngineQueue({ timeoutMs: 20 });
+
+      await expect(queue.withEngine('slow', () => sleep(40))).rejects.toBeInstanceOf(GatewayTimeoutError);
+      await expect(queue.withEngine('fast', async () => 'quick')).resolves.toBe('quick');
+    });
+  });
+
   describe('timeout', () => {
     it('rejects the caller with a 504 but keeps the slot until the engine call settles', async () => {
       const queue = createEngineQueue({ timeoutMs: 30 });

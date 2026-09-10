@@ -40,6 +40,12 @@ budgetLoad:
       request reads and writes that file. Admin only, in every
       AUTH_SCOPE_ENFORCEMENT mode. The next read is forced to sync so it
       reflects the newly-opened file rather than the previous one's freshness.
+
+
+      Runs under `ACTUAL_LOAD_TIMEOUT_MS` (default 300000) rather than the
+      ordinary `ACTUAL_OP_TIMEOUT_MS`: downloading a whole budget file is
+      network-bound, and a timeout would not cancel it — the engine keeps its
+      queue slot until the call settles either way.
     tags: [Budget Files]
     security:
       - bearerAuth: []
@@ -90,6 +96,12 @@ budgetExport:
       Streams the whole ledger as an Actual `.zip` export — the same archive the
       desktop app produces. The body is raw zip bytes, never base64 inside a
       JSON envelope. Admin only, in every AUTH_SCOPE_ENFORCEMENT mode.
+
+
+      Runs under `ACTUAL_LOAD_TIMEOUT_MS` (default 300000) rather than the
+      ordinary `ACTUAL_OP_TIMEOUT_MS`, for the same reason as
+      POST /v2/budget/load: zipping the whole ledger outruns the ordinary
+      budget and a timeout would free no queue slot.
     tags: [Budget Files]
     security:
       - bearerAuth: []

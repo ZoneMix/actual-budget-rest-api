@@ -115,6 +115,15 @@ lint-staged pattern back to `.env*`; that glob untracks `.env.example`.
   `req.validatedQuery`, never `req.body`.
 - Commits: `<type>: <description>`, staged file by file. Never `git add -A`.
 
+## Known follow-ups
+
+- **Queue watchdog.** A caller-side timeout does not cancel the engine call, so
+  a slot stays held until that call settles (`withTimeout` in
+  `src/services/actual/queue.js`). `ACTUAL_LOAD_TIMEOUT_MS` keeps the slow
+  whole-ledger operations from timing out spuriously, but nothing yet detects a
+  slot held far past any budget and reports or recycles it. That watchdog is
+  still to be built.
+
 ## Follow-ups when `@actual-app/api` 26.10.0 lands
 
 Two SDK methods are expected that this wrapper has no route for, because 26.9.0

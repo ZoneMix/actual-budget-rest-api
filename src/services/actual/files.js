@@ -7,6 +7,7 @@
  * them are admin-gated and `budgetImport` has no route at all.
  */
 
+import { ACTUAL_LOAD_TIMEOUT_MS } from '../../config/index.js';
 import logger from '../../logging/logger.js';
 import { runWithApi } from './runner.js';
 import { syncPolicy } from './syncPolicy.js';
@@ -38,7 +39,11 @@ export const budgetLoad = async (budgetId) => {
       await apiInstance.loadBudget(budgetId);
       logger.info('[Actual] budgetLoad completed', { budgetId });
     },
-    { mode: 'write' }
+    // Its own, longer budget: this call pulls a whole budget file over the
+    // network. ACTUAL_OP_TIMEOUT_MS would reject the caller while the engine
+    // kept the queue slot until it finished anyway (queue.js `withTimeout`),
+    // which is the realistic way to wedge the queue.
+    { mode: 'write', timeoutMs: ACTUAL_LOAD_TIMEOUT_MS }
   );
 
   syncPolicy.forceStale();
@@ -55,12 +60,18 @@ export const budgetLoad = async (budgetId) => {
  * @returns {Promise<Uint8Array>} zip archive bytes
  */
 export const budgetExport = async () => {
-  return runWithApi('budgetExport', async (apiInstance) => {
-    logger.debug('[Actual] Exporting budget');
-    const bytes = await apiInstance.exportBudget();
-    logger.info('[Actual] budgetExport result', { byteLength: bytes?.length ?? 0 });
-    return bytes;
-  });
+  return runWithApi(
+    'budgetExport',
+    async (apiInstance) => {
+      logger.debug('[Actual] Exporting budget');
+      const bytes = await apiInstance.exportBudget();
+      logger.info('[Actual] budgetExport result', { byteLength: bytes?.length ?? 0 });
+      return bytes;
+    },
+    // Same reasoning as budgetLoad: zipping the whole ledger is slow enough to
+    // outrun the ordinary per-operation timeout.
+    { timeoutMs: ACTUAL_LOAD_TIMEOUT_MS }
+  );
 };
 
 /**
