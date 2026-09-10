@@ -148,3 +148,24 @@ describe('POST /v2/metrics/reset', () => {
     expect(res.body).toMatchObject({ success: true });
   });
 });
+
+describe('POST /v2/metrics/reset under the shipped warn default', () => {
+  // Resetting metrics destroys observability data, so it is a role gate rather
+  // than part of the scope rollout: it must refuse a non-admin even in `warn`,
+  // which is the mode every deployment starts in.
+  beforeEach(() => {
+    process.env.AUTH_SCOPE_ENFORCEMENT = 'warn';
+  });
+
+  it('still refuses a non-admin token', async () => {
+    const res = await request(app).post('/v2/metrics/reset').set(bearer(legacyToken));
+
+    expect(res.status).toBe(403);
+  });
+
+  it('still accepts an admin token', async () => {
+    const res = await request(app).post('/v2/metrics/reset').set(bearer(adminToken));
+
+    expect(res.status).toBe(200);
+  });
+});
