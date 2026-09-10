@@ -109,6 +109,9 @@ their deletes, and `?resetNextDate=` on schedule update.
   `allowed_scopes`** (RFC 6749 §3.3). The default was hard-coded to `api`, so a
   client registered `allowed_scopes=read` was refused with `invalid_scope`
   unless it named `read` every time.
+  Upgrade note: a client registered `api,admin` that never sent `scope` now
+  receives `api admin` (still bounded by the user's own scopes) where it used to
+  get `api`; register clients with exactly the scopes they should hold.
 - **The access log records the path, not `req.originalUrl`.** Access logs are
   shipped and retained, and the query string is where a `?token=` or an OAuth
   redirect's credentials end up.
