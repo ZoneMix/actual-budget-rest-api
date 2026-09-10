@@ -11,8 +11,21 @@ health:
       **Information Disclosure Prevention:**
       - Production: Only shows service status, no system details
       - Development: Shows full system information (memory, uptime, node version, platform)
-      
-      Returns 200 for healthy, 503 for degraded status.
+
+      **This endpoint observes the engine, it never drives it.** It takes the
+      engine only once initialisation has finished — a poll can never trigger
+      `init()` or a budget download — and it never syncs, so a recorded
+      `lastSyncError` survives being polled. Its two engine calls run through
+      the ordinary queue under the shorter `ACTUAL_HEALTH_TIMEOUT_MS`
+      (default 5000), so a queue held by a long export cannot hang the probe.
+
+      `checks.actualApi.status` therefore has four values: `ok`,
+      `not-initialised` (startup has not finished), `busy` (the engine did not
+      answer inside the health budget, or the queue is at its depth cap) and
+      `error` (the engine refused the call).
+
+      Returns 200 for healthy, 503 for degraded status. Any
+      `checks.actualApi.status` other than `ok` is degraded.
     tags: [Health]
     operationId: getHealth
     responses:
@@ -52,7 +65,7 @@ health:
                       properties:
                         status:
                           type: string
-                          enum: [ok, error]
+                          enum: [ok, not-initialised, busy, error]
                           example: ok
                         message:
                           type: string
