@@ -24,7 +24,9 @@ import {
   clientAllowedScopes,
   disallowedScopes,
   formatScopes,
+  intersectScopes,
   parseRequestedScopes,
+  userHeldScopes,
 } from '../auth/oauth2/scopes.js';
 import { getRow } from '../db/authDb.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -71,6 +73,16 @@ const resolveAuthorizeClient = async (clientId, redirectUri) => {
   }
 
   return client;
+};
+
+/**
+ * Narrow a request to what the signed-in user's own row holds. A scope the user
+ * does not hold is dropped rather than refused (RFC 6749 §3.3 allows a narrower
+ * grant than requested); the caller refuses only an empty result.
+ */
+const narrowToSessionUser = async (userId, requested) => {
+  const user = await getRow('SELECT scopes FROM users WHERE id = ?', [userId]);
+  return intersectScopes(requested, userHeldScopes(user));
 };
 
 /**
@@ -130,12 +142,27 @@ router.get('/authorize', asyncHandler(async (req, res) => {
     return res.redirect(`/login?${params}`);
   }
 
+  // A client may be registered for more than the person signing in holds; the
+  // grant is bounded by both. Only an empty result is an error.
+  const granted = await narrowToSessionUser(req.session.user.id, requested);
+  if (granted.length === 0) {
+    logger.warn('[OAuth2] Requested scope not held by the authorizing user', {
+      client_id,
+      userId: req.session.user.id,
+      requested,
+    });
+    return redirectTo(res, redirect_uri, {
+      error: 'invalid_scope',
+      error_description: `The signed-in user does not hold the requested scope(s): ${requested.join(' ')}`,
+    }, state);
+  }
+
   // Auto-approve (simplified for internal use) and store state for CSRF protection
   if (state) {
     req.session.oauth2_state = state;
   }
 
-  const grantedScopes = formatScopes(requested);
+  const grantedScopes = formatScopes(granted);
   const code = await generateAuthCode(client_id, req.session.user.id, redirect_uri, grantedScopes);
 
   logger.info('[OAuth2] Authorization code generated', {

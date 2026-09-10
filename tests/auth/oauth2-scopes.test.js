@@ -17,16 +17,21 @@ import { describe, it, expect, beforeAll } from '@jest/globals';
 import request from 'supertest';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import { buildTestApp } from '../helpers/app.js';
 import { ensureAdminUserHash } from '../../src/auth/user.js';
 import { createClient } from '../../src/auth/oauth2/client.js';
+import { executeQuery } from '../../src/db/authDb.js';
 
 const REDIRECT_URI = 'http://localhost:5678/rest/oauth2-credential/callback';
 // Not a credential: generated per run, only ever lives in the test sqlite file.
 const TEST_CLIENT_SECRET = `test-client-secret-${crypto.randomUUID()}`;
+// Reuses the harness admin password rather than introducing another literal.
+const USER_PASSWORD = process.env.ADMIN_PASSWORD;
 
 let app;
 let agent;
+let userAgent;
 
 /** Register a fresh OAuth client with the given allowed scopes. */
 const registerClient = async (allowedScopes) => {
@@ -40,13 +45,28 @@ const registerClient = async (allowedScopes) => {
   return clientId;
 };
 
-const authorize = (clientId, query = {}) =>
-  agent.get('/oauth/authorize').query({
+/** Seed a plain (non-admin) user and return a logged-in agent for it. */
+const loginAsUser = async (scopes) => {
+  const username = `test-user-${crypto.randomUUID()}`;
+  const passwordHash = await bcrypt.hash(USER_PASSWORD, 12);
+  await executeQuery(
+    'INSERT INTO users (username, password_hash, role, scopes, is_active) VALUES (?, ?, ?, ?, TRUE)',
+    [username, passwordHash, 'user', scopes]
+  );
+  const loggedIn = request.agent(app);
+  await loggedIn.post('/login').send({ username, password: USER_PASSWORD });
+  return loggedIn;
+};
+
+const authorizeAs = (who, clientId, query = {}) =>
+  who.get('/oauth/authorize').query({
     client_id: clientId,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
     ...query,
   });
+
+const authorize = (clientId, query = {}) => authorizeAs(agent, clientId, query);
 
 const locationOf = (res) => new URL(res.headers.location);
 
@@ -66,6 +86,8 @@ beforeAll(async () => {
   await agent
     .post('/login')
     .send({ username: process.env.ADMIN_USER || 'admin', password: process.env.ADMIN_PASSWORD });
+  // A plain user holding only the legacy api scope — no admin, by role or scope.
+  userAgent = await loginAsUser('api');
 });
 
 describe('GET /oauth/authorize — requested scope vs allowed_scopes', () => {
@@ -148,6 +170,27 @@ describe('POST /oauth/token — granted scope and role', () => {
     expect(decoded.role).toBe('admin');
   });
 
+  it('keeps a narrow grant across a refresh instead of widening it', async () => {
+    // Granted `read` through a client that may grant the whole legacy api set.
+    // The refresh must narrow back to what was granted, not to what the user
+    // could have asked for — that is what the refresh token's scope claim is for.
+    const clientId = await registerClient('api');
+    const res = await authorize(clientId, { scope: 'read' });
+    const code = locationOf(res).searchParams.get('code');
+    const { body: tokens } = await exchangeCode(clientId, code);
+    expect(jwt.decode(tokens.access_token).scope).toBe('read');
+
+    const refreshed = await request(app).post('/oauth/token').type('form').send({
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refresh_token,
+      client_id: clientId,
+      client_secret: TEST_CLIENT_SECRET,
+    });
+
+    expect(refreshed.status).toBe(200);
+    expect(jwt.decode(refreshed.body.access_token).scope).toBe('read');
+  });
+
   it('re-intersects on refresh, dropping a scope the client does not allow', async () => {
     // The admin user's DB scopes are api,admin; this client only allows api.
     const clientId = await registerClient('api');
@@ -167,5 +210,46 @@ describe('POST /oauth/token — granted scope and role', () => {
     expect(decoded.scope).toBe('api');
     expect(decoded.scope).not.toContain('admin');
     expect(decoded.role).toBe('admin');
+  });
+});
+
+describe('a grant is bounded by the signed-in user, not only by the client', () => {
+  it('refuses a non-admin asking for admin through a client that allows it', async () => {
+    const clientId = await registerClient('api,admin');
+
+    const res = await authorizeAs(userAgent, clientId, { scope: 'admin' });
+
+    expect(locationOf(res).searchParams.get('error')).toBe('invalid_scope');
+    expect(locationOf(res).searchParams.get('code')).toBeNull();
+  });
+
+  it('drops admin from a mixed request and the token is refused by /admin', async () => {
+    const clientId = await registerClient('api,admin');
+
+    const res = await authorizeAs(userAgent, clientId, { scope: 'api admin' });
+    const code = locationOf(res).searchParams.get('code');
+    const tokenRes = await exchangeCode(clientId, code);
+
+    expect(tokenRes.status).toBe(200);
+    const decoded = jwt.decode(tokenRes.body.access_token);
+    expect(decoded.scope).toBe('api');
+    expect(decoded.role).toBe('user');
+
+    const adminRes = await request(app)
+      .get('/admin/oauth-clients')
+      .set('Accept', 'application/json')
+      .set({ Authorization: `Bearer ${tokenRes.body.access_token}` });
+
+    expect(adminRes.status).toBe(403);
+  });
+
+  it('still lets an admin user take the admin scope', async () => {
+    const clientId = await registerClient('api,admin');
+
+    const res = await authorize(clientId, { scope: 'admin' });
+    const code = locationOf(res).searchParams.get('code');
+    const tokenRes = await exchangeCode(clientId, code);
+
+    expect(jwt.decode(tokenRes.body.access_token).scope).toBe('admin');
   });
 });

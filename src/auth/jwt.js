@@ -67,8 +67,11 @@ export const issueTokens = async (userId, username, scopes = 'api', role = 'user
     { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: jti }
   );
 
+  // The refresh token carries the granted scope as well. Without it a refresh
+  // has nothing to narrow back to and falls back to the user's full DB scopes,
+  // which silently widens a grant that was deliberately issued narrow.
   const refreshToken = jwt.sign(
-    { user_id: userId, username, role, iss: JWT_ISSUER, aud: JWT_AUDIENCE },
+    { user_id: userId, username, role, scope: scopeString, scopes: scopeArray, iss: JWT_ISSUER, aud: JWT_AUDIENCE },
     JWT_REFRESH_SECRET,
     { expiresIn: `${REFRESH_TTL_SECONDS}s`, jwtid: `${jti}-refresh` }
   );

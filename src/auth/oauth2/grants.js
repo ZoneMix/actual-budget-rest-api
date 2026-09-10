@@ -6,14 +6,21 @@
  * readable on its own.
  *
  * Both grants re-derive the granted scope from the client's *current*
- * `allowed_scopes` rather than trusting what was stored at authorize time: a
- * client whose scopes were narrowed since must not keep minting the old ones.
+ * `allowed_scopes` AND the user's *current* `users.scopes` rather than trusting
+ * what was stored at authorize time: neither a client nor a user whose scopes
+ * were narrowed since may keep minting the old ones.
  */
 
 import jwt from 'jsonwebtoken';
 import { issueTokens, isTokenRevoked, revokeToken, JWT_VERIFY_OPTIONS } from '../jwt.js';
 import { validateAuthCode } from './code.js';
-import { clientAllowedScopes, formatScopes, intersectScopes, parseRequestedScopes } from './scopes.js';
+import {
+  clientAllowedScopes,
+  formatScopes,
+  intersectScopes,
+  parseRequestedScopes,
+  userHeldScopes,
+} from './scopes.js';
 import { getRow } from '../../db/authDb.js';
 import { JWT_REFRESH_SECRET } from '../../config/index.js';
 import { throwBadRequest, throwInternalError, throwUnauthorized } from '../../middleware/responseHelpers.js';
@@ -22,15 +29,18 @@ import logger, { logAuthEvent } from '../../logging/logger.js';
 const DEFAULT_ROLE = 'user';
 
 /**
- * Intersect a scope request with what the client may grant.
- * An empty intersection is refused rather than issued: a token with no scope
- * expands to the legacy `api` grant, which would *widen* it.
+ * Intersect a scope request with what the client may grant AND what the user
+ * holds. An empty intersection is refused rather than issued: a token with no
+ * scope expands to the legacy `api` grant, which would *widen* it.
  */
-const grantScopes = (client, requestedRaw) => {
-  const allowed = clientAllowedScopes(client);
-  const granted = intersectScopes(parseRequestedScopes(requestedRaw), allowed);
+const grantScopes = (client, user, requestedRaw) => {
+  const granted = intersectScopes(
+    parseRequestedScopes(requestedRaw),
+    clientAllowedScopes(client),
+    userHeldScopes(user)
+  );
   if (granted.length === 0) {
-    throwBadRequest('invalid_scope: the client is not allowed any of the requested scopes');
+    throwBadRequest('invalid_scope: the client and user do not share any of the requested scopes');
   }
   return formatScopes(granted);
 };
@@ -50,13 +60,15 @@ export const exchangeAuthorizationCode = async ({ client, clientId, code, redire
 
   logger.debug('[OAuth2] Authorization code validated', { clientId, userId, scope });
 
-  const user = await getRow('SELECT username, role FROM users WHERE id = ?', [userId]);
+  const user = await getRow('SELECT username, role, scopes FROM users WHERE id = ?', [userId]);
   if (!user) {
     logger.error('[OAuth2] User not found after code validation', { userId, clientId });
     throwInternalError('User not found');
   }
 
-  const grantedScopes = grantScopes(client, scope);
+  // Re-checked here, not only at authorize time: the user's scopes may have
+  // been narrowed in the ten minutes the code is valid for.
+  const grantedScopes = grantScopes(client, user, scope);
   const role = user.role || DEFAULT_ROLE;
   const tokens = await issueTokens(userId, user.username, grantedScopes, role);
 
@@ -103,7 +115,11 @@ export const exchangeRefreshToken = async ({ client, clientId, refreshToken }) =
     const { decoded, user } = await resolveRefreshSubject(refreshToken, clientId);
 
     const role = user.role || decoded.role || DEFAULT_ROLE;
-    const grantedScopes = grantScopes(client, user.scopes || decoded.scope);
+    // The refresh token's own scope claim is what was granted. Falling back to
+    // the user's DB scopes is only for refresh tokens minted before that claim
+    // existed; using it as the primary source would widen every narrow grant
+    // to everything the user could have asked for.
+    const grantedScopes = grantScopes(client, user, decoded.scope || user.scopes);
     const tokens = await issueTokens(decoded.user_id, user.username, grantedScopes, role);
 
     // Rotation: the presented refresh token dies with the new pair's issue.
