@@ -13,7 +13,8 @@ describe('errorHandler log hygiene', () => {
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
     const req = {
       id: 'rid', method: 'GET', originalUrl: '/v2/accounts?token=super-secret-value',
-      user: null, body: {}, query: {}, params: {}, ip: '127.0.0.1', get: jest.fn(() => 'ua'),
+      user: null, body: {}, query: { token: 'super-secret-value' }, params: {}, ip: '127.0.0.1',
+      get: jest.fn(() => 'ua'),
     };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis(), setHeader: jest.fn() };
 
@@ -21,6 +22,7 @@ describe('errorHandler log hygiene', () => {
 
     const [, meta] = warn.mock.calls[0];
     expect(meta.url).toBe('/v2/accounts');
+    expect(meta.queryKeys).toEqual(['token']);
     expect(JSON.stringify(meta)).not.toContain('super-secret-value');
     warn.mockRestore();
   });
