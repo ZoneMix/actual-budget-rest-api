@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm ci)",
+      "Bash(npm install)",
+      "Bash(npm run lint)",
+      "Bash(npm test)",
+      "Bash(npm run test:coverage)",
+      "Bash(npm run validate:openapi)"
+    ]
+  }
+}

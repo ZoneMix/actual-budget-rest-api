@@ -1,3 +1,10 @@
+# Local development stack. Every third-party image is pinned to an explicit
+# version rather than :latest, so `docker compose up` two months from now
+# reproduces the environment a bug was found in. actual-server is held at the
+# same 26.9.0 as the @actual-app/api in package.json — the SDK and the server
+# move in lockstep and a mismatch fails at sync time, not at startup.
+#
+# Bumping one of these is a deliberate commit, not a side effect of a pull.
 services:
   actual-rest-api-dev:
     build:
@@ -66,7 +73,7 @@ services:
         compress: "true"
 
   n8n-dev:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:2.39.2
     container_name: n8n-dev
     ports:
       - "5678:5678"
@@ -89,7 +96,7 @@ services:
 
   actual-server-dev:
     container_name: actual-server-dev
-    image: docker.io/actualbudget/actual-server:latest
+    image: docker.io/actualbudget/actual-server:26.9.0
     ports:
       - "5006:5006"
     environment:
@@ -111,7 +118,7 @@ services:
         compress: "true"
 
   prometheus-dev:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.13.3
     container_name: prometheus-dev
     ports:
       - "9090:9090"
@@ -136,7 +143,7 @@ services:
         compress: "true"
 
   grafana-dev:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.0.8
     container_name: grafana-dev
     ports:
       - "3001:3000"
