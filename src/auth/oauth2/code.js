@@ -3,7 +3,7 @@
  */
 
 import crypto from 'crypto';
-import { executeQuery, getRow, pruneExpiredCodes } from '../../db/authDb.js';
+import { executeQuery, getUnexpiredAuthCode, pruneExpiredCodes } from '../../db/authDb.js';
 import logger from '../../logging/logger.js';
 
 /**
@@ -41,6 +41,10 @@ const validateAuthCodeFormat = (code) => {
 /**
  * Validate and consume an authorization code.
  * Returns userId and scope.
+ *
+ * `pruneExpiredCodes()` is housekeeping that bounds the table, NOT the expiry
+ * check: `getUnexpiredAuthCode` carries the lifetime predicate itself, so a
+ * code past its ten minutes is refused whether or not the prune has run.
  */
 export const validateAuthCode = async (code, clientId, redirectUri) => {
   if (!validateAuthCodeFormat(code)) {
@@ -48,10 +52,7 @@ export const validateAuthCode = async (code, clientId, redirectUri) => {
     throw new Error('Invalid authorization code format');
   }
   await pruneExpiredCodes();
-  const row = await getRow(`
-    SELECT user_id, scope FROM auth_codes
-    WHERE code = ? AND client_id = ? AND redirect_uri = ?
-  `, [code, clientId, redirectUri]);
+  const row = await getUnexpiredAuthCode(code, clientId, redirectUri);
 
   if (!row) {
     logger.warn('[OAuth2] Invalid or expired authorization code', { clientId, redirectUri });
