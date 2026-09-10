@@ -12,8 +12,7 @@
 import express from 'express';
 import { getMetrics, resetMetrics, register } from '../middleware/metrics.js';
 import { authenticateJWT } from '../auth/jwt.js';
-import { requireScope } from '../auth/permissions.js';
-import { SCOPES } from '../auth/scopes.js';
+import { requireAdminRole } from '../auth/permissions.js';
 import { sendSuccess } from '../middleware/responseHelpers.js';
 import { NODE_ENV } from '../config/index.js';
 
@@ -81,12 +80,16 @@ router.get('/summary', (req, res) => {
  * Resets all metrics counters. Destroys observability data, so it is the one
  * metrics endpoint that is admin-only in every environment: the router-level
  * `authenticateJWT` above only applies in production, so outside production
- * this route authenticates on its own. The admin scope check follows
- * AUTH_SCOPE_ENFORCEMENT like every other requireScope() call.
+ * this route authenticates on its own.
+ *
+ * requireAdminRole() — not requireScope(SCOPES.ADMIN) — on purpose: the scope
+ * middleware is staged behind AUTH_SCOPE_ENFORCEMENT, and under the shipped
+ * `warn` default it would log a would-be denial and then let a non-admin reset
+ * the metrics anyway. A role gate is not part of that rollout.
  */
 const resetGuards = isProduction
-  ? [requireScope(SCOPES.ADMIN)]
-  : [authenticateJWT, requireScope(SCOPES.ADMIN)];
+  ? [requireAdminRole()]
+  : [authenticateJWT, requireAdminRole()];
 
 router.post('/reset', ...resetGuards, (req, res) => {
   resetMetrics();
