@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { SCOPES, expandScopes, hasScope, isAdmin } from '../../src/auth/scopes.js';
+import { SCOPES, expandScopes, hasScope, isAdmin, parseScopeList } from '../../src/auth/scopes.js';
 import { SCOPES as VALIDATION_SCOPE_NAMES } from '../../src/validation/constants.js';
 
 const sorted = (set) => [...set].sort();
@@ -22,6 +22,17 @@ describe('SCOPES', () => {
 
   it('stays in sync with the admin-schema scope enum', () => {
     expect(Object.values(SCOPES).sort()).toEqual([...VALIDATION_SCOPE_NAMES].sort());
+  });
+});
+
+describe('parseScopeList', () => {
+  it('splits on commas and whitespace without expanding or filtering', () => {
+    // The OAuth2 layer needs what was *requested*, unknown names included, so
+    // it can answer invalid_scope instead of silently dropping them.
+    expect(parseScopeList('read, write  admin')).toEqual(['read', 'write', 'admin']);
+    expect(parseScopeList(['read', ' write '])).toEqual(['read', 'write']);
+    expect(parseScopeList('superuser')).toEqual(['superuser']);
+    expect(parseScopeList(undefined)).toEqual([]);
   });
 });
 
