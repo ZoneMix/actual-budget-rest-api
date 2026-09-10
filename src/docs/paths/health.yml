@@ -69,10 +69,15 @@ health:
                         lastSyncError:
                           type: object
                           nullable: true
-                          description: Last sync failure, null while syncs are succeeding
+                          description: |
+                            Last sync failure, null while syncs are succeeding.
+                            In production only `at` is returned — the raw message can
+                            carry Actual server connection details and this endpoint
+                            is unauthenticated.
                           properties:
                             message:
                               type: string
+                              description: Error details (development only)
                               example: 'Failed to sync with Actual Budget server'
                             at:
                               type: string
