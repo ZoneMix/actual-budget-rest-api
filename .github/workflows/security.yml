@@ -1,17 +1,25 @@
 name: Security Checks
 
+# Every `uses:` is pinned to a full commit SHA (Dependabot keeps the pins + version
+# comments current). No floating @master/@main refs, no curl|sh installers.
+
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
   schedule:
-    - cron: '0 0 * * 0'  # Weekly vulnerability scan
+    - cron: '0 0 * * 0' # weekly, Sunday 00:00 UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
-  security-events: write
-  actions: read
-  pull-requests: write
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
 
 jobs:
   npm-audit:
@@ -19,207 +27,106 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run npm audit
+      - name: Audit production dependencies (blocking)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit all dependencies (report only)
         run: npm audit --audit-level=moderate
         continue-on-error: true
-
-      - name: Check for fixable vulnerabilities
-        run: npm audit fix --dry-run
-        continue-on-error: true
-
-  snyk-scan:
-    name: Snyk Vulnerability Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Snyk scan
-        uses: snyk/actions/node@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
-
-  container-scan:
-    name: Container Image Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          tags: budget-api:scan
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: budget-api:scan
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
-        if: >
-          always() && (
-            github.event_name != 'pull_request' ||
-            github.event.pull_request.head.repo.full_name == github.repository
-          )
-        with:
-          sarif_file: 'trivy-results.sarif'
-          category: 'trivy'
-
-  secret-scan:
-    name: Secret & Credential Detection
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Run gitleaks scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   eslint:
     name: ESLint Code Quality
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run ESLint
-        run: npx eslint src --max-warnings 0 --format json --output-file eslint-report.json || true
-        continue-on-error: true
+        run: npm run lint
 
-      - name: Comment on PR with ESLint results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const report = JSON.parse(fs.readFileSync('eslint-report.json', 'utf8'));
-            const issues = report.filter(f => f.messages.length > 0);
-            if (issues.length > 0) {
-              let comment = '## ESLint Issues\n\n';
-              issues.forEach(file => {
-                comment += `### ${file.filePath}\n`;
-                file.messages.forEach(msg => {
-                  comment += `- Line ${msg.line}: ${msg.message} (${msg.severity})\n`;
-                });
-              });
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
-
-  docker-build:
-    name: Docker Build Test
+  secret-scan:
+    name: Secret & Credential Detection
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+          GITLEAKS_ENABLE_SUMMARY: 'true'
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'true'
+
+  container-scan:
+    name: Container Image Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
-          tags: budget-api:test
+          push: false
+          load: true
+          tags: actual-rest-api:scan
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  dependency-check:
-    name: OWASP Dependency-Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Smoke the image
+        run: docker run --rm actual-rest-api:scan node --check src/server.js
 
-      - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@main
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          project: 'budget-automation'
-          path: '.'
-          format: 'SARIF'
-          args: >
-            --out reports
+          image-ref: actual-rest-api:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
 
-      - name: Upload Dependency-Check results
-        uses: github/codeql-action/upload-sarif@v4
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         if: >
           always() && (
             github.event_name != 'pull_request' ||
             github.event.pull_request.head.repo.full_name == github.repository
           )
         with:
-          sarif_file: 'reports/dependency-check-report.sarif'
-          category: 'dependency-check'
-
-  license-check:
-    name: License Compliance
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Check licenses
-        run: npx license-checker --onlyunknown
-        continue-on-error: true
-
-  summary:
-    name: Security Summary
-    runs-on: ubuntu-latest
-    needs: [npm-audit, snyk-scan, container-scan, secret-scan, eslint, docker-build]
-    if: always()
-    steps:
-      - name: Check security status
-        run: |
-          echo "Security checks completed!"
-          echo "Review the results above for any issues."
+          sarif_file: trivy-results.sarif
+          category: trivy
