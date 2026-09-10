@@ -31,6 +31,7 @@ export const ACTUAL_FILE_PASSWORD = env.ACTUAL_FILE_PASSWORD;
 // Actual engine queue & sync policy tuning
 export const ACTUAL_QUEUE_MAX_DEPTH = env.ACTUAL_QUEUE_MAX_DEPTH;
 export const ACTUAL_OP_TIMEOUT_MS = env.ACTUAL_OP_TIMEOUT_MS;
+export const ACTUAL_LOAD_TIMEOUT_MS = env.ACTUAL_LOAD_TIMEOUT_MS;
 export const ACTUAL_SYNC_MIN_INTERVAL_MS = env.ACTUAL_SYNC_MIN_INTERVAL_MS;
 
 // ActualQL query limits (POST /v2/query)

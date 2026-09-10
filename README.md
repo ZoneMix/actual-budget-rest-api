@@ -129,7 +129,10 @@ Every call into the embedded engine is serialised through one queue. Pending
 operations beyond `ACTUAL_QUEUE_MAX_DEPTH` are rejected with 503 rather than
 queued forever, and a caller waiting longer than `ACTUAL_OP_TIMEOUT_MS` gets
 504 — the engine call itself is not cancelled and keeps its slot until it
-settles.
+settles. `POST /v2/budget/load` and `POST /v2/budget/export` move the whole
+ledger over the network, so they run under the longer `ACTUAL_LOAD_TIMEOUT_MS`
+instead: timing one out would free nothing and just leave the queue blocked
+behind a call still running.
 
 ## Requirements
 - Node.js 22+ and npm
@@ -428,6 +431,7 @@ variables abort startup with a message naming the variable.
 |---|---|---|
 | `ACTUAL_QUEUE_MAX_DEPTH` | `100` | Pending engine operations above this are rejected with 503. |
 | `ACTUAL_OP_TIMEOUT_MS` | `60000` | Per-operation caller timeout; on expiry the caller gets 504 and the engine call keeps its slot. |
+| `ACTUAL_LOAD_TIMEOUT_MS` | `300000` | Caller timeout for `POST /v2/budget/load` and `POST /v2/budget/export`, which move the whole ledger and outrun the ordinary one. |
 | `ACTUAL_SYNC_MIN_INTERVAL_MS` | `5000` | Minimum age of the last sync before a read triggers another. `0` syncs before every read. See [Sync semantics](#sync-semantics). |
 
 ### Database (auth: users, tokens, OAuth clients — not the budget)

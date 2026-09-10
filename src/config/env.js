@@ -68,6 +68,11 @@ const envSchema = z.object({
   ACTUAL_QUEUE_MAX_DEPTH: z.string().transform(Number).pipe(z.number().int().positive()).default(100),
   // Per-operation caller timeout; the engine call itself is NOT cancelled (504 to the caller)
   ACTUAL_OP_TIMEOUT_MS: z.string().transform(Number).pipe(z.number().int().positive()).default(60000),
+  // Per-operation timeout for the budget-file calls that move the whole ledger
+  // (load, export). They are network-bound and legitimately slower than
+  // ACTUAL_OP_TIMEOUT_MS, and a timeout holds the queue slot until the engine
+  // call settles — so they get a longer budget rather than wedging the queue.
+  ACTUAL_LOAD_TIMEOUT_MS: z.string().transform(Number).pipe(z.number().int().positive()).default(300000),
   // Minimum age of the last successful sync before a read triggers another one
   ACTUAL_SYNC_MIN_INTERVAL_MS: z.string().transform(Number).pipe(z.number().int().nonnegative()).default(5000),
 

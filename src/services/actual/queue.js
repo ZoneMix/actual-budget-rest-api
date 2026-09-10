@@ -60,7 +60,7 @@ export const createEngineQueue = ({
 
   const getQueueDepth = () => depth;
 
-  const enqueue = (label, fn) => {
+  const enqueue = (label, fn, callTimeoutMs) => {
     depth += 1;
 
     const settled = tail.then(() => engineContext.run({ label }, () => fn()));
@@ -72,12 +72,22 @@ export const createEngineQueue = ({
       depth -= 1;
     });
 
-    return withTimeout(tracked, label, timeoutMs);
+    return withTimeout(tracked, label, callTimeoutMs ?? timeoutMs);
   };
 
-  const withEngine = (label, fn) => {
+  /**
+   * @param {string} label - operation name, used for logs and metrics
+   * @param {function} fn - the engine call
+   * @param {object} [options]
+   * @param {number} [options.timeoutMs] - caller-side budget for THIS call,
+   *   overriding the queue default. The slow whole-ledger operations
+   *   (budget load/export) raise it; a timeout never cancels the engine call,
+   *   so shortening the default for everyone else is not the alternative.
+   */
+  const withEngine = (label, fn, { timeoutMs: callTimeoutMs } = {}) => {
     if (engineContext.getStore()) {
-      // Already inside an engine task: run inline, never enqueue.
+      // Already inside an engine task: run inline, never enqueue. The outer
+      // task already owns a timeout; a second one here would race it.
       return (async () => fn())();
     }
 
@@ -90,7 +100,7 @@ export const createEngineQueue = ({
       );
     }
 
-    return enqueue(label, fn);
+    return enqueue(label, fn, callTimeoutMs);
   };
 
   return { withEngine, withEngineExclusive: withEngine, getQueueDepth };
@@ -99,7 +109,7 @@ export const createEngineQueue = ({
 const defaultQueue = createEngineQueue();
 
 /** Enqueues a single engine operation behind every earlier one. */
-export const withEngine = (label, fn) => defaultQueue.withEngine(label, fn);
+export const withEngine = (label, fn, options) => defaultQueue.withEngine(label, fn, options);
 
 /**
  * Alias of `withEngine`, kept as a distinct name so batch operations

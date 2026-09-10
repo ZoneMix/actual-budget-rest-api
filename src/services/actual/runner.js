@@ -101,8 +101,12 @@ const syncAfterWrite = async (instance, label) => {
  * @param {boolean} [options.force] - force a pre-read sync regardless of interval
  * @param {boolean} [options.syncBefore] - write mode only: also sync before fn,
  *   for a read-modify-write that must not merge onto a stale copy
+ * @param {number} [options.timeoutMs] - caller-side budget for this call,
+ *   overriding ACTUAL_OP_TIMEOUT_MS. Raised for the whole-ledger operations
+ *   (budget load/export), which are network-bound and would otherwise time out
+ *   and hold the queue slot until the engine call settled anyway.
  */
-export const runWithApi = async (label, fn, { mode = 'read', force = false, syncBefore = false } = {}) =>
+export const runWithApi = async (label, fn, { mode = 'read', force = false, syncBefore = false, timeoutMs } = {}) =>
   withEngine(label, async () => {
     const started = Date.now();
     queueDepth.set(getQueueDepth());
@@ -142,4 +146,4 @@ export const runWithApi = async (label, fn, { mode = 'read', force = false, sync
       opDuration.observe({ label, mode, outcome }, duration / 1000);
       queueDepth.set(getQueueDepth());
     }
-  });
+  }, { timeoutMs });

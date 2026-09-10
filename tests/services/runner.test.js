@@ -21,6 +21,37 @@ const metricTotal = async (name) => {
   return values.reduce((sum, entry) => sum + entry.value, 0);
 };
 
+/**
+ * A per-call timeoutMs overrides the queue default. POST /v2/budget/load is
+ * network-bound and a timeout there holds the slot until the engine settles,
+ * so the slow calls get a longer budget rather than everything else a shorter
+ * one.
+ */
+describe('runWithApi timeoutMs', () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  beforeEach(async () => {
+    __reset();
+    await getActualApi();
+    __reset();
+  });
+
+  it('rejects a 40 ms task given a 20 ms budget', async () => {
+    await expect(
+      runWithApi('slow-op', () => sleep(40), { timeoutMs: 20 })
+    ).rejects.toMatchObject({ status: 504 });
+  });
+
+  it('leaves the same task alone on the default budget', async () => {
+    await expect(
+      runWithApi('slow-op', async () => {
+        await sleep(40);
+        return 'finished';
+      })
+    ).resolves.toBe('finished');
+  });
+});
+
 describe('runWithApi', () => {
   beforeEach(async () => {
     __reset();
