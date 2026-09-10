@@ -4,7 +4,7 @@
  */
 
 import jwt from 'jsonwebtoken';
-import { isTokenRevoked } from './jwt.js';
+import { isTokenRevoked, JWT_VERIFY_OPTIONS } from './jwt.js';
 import { JWT_SECRET } from '../config/index.js';
 
 /**
@@ -20,7 +20,7 @@ export const authenticateForDocs = (req, res, next) => {
     // Use existing JWT middleware logic
     try {
       // Verify token first (decode doesn't verify signature)
-      const payload = jwt.verify(token, JWT_SECRET);
+      const payload = jwt.verify(token, JWT_SECRET, JWT_VERIFY_OPTIONS);
       // Then check if token is revoked
       if (payload && !isTokenRevoked(payload.jti)) {
         req.user = payload;
