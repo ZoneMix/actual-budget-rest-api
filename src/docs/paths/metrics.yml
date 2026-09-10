@@ -87,8 +87,12 @@ metricsReset:
       - Testing and development
       - Periodic metric resets
       - Troubleshooting
-      
-      **Note**: Requires JWT authentication. Admin access recommended.
+
+      **Admin only**, in every `AUTH_SCOPE_ENFORCEMENT` mode. Resetting
+      destroys observability data, so the check does not take part in the
+      staged scope rollout — a caller without the `admin` scope gets 403 even
+      under the default `warn` mode. The token must also carry `admin`: an
+      admin user holding a deliberately narrow token is refused.
     operationId: resetMetrics
     security:
       - bearerAuth: []
@@ -112,4 +116,53 @@ metricsReset:
           application/json:
             schema:
               $ref: '../components/schemas.yml#/Error'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+metricsPrometheus:
+  get:
+    tags:
+      - Metrics
+    summary: Scrape metrics in Prometheus text format
+    description: |
+      The `prom-client` registry rendered as Prometheus exposition text, for a
+      scrape job to poll.
+
+      **Note**: in production this endpoint requires JWT authentication, like
+      the other metrics endpoints — the router authenticates every route under
+      `/v2/metrics` when `NODE_ENV=production`. A scrape job must therefore
+      present a bearer token, or reach the process on an unauthenticated
+      internal listener. Outside production it is open.
+
+      The payload is request counters and timings; it carries no ledger data.
+    operationId: getPrometheusMetrics
+    security:
+      - bearerAuth: []
+    responses:
+      '200':
+        description: Prometheus exposition text
+        content:
+          text/plain:
+            schema:
+              type: string
+            example: |
+              # HELP http_requests_total Total HTTP requests
+              # TYPE http_requests_total counter
+              http_requests_total{method="GET",route="/v2/accounts",status="200"} 42
+      '401':
+        description: Unauthorized (production only)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      '500':
+        description: The registry could not be rendered
+        content:
+          text/plain:
+            schema:
+              type: string
 

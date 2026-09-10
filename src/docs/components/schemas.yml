@@ -24,18 +24,26 @@ Success:
       example: true
 Account:
   type: object
+  description: >-
+    An Actual account, shaped after the engine's own APIAccountEntity. There is
+    no account `type` field — Actual distinguishes accounts by `offbudget`, not
+    by a checking/savings kind.
   properties:
     id:
       type: string
+      example: 11111111-1111-4111-8111-111111111111
     name:
       type: string
-    type:
-      type: string
-      enum: [checking, savings, credit, investment, mortgage, debt, other]
+      example: Checking
     offbudget:
       type: boolean
+      description: Tracked outside the budget (investments, loans).
     closed:
       type: boolean
+    account_group_id:
+      type: string
+      nullable: true
+      description: The sidebar folder this account sits in, or null for none.
 Transaction:
   type: object
   properties:
@@ -56,6 +64,8 @@ Transaction:
     account:
       type: string
     cleared:
+      type: boolean
+    reconciled:
       type: boolean
     subtransactions:
       type: array
@@ -81,39 +91,60 @@ Transaction:
 
 NewTransaction:
   type: object
+  description: >-
+    A transaction in a create or import body. The account comes from the URL,
+    so there is no `account` field here.
+  required: [amount]
   properties:
     amount:
       type: integer
-    payee:
-      type: string
-    payee_name:
-      type: string
-      description: Only valid in create/import; creates or matches a payee
-    imported_payee:
-      type: string
-    notes:
-      type: string
+      description: Minor units (cents); negative for money out.
     date:
       type: string
       format: date
-    category:
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+      description: Defaults to today in the engine when omitted.
+    payee:
+      type: string
+      description: Payee id.
+    payee_name:
+      type: string
+      description: Only valid in create/import; creates or matches a payee.
+    imported_payee:
       type: string
     imported_id:
       type: string
+      description: Bank-provided unique id; import uses it to avoid duplicates.
+    notes:
+      type: string
+      maxLength: 1000
+    category:
+      type: string
+      nullable: true
+    cleared:
+      type: boolean
+    reconciled:
+      type: boolean
     transfer_id:
       type: string
-    cleared:
+      nullable: true
+    starting_balance_flag:
       type: boolean
     subtransactions:
       type: array
+      description: Splits. Their amounts must sum to the parent amount.
       items:
         type: object
+        required: [amount]
         properties:
           amount:
             type: integer
           category:
             type: string
+            nullable: true
           notes:
+            type: string
+          payee:
             type: string
 Category:
   type: object
@@ -142,8 +173,34 @@ Payee:
       type: string
     transfer_acct:
       type: string
+ScheduleDate:
+  description: >-
+    When a schedule falls due: either a single `YYYY-MM-DD` calendar date, or a
+    recurrence object. There is no separate `recur`/`frequency` field on a
+    schedule — the recurrence IS the date.
+  oneOf:
+    - type: string
+      format: date
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+      example: '2026-11-15'
+    - $ref: '#/RecurConfig'
+ScheduleAmount:
+  description: >-
+    Minor units (cents), negative for money out. A `{ num1, num2 }` range is
+    accepted, and is what `amountOp: isbetween` matches against.
+  oneOf:
+    - type: integer
+      example: -120000
+    - type: object
+      required: [num1, num2]
+      properties:
+        num1:
+          type: integer
+        num2:
+          type: integer
 Schedule:
   type: object
+  description: A schedule as the engine returns it.
   properties:
     id:
       type: string
@@ -151,8 +208,10 @@ Schedule:
       type: string
     rule:
       type: string
+      description: Id of the rule the engine maintains behind the schedule.
     next_date:
       type: string
+      format: date
     completed:
       type: boolean
     posts_transaction:
@@ -164,33 +223,124 @@ Schedule:
       type: string
       nullable: true
     amount:
-      type: integer
-      description: Amount in cents; see amountOp for behavior
+      $ref: '#/ScheduleAmount'
     amountOp:
       type: string
       enum: [is, isapprox, isbetween]
     date:
+      $ref: '#/ScheduleDate'
+RuleCondition:
+  type: object
+  description: >-
+    One test a transaction must satisfy. The field/op lists are the rule
+    engine's own, pinned against the installed @actual-app/api by
+    tests/validation/constants.test.js.
+  required: [field, op]
+  properties:
+    field:
       type: string
-      format: date
-      description: Either a single date or omitted when using recurrence
-    recur:
-      $ref: '#/RecurConfig'
+      enum:
+        - imported_payee
+        - payee
+        - payee_name
+        - date
+        - notes
+        - amount
+        - category
+        - category_group
+        - account
+        - cleared
+        - reconciled
+        - saved
+        - transfer
+        - parent
+      example: payee
+    op:
+      type: string
+      enum:
+        - is
+        - isNot
+        - oneOf
+        - notOneOf
+        - contains
+        - doesNotContain
+        - matches
+        - gt
+        - gte
+        - lt
+        - lte
+        - isapprox
+        - isbetween
+        - hasTags
+        - hasAnyTag
+        - onBudget
+        - offBudget
+      example: is
+    value:
+      description: >-
+        The comparison value. Its kind follows from field and op — an id, a
+        string, a number of minor units, a date, a boolean, or an array for
+        oneOf/notOneOf.
+    type:
+      type: string
+      enum: [id, string, number, date, boolean]
+      description: Optional hint for how to parse `value`.
+    options:
+      type: object
+      description: >-
+        Engine-specific extras — a date condition carries `{ "month": true }`
+        to compare only the month, for example.
+      additionalProperties: true
+RuleAction:
+  type: object
+  description: What the rule does to a transaction that matches.
+  required: [op]
+  properties:
+    op:
+      type: string
+      enum:
+        - set
+        - set-split-amount
+        - link-schedule
+        - prepend-notes
+        - append-notes
+        - delete-transaction
+      example: set
+    field:
+      type: string
+      description: The transaction field to write. Omitted by ops that take no field.
+      example: category
+    value:
+      description: The value to write.
+    type:
+      type: string
+    options:
+      type: object
+      additionalProperties: true
 Rule:
   type: object
+  description: A rule as the engine returns it.
   properties:
     id:
       type: string
-    conditions:
-      type: array
-      items:
-        type: object
-    actions:
-      type: array
-      items:
-        type: object
     stage:
       type: string
       enum: [pre, default, post]
+      description: >-
+        When the rule runs relative to the others. Rules created without a
+        stage get `default`.
+    conditionsOp:
+      type: string
+      enum: [and, or]
+      description: How the conditions combine. The engine defaults it to `and`.
+    conditions:
+      type: array
+      items:
+        $ref: '#/RuleCondition'
+    actions:
+      type: array
+      items:
+        $ref: '#/RuleAction'
 AuthTokens:
   type: object
   properties:
@@ -229,9 +379,22 @@ CreateAccountRequest:
         offbudget:
           type: boolean
           example: true
+        offBudget:
+          type: boolean
+          deprecated: true
+          description: >-
+            Deprecated camelCase alias for `offbudget`; removed in 3.0.0. Folded
+            into `offbudget` before validation, and ignored when both are sent.
         closed:
           type: boolean
           example: false
+        account_group_id:
+          type: string
+          nullable: true
+          description: >-
+            Sidebar folder for the account. Actual's create call ignores it, so
+            the wrapper applies it with a follow-up update — see the endpoint
+            description.
     initialBalance:
       type: integer
       description: Initial balance in cents (1000 = $10.00)
@@ -239,9 +402,13 @@ CreateAccountRequest:
 UpdateAccountRequest:
   type: object
   required: [fields]
+  description: >-
+    A partial update. At least one field must be present; an empty `fields`
+    object is a 400.
   properties:
     fields:
       type: object
+      minProperties: 1
       properties:
         name:
           type: string
@@ -249,35 +416,57 @@ UpdateAccountRequest:
         offbudget:
           type: boolean
           example: false
+        offBudget:
+          type: boolean
+          deprecated: true
+          description: Deprecated camelCase alias for `offbudget`; removed in 3.0.0.
         closed:
           type: boolean
           example: false
+        account_group_id:
+          type: string
+          nullable: true
+          description: Move the account to this sidebar folder, or null to remove it.
 RecurConfig:
   type: object
+  description: A recurrence, used as the `date` of a repeating schedule.
+  required: [start, frequency]
   properties:
+    start:
+      type: string
+      format: date
+      description: First occurrence, YYYY-MM-DD.
+      example: '2026-10-01'
     frequency:
       type: string
       enum: [daily, weekly, monthly, yearly]
     interval:
       type: integer
+      minimum: 1
+      description: Repeat every N periods. Defaults to 1 in the engine.
     patterns:
       type: array
+      description: Engine-defined refinements, e.g. day-of-month or nth-weekday rules.
       items:
         type: object
     skipWeekend:
       type: boolean
-    start:
+      description: Move an occurrence that lands on a weekend, per weekendSolveMode.
+    weekendSolveMode:
       type: string
+      enum: [before, after]
     endMode:
       type: string
-      enum: [never, after_n_occurrences, on_date]
+      description: >-
+        How the recurrence stops. The engine's own values are `never`,
+        `after_n_occurrences` and `on_date`; any string is forwarded, so an
+        unknown one is the engine's error, not a 400.
+      example: never
     endOccurrences:
       type: integer
     endDate:
       type: string
-    weekendSolveMode:
-      type: string
-      enum: [before, after]
+      format: date
 
 CloseAccountRequest:
   type: object

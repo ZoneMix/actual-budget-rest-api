@@ -2,3 +2,24 @@ bearerAuth:
   type: http
   scheme: bearer
   bearerFormat: JWT
+  description: |
+    A JWT access token from `POST /v2/auth/login` or the OAuth2 token endpoint,
+    sent as `Authorization: Bearer <token>`.
+
+    **Scopes** are nested — a wider scope implies every narrower one:
+
+    | Scope | Grants |
+    |---|---|
+    | `read` | Every GET, plus `POST /v2/query` (a read over POST). |
+    | `write` | Everything `read` grants, plus creates, updates and deletes. |
+    | `admin` | Everything `write` grants, plus the admin-only operations. |
+
+    The legacy scope `api` is still issued and still accepted; it expands to
+    `read` + `write`. Tokens minted by `POST /v2/auth/login` for an admin user
+    carry `api,admin`.
+
+    Enforcement is staged by `AUTH_SCOPE_ENFORCEMENT`: under the shipped
+    default `warn` a scope denial is logged and the request proceeds, under
+    `enforce` it is a 403, and under `off` the check is skipped. Operations
+    marked **admin only** below do not take part in that rollout — they check
+    the admin scope directly and answer 403 in every mode.

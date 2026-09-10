@@ -1,7 +1,11 @@
 openapi: 3.0.0
 info:
   title: Actual Budget REST API
-  version: 1.0.0
+  # No `version` here on purpose. It is injected from package.json by
+  # src/config/swagger.js (which serves /docs) and by
+  # scripts/validate-openapi.mjs, so the release version is maintained in
+  # exactly one place. A copy here would drift the first time one is bumped
+  # without the other.
   description: |
     REST API wrapper for Actual Budget with OAuth2 integration for n8n.
     
@@ -51,6 +55,8 @@ paths:
     $ref: './paths/metrics.yml#/metricsSummary'
   /v2/metrics/reset:
     $ref: './paths/metrics.yml#/metricsReset'
+  /v2/metrics/prometheus:
+    $ref: './paths/metrics.yml#/metricsPrometheus'
   /v2/auth/login:
     $ref: './paths/authentication.yml#/authLogin'
   /v2/auth/logout:
@@ -142,6 +148,8 @@ paths:
   # Non-versioned endpoints (no /v2 prefix)
   /login:
     $ref: './paths/authentication.yml#/loginForm'
+  /logout:
+    $ref: './paths/authentication.yml#/logoutForm'
   /oauth/authorize:
     $ref: './paths/oauth2.yml#/oauthAuthorize'
   /oauth/token:

@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 import path from 'path';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import swaggerUi from 'swagger-ui-express';
@@ -7,7 +8,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const specPath = path.join(__dirname, '../docs/openapi.yml');
-const baseSpecs = await SwaggerParser.dereference(specPath);
+const packagePath = path.join(__dirname, '../../package.json');
+
+// src/docs/openapi.yml deliberately carries no info.version: a second copy of
+// the version drifts from package.json the first time one of them is bumped
+// alone. It is injected here and in scripts/validate-openapi.mjs instead.
+const { version } = JSON.parse(readFileSync(packagePath, 'utf8'));
+
+const parsedSpecs = await SwaggerParser.dereference(specPath);
+const baseSpecs = { ...parsedSpecs, info: { ...parsedSpecs.info, version } };
 
 /**
  * Creates a dynamic Swagger spec with server URL based on the request.

@@ -68,12 +68,17 @@ accountTransactions:
             properties:
               transactions:
                 type: array
+                minItems: 1
                 items:
                   $ref: '../components/schemas.yml#/NewTransaction'
               runTransfers:
                 type: boolean
+                default: false
+                description: Resolve transfer pairs after adding.
               learnCategories:
                 type: boolean
+                default: false
+                description: Let the engine learn payee-to-category from these rows.
     responses:
       201:
         description: Transactions added
@@ -142,6 +147,7 @@ accountTransactionsImport:
             properties:
               transactions:
                 type: array
+                minItems: 1
                 items:
                   $ref: '../components/schemas.yml#/NewTransaction'
               opts:
@@ -216,18 +222,55 @@ transactionById:
             properties:
               fields:
                 type: object
+                minProperties: 1
+                description: >-
+                  At least one field must be present; an empty object is a 400.
+                  Every field of a new transaction is writable except the
+                  account, which a transaction cannot be moved between.
                 properties:
                   amount:
                     type: integer
-                  payee:
-                    type: string
-                  notes:
-                    type: string
                   date:
                     type: string
                     format: date
+                  payee:
+                    type: string
+                  payee_name:
+                    type: string
+                  imported_payee:
+                    type: string
+                  imported_id:
+                    type: string
+                  notes:
+                    type: string
+                    maxLength: 1000
                   category:
                     type: string
+                    nullable: true
+                  cleared:
+                    type: boolean
+                  reconciled:
+                    type: boolean
+                  transfer_id:
+                    type: string
+                    nullable: true
+                  starting_balance_flag:
+                    type: boolean
+                  subtransactions:
+                    type: array
+                    items:
+                      type: object
+                      required: [amount]
+                      properties:
+                        amount:
+                          type: integer
+                        category:
+                          type: string
+                          nullable: true
+                        notes:
+                          type: string
+                        payee:
+                          type: string
     responses:
       200:
         description: Transaction updated

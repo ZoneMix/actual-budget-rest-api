@@ -3,7 +3,10 @@ adminOAuthClients:
     summary: List all OAuth clients
     description: |
       Returns a list of all OAuth clients (without secrets).
-      Requires admin authentication via JWT.
+      **Admin only.** The bearer token must be for an admin user AND carry the
+      `admin` scope: a deliberately narrow token issued to an admin through an
+      api-only OAuth client is refused. Enforced in every
+      `AUTH_SCOPE_ENFORCEMENT` mode.
     tags: [Admin]
     security:
       - bearerAuth: []
@@ -46,7 +49,10 @@ adminOAuthClients:
     description: |
       Creates a new OAuth client. If client_secret is not provided, a secure secret will be auto-generated.
       The plain secret is only returned once on creation - save it immediately.
-      Requires admin authentication via JWT.
+      **Admin only.** The bearer token must be for an admin user AND carry the
+      `admin` scope: a deliberately narrow token issued to an admin through an
+      api-only OAuth client is refused. Enforced in every
+      `AUTH_SCOPE_ENFORCEMENT` mode.
     tags: [Admin]
     security:
       - bearerAuth: []
@@ -126,7 +132,10 @@ adminOAuthClientById:
     summary: Get a specific OAuth client
     description: |
       Returns information about a specific OAuth client (without secret).
-      Requires admin authentication via JWT.
+      **Admin only.** The bearer token must be for an admin user AND carry the
+      `admin` scope: a deliberately narrow token issued to an admin through an
+      api-only OAuth client is refused. Enforced in every
+      `AUTH_SCOPE_ENFORCEMENT` mode.
     tags: [Admin]
     security:
       - bearerAuth: []
@@ -180,7 +189,10 @@ adminOAuthClientById:
     summary: Update an OAuth client
     description: |
       Updates an existing OAuth client. If client_secret is provided, it will be hashed and stored.
-      Requires admin authentication via JWT.
+      **Admin only.** The bearer token must be for an admin user AND carry the
+      `admin` scope: a deliberately narrow token issued to an admin through an
+      api-only OAuth client is refused. Enforced in every
+      `AUTH_SCOPE_ENFORCEMENT` mode.
     tags: [Admin]
     security:
       - bearerAuth: []
@@ -263,7 +275,10 @@ adminOAuthClientById:
     summary: Delete an OAuth client
     description: |
       Deletes an OAuth client. This action cannot be undone.
-      Requires admin authentication via JWT.
+      **Admin only.** The bearer token must be for an admin user AND carry the
+      `admin` scope: a deliberately narrow token issued to an admin through an
+      api-only OAuth client is refused. Enforced in every
+      `AUTH_SCOPE_ENFORCEMENT` mode.
     tags: [Admin]
     security:
       - bearerAuth: []

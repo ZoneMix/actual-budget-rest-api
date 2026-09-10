@@ -101,7 +101,11 @@ router.post('/reset', ...resetGuards, (req, res) => {
  * GET /metrics/prometheus
  *
  * Returns metrics in Prometheus format for scraping.
- * This endpoint is typically not protected as Prometheus needs to scrape it.
+ *
+ * Not exempt from the router-level `authenticateJWT` above: in production a
+ * scrape job must present a bearer token like any other caller. Leaving it
+ * open would publish request volumes and route names to anyone who can reach
+ * the port, and the endpoint is not worth a second auth path.
  */
 router.get('/prometheus', async (req, res) => {
   try {

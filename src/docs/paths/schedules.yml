@@ -25,16 +25,30 @@ schedules:
                   schedules:
                     - id: sch-1
                       name: Rent
-                      amount: 120000
-                      date: 2025-01-01
-                      frequency: monthly
+                      amount: -120000
+                      amountOp: is
+                      next_date: '2026-10-01'
+                      posts_transaction: true
+                      completed: false
+                      date:
+                        start: '2026-01-01'
+                        frequency: monthly
+                        interval: 1
                     - id: sch-2
-                      name: Payday
-                      amount: 300000
-                      date: 2025-01-15
-                      frequency: monthly
+                      name: Annual insurance
+                      amount: -84000
+                      amountOp: is
+                      next_date: '2026-11-15'
+                      posts_transaction: false
+                      completed: false
+                      date: '2026-11-15'
   post:
     summary: Create schedule
+    description: >-
+      `date` is either a single calendar date or a recurrence object — there is
+      no separate `recur` or `frequency` field; the recurrence lives inside
+      `date`. `amount` is a number of minor units, or a `{ num1, num2 }` range
+      when `amountOp` is `isbetween`.
     tags: [Schedules]
     security:
       - bearerAuth: []
@@ -52,16 +66,60 @@ schedules:
                 properties:
                   name:
                     type: string
-                  amount:
-                    type: integer
+                    maxLength: 255
                   date:
+                    $ref: '../components/schemas.yml#/ScheduleDate'
+                  _date:
+                    deprecated: true
+                    description: >-
+                      Deprecated alias for `date`; removed in 3.0.0. Renamed to
+                      `date` before validation, and ignored when `date` is also
+                      present.
+                    allOf:
+                      - $ref: '../components/schemas.yml#/ScheduleDate'
+                  amount:
+                    $ref: '../components/schemas.yml#/ScheduleAmount'
+                  amountOp:
                     type: string
-                    format: date
-                  recur:
-                    $ref: '../components/schemas.yml#/RecurConfig'
-                  frequency:
+                    enum: [is, isapprox, isbetween]
+                    default: is
+                    description: >-
+                      How `amount` is matched. Defaults to `is` when omitted, so
+                      a created schedule always has one.
+                  account:
                     type: string
-                    enum: [daily, weekly, monthly, yearly]
+                    description: Account id the schedule posts to.
+                  payee:
+                    type: string
+                    description: Payee id.
+                  posts_transaction:
+                    type: boolean
+                    description: >-
+                      Whether the engine posts the transaction automatically on
+                      the due date instead of only proposing it.
+          examples:
+            monthlyRent:
+              summary: A recurring schedule
+              value:
+                schedule:
+                  name: Rent
+                  amount: -120000
+                  amountOp: is
+                  account: 11111111-1111-4111-8111-111111111111
+                  payee: 22222222-2222-4222-8222-222222222222
+                  posts_transaction: true
+                  date:
+                    start: '2026-10-01'
+                    frequency: monthly
+                    interval: 1
+                    skipWeekend: false
+            oneOff:
+              summary: A single-date schedule
+              value:
+                schedule:
+                  name: Annual insurance
+                  amount: -84000
+                  date: '2026-11-15'
     responses:
       201:
         description: Schedule created
@@ -111,17 +169,33 @@ scheduleById:
             properties:
               fields:
                 type: object
+                minProperties: 1
+                description: >-
+                  At least one field must be present; an empty object is a 400.
+                  Unlike create, `amountOp` has no default here — omitting it
+                  leaves the stored value alone.
                 properties:
                   name:
                     type: string
-                  amount:
-                    type: integer
+                    maxLength: 255
                   date:
+                    $ref: '../components/schemas.yml#/ScheduleDate'
+                  _date:
+                    deprecated: true
+                    description: Deprecated alias for `date`; removed in 3.0.0.
+                    allOf:
+                      - $ref: '../components/schemas.yml#/ScheduleDate'
+                  amount:
+                    $ref: '../components/schemas.yml#/ScheduleAmount'
+                  amountOp:
                     type: string
-                    format: date
-                  frequency:
+                    enum: [is, isapprox, isbetween]
+                  account:
                     type: string
-                    enum: [daily, weekly, monthly, yearly]
+                  payee:
+                    type: string
+                  posts_transaction:
+                    type: boolean
     responses:
       200:
         description: Schedule updated
@@ -141,9 +215,13 @@ scheduleById:
                   schedule:
                     id: sch-xyz
                     name: Rent (updated)
-                    amount: 125000
-                    date: 2025-02-01
-                    frequency: monthly
+                    amount: -125000
+                    amountOp: is
+                    next_date: '2026-11-01'
+                    date:
+                      start: '2026-01-01'
+                      frequency: monthly
+                      interval: 1
   delete:
     summary: Delete schedule
     tags: [Schedules]
