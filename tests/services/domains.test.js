@@ -139,6 +139,12 @@ describe('domain services', () => {
         'budgetResetHold', 'rulesList', 'payeeRulesList', 'ruleCreate', 'ruleUpdate',
         'ruleDelete', 'schedulesList', 'scheduleCreate', 'scheduleUpdate', 'scheduleDelete',
         'runActualQuery', 'getIdByName', 'initActualApi', 'getActualApi', 'shutdownActualApi',
+        // Phase G additions
+        'tagsList', 'tagCreate', 'tagUpdate', 'tagDelete', 'noteGet', 'noteUpdate',
+        'preferencesGet', 'accountGroupsList', 'accountGroupCreate', 'accountGroupUpdate',
+        'accountGroupDelete', 'payeesCommonList', 'budgetFilesList', 'budgetLoad',
+        'budgetExport', 'budgetImport', 'budgetBatchUpdate', 'bankSync', 'syncNow',
+        'serverVersion',
       ];
 
       exported.forEach((name) => expect(typeof barrel[name]).toBe('function'));

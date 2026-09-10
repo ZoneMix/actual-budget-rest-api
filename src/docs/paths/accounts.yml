@@ -174,3 +174,38 @@ accountBalance:
                 value:
                   success: true
                   balance: 12030
+
+accountBankSync:
+  parameters:
+    - in: path
+      name: accountId
+      required: true
+      description: Account to sync. Must be a UUID.
+      schema:
+        type: string
+        format: uuid
+  post:
+    summary: Pull new transactions from the linked bank
+    description: >-
+      Runs a bank sync (GoCardless/SimpleFIN) for this one account. A write:
+      it creates transactions. The account must already have a bank link.
+    tags: [Accounts]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Bank sync completed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                accountId:
+                  type: string
+            examples:
+              ok:
+                value:
+                  success: true
+                  accountId: 11111111-1111-4111-8111-111111111111

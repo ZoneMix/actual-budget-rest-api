@@ -170,4 +170,34 @@ describe('/v2/accounts', () => {
       expect(actualApi.deleteAccount).toHaveBeenCalledWith('acc-1');
     });
   });
+
+  // `runBankSync(args?)` takes an OBJECT, not a bare id (methods.d.ts:29-31);
+  // passing the id positionally would sync every linked account instead of one.
+  describe('POST /v2/accounts/:accountId/bank-sync', () => {
+    const ACCOUNT_UUID = '11111111-1111-4111-8111-111111111111';
+
+    it('returns 401 without a token and never reaches the engine', async () => {
+      const res = await request(app).post(`/v2/accounts/${ACCOUNT_UUID}/bank-sync`);
+
+      expect(res.status).toBe(401);
+      expect(actualApi.runBankSync).not.toHaveBeenCalled();
+    });
+
+    it('triggers a bank sync for the one account', async () => {
+      const res = await request(app)
+        .post(`/v2/accounts/${ACCOUNT_UUID}/bank-sync`)
+        .set(bearer(token));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true, accountId: ACCOUNT_UUID });
+      expect(actualApi.runBankSync).toHaveBeenCalledWith({ accountId: ACCOUNT_UUID });
+    });
+
+    it('rejects an accountId that is not a UUID before touching the engine', async () => {
+      const res = await request(app).post('/v2/accounts/acc-1/bank-sync').set(bearer(token));
+
+      expect(res.status).toBe(400);
+      expect(actualApi.runBankSync).not.toHaveBeenCalled();
+    });
+  });
 });

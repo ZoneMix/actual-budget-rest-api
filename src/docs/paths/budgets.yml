@@ -176,3 +176,58 @@ budgetResetHold:
               ok:
                 value:
                   success: true
+
+budgetBatch:
+  post:
+    summary: Apply many budget edits at once
+    description: >-
+      Applies every operation under ONE engine transaction, strictly in the
+      order given. Cheaper and safer than issuing the edits one request at a
+      time: no other request can interleave a sync between them.
+    tags: [Budgets]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [operations]
+            properties:
+              operations:
+                type: array
+                minItems: 1
+                maxItems: 500
+                items:
+                  $ref: '../components/schemas.yml#/BatchBudgetOperation'
+          examples:
+            mixed:
+              value:
+                operations:
+                  - type: setAmount
+                    month: 2026-09
+                    categoryId: 11111111-aaaa-4111-8111-111111111111
+                    amount: 125000
+                  - type: setCarryover
+                    month: 2026-09
+                    categoryId: 11111111-aaaa-4111-8111-111111111111
+                    flag: true
+    responses:
+      200:
+        description: Operations applied
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                applied:
+                  type: integer
+                  description: How many operations were applied.
+            examples:
+              ok:
+                value:
+                  success: true
+                  applied: 2

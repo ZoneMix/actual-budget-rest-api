@@ -25,6 +25,10 @@ import notesRoutes from './routes/notes.js';
 import preferencesRoutes from './routes/preferences.js';
 import accountGroupsRoutes from './routes/account-groups.js';
 import budgetsRoutes from './routes/budgets.js';
+import budgetFilesRoutes from './routes/budget-files.js';
+import syncRoutes from './routes/sync.js';
+import systemRoutes from './routes/system.js';
+import lookupRoutes from './routes/lookup.js';
 import rulesRoutes from './routes/rules.js';
 import schedulesRoutes from './routes/schedules.js';
 import queryRoutes from './routes/query.js';
@@ -170,6 +174,12 @@ export const createApp = () => {
   app.use('/v2/preferences', preferencesRoutes);
   app.use('/v2/account-groups', accountGroupsRoutes);
   app.use('/v2/budgets', budgetsRoutes);
+  // Singular '/v2/budget' is the budget FILE router (list/load/export); the
+  // plural '/v2/budgets' above is the budget MONTH router. Separate mounts.
+  app.use('/v2/budget', budgetFilesRoutes);
+  app.use('/v2/sync', syncRoutes);
+  app.use('/v2/server', systemRoutes);
+  app.use('/v2/lookup', lookupRoutes);
   app.use('/v2/rules', rulesRoutes);
   app.use('/v2/schedules', schedulesRoutes);
   app.use('/v2/query', queryRoutes);

@@ -67,12 +67,28 @@ describe('common schemas', () => {
   });
 
   describe('LookupParamsSchema', () => {
-    it('accepts a non-empty name', () => {
-      expect(LookupParamsSchema.safeParse({ name: 'Groceries' }).success).toBe(true);
+    it('accepts a non-empty name paired with a known type', () => {
+      expect(LookupParamsSchema.safeParse({ type: 'categories', name: 'Groceries' }).success).toBe(true);
     });
 
     it('rejects an empty name', () => {
-      expect(LookupParamsSchema.safeParse({ name: '' }).success).toBe(false);
+      expect(LookupParamsSchema.safeParse({ type: 'categories', name: '' }).success).toBe(false);
+    });
+
+    // getIDByName's `type` is a closed union in the SDK signature, so an
+    // unlisted table must fail here rather than reach the engine.
+    it('rejects a type outside the SDK union', () => {
+      expect(LookupParamsSchema.safeParse({ type: 'transactions', name: 'Groceries' }).success).toBe(false);
+    });
+
+    it('requires a type', () => {
+      expect(LookupParamsSchema.safeParse({ name: 'Groceries' }).success).toBe(false);
+    });
+
+    it('accepts every type the SDK union allows', () => {
+      ['accounts', 'schedules', 'categories', 'payees'].forEach((type) => {
+        expect(LookupParamsSchema.safeParse({ type, name: 'Anything' }).success).toBe(true);
+      });
     });
   });
 

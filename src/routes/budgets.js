@@ -8,7 +8,8 @@ import {
   budgetSetAmount,
   budgetSetCarryover,
   budgetHoldNextMonth,
-  budgetResetHold
+  budgetResetHold,
+  budgetBatchUpdate
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
@@ -18,6 +19,7 @@ import {
   BudgetCategoryParamsSchema,
   BudgetCarryoverSchema,
   BudgetHoldSchema,
+  BatchBudgetSchema,
 } from '../middleware/validation-schemas.js';
 import { budgetLimiter } from '../middleware/rateLimiters.js';
 
@@ -28,6 +30,19 @@ router.get('/months', asyncHandler(async (req, res) => {
   const months = await budgetMonthsList();
   res.json({ success: true, months });
 }));
+
+// Registered before the '/:month' routes so Express cannot read "batch" as a
+// month. Applies every operation under one engine transaction, in order.
+router.post(
+  '/batch',
+  budgetLimiter,
+  validateBody(BatchBudgetSchema),
+  asyncHandler(async (req, res) => {
+    const { operations } = req.validatedBody;
+    const applied = await budgetBatchUpdate(operations);
+    res.json({ success: true, applied });
+  })
+);
 
 router.get(
   '/:month',

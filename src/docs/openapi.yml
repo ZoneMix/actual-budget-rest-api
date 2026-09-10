@@ -33,9 +33,11 @@ tags:
   - name: Preferences
   - name: Account Groups
   - name: Budgets
+  - name: Budget Files
   - name: Rules
   - name: Schedules
   - name: Query
+  - name: System
   - name: Health
   - name: Metrics
 
@@ -63,6 +65,8 @@ paths:
     $ref: './paths/accounts.yml#/accountReopen'
   /v2/accounts/{id}/balance:
     $ref: './paths/accounts.yml#/accountBalance'
+  /v2/accounts/{accountId}/bank-sync:
+    $ref: './paths/accounts.yml#/accountBankSync'
   /v2/accounts/{accountId}/transactions:
     $ref: './paths/transactions.yml#/accountTransactions'
   /v2/accounts/{accountId}/transactions/import:
@@ -99,6 +103,8 @@ paths:
     $ref: './paths/account-groups.yml#/accountGroupById'
   /v2/budgets/months:
     $ref: './paths/budgets.yml#/budgetMonths'
+  /v2/budgets/batch:
+    $ref: './paths/budgets.yml#/budgetBatch'
   /v2/budgets/{month}:
     $ref: './paths/budgets.yml#/budgetByMonth'
   /v2/budgets/{month}/categories/{categoryId}/budget:
@@ -121,6 +127,18 @@ paths:
     $ref: './paths/schedules.yml#/scheduleById'
   /v2/query:
     $ref: './paths/query.yml#/query'
+  /v2/budget/files:
+    $ref: './paths/budget-files.yml#/budgetFiles'
+  /v2/budget/load:
+    $ref: './paths/budget-files.yml#/budgetLoad'
+  /v2/budget/export:
+    $ref: './paths/budget-files.yml#/budgetExport'
+  /v2/sync:
+    $ref: './paths/system.yml#/sync'
+  /v2/server/version:
+    $ref: './paths/system.yml#/serverVersion'
+  /v2/lookup/{type}/{name}:
+    $ref: './paths/system.yml#/lookupByName'
   # Non-versioned endpoints (no /v2 prefix)
   /login:
     $ref: './paths/authentication.yml#/loginForm'
@@ -162,6 +180,12 @@ components:
       $ref: './components/schemas.yml#/AccountGroup'
     Preferences:
       $ref: './components/schemas.yml#/Preferences'
+    BudgetFile:
+      $ref: './components/schemas.yml#/BudgetFile'
+    ServerVersion:
+      $ref: './components/schemas.yml#/ServerVersion'
+    BatchBudgetOperation:
+      $ref: './components/schemas.yml#/BatchBudgetOperation'
     Schedule:
       $ref: './components/schemas.yml#/Schedule'
     Rule:
