@@ -87,6 +87,29 @@ export const expandScopes = (raw) => {
   return freezeScopeSet(granted);
 };
 
+/**
+ * Keep only the scopes present in every one of the given grants.
+ *
+ * Narrowing is always an intersection, never a union: a grant may lose scopes
+ * as a client's registration or a user's row changes, and must never gain any.
+ *
+ * @param {string[]} scopes - Scope names to narrow
+ * @param {...ReadonlySet<string>} allowedSets - Expanded grants to narrow against
+ * @returns {string[]} The surviving scope names, in the input order
+ */
+export const intersectScopes = (scopes, ...allowedSets) =>
+  scopes.filter((scope) => allowedSets.every((allowed) => allowed.has(scope)));
+
+/**
+ * Canonical storage/transport form: unique, sorted, comma-joined. Used for the
+ * `scope` claim, the auth-code row and the token response, so the same grant
+ * always reads the same way whatever order it was requested in.
+ *
+ * @param {string[]} scopes - Scope names
+ * @returns {string} e.g. "read,write"
+ */
+export const formatScopes = (scopes) => [...new Set(scopes)].sort().join(',');
+
 /** The raw grant carried by a JWT payload or a session-derived user object. */
 const grantOf = (user) => (Array.isArray(user.scopes) ? user.scopes : user.scope);
 

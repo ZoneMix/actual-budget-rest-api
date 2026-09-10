@@ -1,17 +1,24 @@
 /**
  * OAuth2 scope negotiation — pure.
  *
- * Two lists meet at every grant: what the request asked for, and what the
- * client row (`clients.allowed_scopes`, a comma string) is registered to hand
- * out. The client's list is expanded through the scope model first, so a client
- * allowed `api` may also grant `read` or `write` — but never `admin`, which
- * `api` deliberately does not imply.
+ * Three lists meet at every grant: what the request asked for, what the client
+ * row (`clients.allowed_scopes`, a comma string) is registered to hand out, and
+ * what the signed-in user's own row (`users.scopes`) holds. Both grants are
+ * expanded through the scope model first, so a client or user with `api` also
+ * covers `read` and `write` — but never `admin`, which `api` deliberately does
+ * not imply.
  *
- * Anything the expanded set does not contain — including a scope name that
- * simply does not exist — is refused as `invalid_scope` (RFC 6749 §4.1.2.1).
+ * A scope the *client* may not grant is refused outright as `invalid_scope`
+ * (RFC 6749 §4.1.2.1) — including a scope name that simply does not exist. A
+ * scope the *user* does not hold is dropped instead, which RFC 6749 §3.3
+ * allows, and the issued `scope` says what survived; only an empty result is an
+ * error. Without the user bound in, a client registered for `admin` would mint
+ * admin tokens for users who hold no admin scope at all.
  */
 
-import { expandScopes, parseScopeList, SCOPES } from '../scopes.js';
+import { expandScopes, formatScopes, intersectScopes, parseScopeList, SCOPES } from '../scopes.js';
+
+export { formatScopes, intersectScopes };
 
 /** What a request with no `scope` parameter means: today's default. */
 export const DEFAULT_REQUESTED_SCOPES = Object.freeze([SCOPES.LEGACY_API]);
@@ -36,6 +43,16 @@ export const parseRequestedScopes = (raw) => {
 export const clientAllowedScopes = (client) => expandScopes(client?.allowed_scopes);
 
 /**
+ * Everything the signed-in user holds, closed under implication. An empty or
+ * missing `users.scopes` means the legacy `api` grant, matching how every
+ * scope-less token has always been read.
+ *
+ * @param {object} user - User row (`scopes` comma string)
+ * @returns {ReadonlySet<string>} Frozen set of the user's scopes
+ */
+export const userHeldScopes = (user) => expandScopes(user?.scopes);
+
+/**
  * Requested scopes this client may not grant.
  *
  * @param {string[]} requested - Requested scope names
@@ -44,20 +61,3 @@ export const clientAllowedScopes = (client) => expandScopes(client?.allowed_scop
  */
 export const disallowedScopes = (requested, allowed) => requested.filter((scope) => !allowed.has(scope));
 
-/**
- * Narrow an already-granted list to what the client still allows. Used on
- * refresh: a scope the client lost since the grant is dropped, not an error.
- *
- * @param {string[]} granted - Previously granted scope names
- * @param {ReadonlySet<string>} allowed - Result of clientAllowedScopes()
- * @returns {string[]} The surviving scope names
- */
-export const intersectScopes = (granted, allowed) => granted.filter((scope) => allowed.has(scope));
-
-/**
- * Canonical storage/transport form: unique, sorted, comma-joined.
- *
- * @param {string[]} scopes - Scope names
- * @returns {string} e.g. "read,write"
- */
-export const formatScopes = (scopes) => [...new Set(scopes)].sort().join(',');

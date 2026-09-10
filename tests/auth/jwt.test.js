@@ -14,7 +14,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { authenticateJWT, revokeToken } from '../../src/auth/jwt.js';
+import { authenticateJWT, revokeToken, issueTokens } from '../../src/auth/jwt.js';
 import { JWT_ISSUER, JWT_AUDIENCE } from '../../src/config/index.js';
 
 const basePayload = (overrides = {}) => ({
@@ -71,6 +71,20 @@ const invoke = async (token) => {
   await authenticateJWT(req, res, next);
   return { req, res, next };
 };
+
+describe('issueTokens', () => {
+  it('records the granted scope on the refresh token too', async () => {
+    // Without this claim a refresh has nothing to narrow back to and falls back
+    // to the user's full DB scopes, widening a deliberately narrow grant.
+    const tokens = await issueTokens(1, 'tester', 'read', 'user');
+    const refresh = jwt.decode(tokens.refresh_token);
+
+    expect(refresh.scope).toBe('read');
+    expect(refresh.scopes).toEqual(['read']);
+    expect(refresh.iss).toBe(JWT_ISSUER);
+    expect(refresh.aud).toBe(JWT_AUDIENCE);
+  });
+});
 
 describe('authenticateJWT — accepted', () => {
   it('sets req.user from a well-formed token', async () => {
