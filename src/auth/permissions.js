@@ -1,104 +1,104 @@
 /**
- * Permission and scope checking utilities.
- * 
- * Provides helpers for checking user permissions and scopes.
- * Used for fine-grained access control on endpoints.
+ * Scope enforcement middleware.
+ *
+ * The scope model itself lives in ./scopes.js; this module is only the Express
+ * layer over it. `hasScope`/`isAdmin` are re-exported so existing importers
+ * (src/auth/adminApi.js) keep working unchanged.
+ *
+ * Rollout is staged through AUTH_SCOPE_ENFORCEMENT, read at request time via
+ * config's getScopeEnforcementMode():
+ *
+ *   off     — no scope decision at all, next() immediately
+ *   warn    — log SCOPE_WOULD_DENY on a would-be denial, then next() (default)
+ *   enforce — 403 on a denial
+ *
+ * `requireAdminRole()` is the exception: a role gate is not part of that
+ * rollout, so it always enforces.
  */
 
+import { SCOPES, expandScopes, hasScope, isAdmin } from './scopes.js';
+import { getScopeEnforcementMode, SCOPE_ENFORCEMENT_MODES } from '../config/index.js';
+import { throwUnauthorized, throwForbidden } from '../middleware/responseHelpers.js';
+import { logAuthEvent } from '../logging/logger.js';
+
+export { SCOPES, expandScopes, hasScope, isAdmin };
+
+/** Methods that only read. Everything else is treated as a write. */
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+const asList = (requiredScopes) => (Array.isArray(requiredScopes) ? requiredScopes : [requiredScopes]);
+
+/** What the caller actually holds, for the audit record. */
+const grantedList = (user) => [...expandScopes(Array.isArray(user.scopes) ? user.scopes : user.scope)].sort();
+
+const denialDetails = (req, required) => ({
+  required: required.join(','),
+  actual: grantedList(req.user).join(','),
+  method: req.method,
+  path: req.originalUrl || req.path,
+});
+
 /**
- * Check if user has a specific scope.
- * 
- * @param {object} user - User object from JWT (req.user)
- * @param {string|string[]} requiredScopes - Required scope(s) to check
- * @returns {boolean} True if user has all required scopes
+ * Decide one request against one requirement, honouring the enforcement mode.
+ * Denials throw (Express forwards a synchronous throw to the error handler).
  */
-export const hasScope = (user, requiredScopes) => {
-  if (!user) return false;
-  
-  // Normalize to array
-  const required = Array.isArray(requiredScopes) ? requiredScopes : [requiredScopes];
-  if (required.length === 0) return true;
-  
-  // Get user's scopes
-  let userScopes = [];
-  if (Array.isArray(user.scopes)) {
-    userScopes = user.scopes;
-  } else if (user.scope) {
-    userScopes = user.scope.split(',').map(s => s.trim()).filter(Boolean);
-  } else {
-    // Default to 'api' scope if none specified
-    userScopes = ['api'];
+const decide = (req, requiredScopes, next) => {
+  if (getScopeEnforcementMode() === SCOPE_ENFORCEMENT_MODES.OFF) return next();
+
+  if (!req.user) {
+    throwUnauthorized('Authentication required');
   }
-  
-  // Check if user has all required scopes
-  return required.every(scope => userScopes.includes(scope));
+
+  const required = asList(requiredScopes);
+  if (hasScope(req.user, required)) return next();
+
+  const details = denialDetails(req, required);
+  if (getScopeEnforcementMode() === SCOPE_ENFORCEMENT_MODES.WARN) {
+    logAuthEvent('SCOPE_WOULD_DENY', req.user.user_id, details, false);
+    return next();
+  }
+
+  logAuthEvent('SCOPE_DENIED', req.user.user_id, details, false);
+  return throwForbidden(`Required scope(s): ${required.join(', ')}`);
 };
 
 /**
- * Check if user has admin role or admin scope.
- * 
- * @param {object} user - User object from JWT (req.user)
- * @returns {boolean} True if user is admin
- */
-export const isAdmin = (user) => {
-  if (!user) return false;
-  
-  // Check role first
-  if (user.role === 'admin') {
-    return true;
-  }
-  
-  // Fallback to scope check
-  return hasScope(user, 'admin');
-};
-
-/**
- * Middleware factory to require specific scope(s).
- * 
+ * Require specific scope(s) on a route.
+ *
  * @param {string|string[]} requiredScopes - Required scope(s)
  * @returns {Function} Express middleware
- * 
+ *
  * @example
- * router.get('/sensitive', requireScope('admin'), handler);
- * router.get('/data', requireScope(['read', 'data']), handler);
+ * router.post('/reset', authenticateJWT, requireScope(SCOPES.ADMIN), handler);
  */
-export const requireScope = (requiredScopes) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      const { throwUnauthorized } = require('../middleware/responseHelpers.js');
-      throwUnauthorized('Authentication required');
-    }
-    
-    if (!hasScope(req.user, requiredScopes)) {
-      const { throwForbidden } = require('../middleware/responseHelpers.js');
-      throwForbidden(`Required scope(s): ${Array.isArray(requiredScopes) ? requiredScopes.join(', ') : requiredScopes}`);
-    }
-    
-    next();
-  };
+export const requireScope = (requiredScopes) => (req, res, next) => decide(req, requiredScopes, next);
+
+/**
+ * Require `read` for safe methods and `write` for everything else — the
+ * default gate for every /v2 data router.
+ *
+ * @returns {Function} Express middleware
+ */
+export const requireScopeByMethod = () => (req, res, next) => {
+  const required = READ_METHODS.has(req.method) ? SCOPES.READ : SCOPES.WRITE;
+  return decide(req, required, next);
 };
 
 /**
- * Middleware factory to require admin role or scope.
- * 
+ * Require the admin role or the admin scope. Always enforced.
+ *
  * @returns {Function} Express middleware
- * 
- * @example
- * router.get('/admin-only', requireAdminRole(), handler);
  */
-export const requireAdminRole = () => {
-  return (req, res, next) => {
-    if (!req.user) {
-      const { throwUnauthorized } = require('../middleware/responseHelpers.js');
-      throwUnauthorized('Authentication required');
-    }
-    
-    if (!isAdmin(req.user)) {
-      const { throwForbidden } = require('../middleware/responseHelpers.js');
-      throwForbidden('Admin access required');
-    }
-    
-    next();
-  };
+export const requireAdminRole = () => (req, res, next) => {
+  if (!req.user) {
+    throwUnauthorized('Authentication required');
+  }
+  if (!isAdmin(req.user)) {
+    logAuthEvent('ADMIN_DENIED', req.user.user_id, {
+      method: req.method,
+      path: req.originalUrl || req.path,
+    }, false);
+    throwForbidden('Admin access required');
+  }
+  return next();
 };
-
