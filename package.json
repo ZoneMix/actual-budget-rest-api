@@ -50,7 +50,13 @@
       "eslint --fix",
       "eslint"
     ],
-    ".env*": [
+    ".env": [
+      "git rm --cached"
+    ],
+    ".env.local": [
+      "git rm --cached"
+    ],
+    ".env.keys": [
       "git rm --cached"
     ]
   },
