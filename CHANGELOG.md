@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 2.3.1
+
+- **`POST /oauth/token` refresh refuses a deactivated or deleted user** (401) instead of
+  minting a new pair for the refresh token's full TTL — the same guard `/v2/auth/login`
+  gained in 2.3.0. The token route now honours `MAX_REQUEST_SIZE` like every other route.
+
 ## 2.3.0
 
 ### Fixed — endpoints that did not work
