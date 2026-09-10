@@ -86,27 +86,39 @@ accountTransactions:
                   type: boolean
                 accountId:
                   type: string
+                result:
+                  type: string
+                  enum: ['ok']
+                  description: >-
+                    The engine's acknowledgement. Actual's addTransactions
+                    resolves with the literal string "ok" and returns no ids,
+                    so no per-transaction id is available here.
+                submittedCount:
+                  type: integer
+                  description: Number of transactions in the request body.
                 addedCount:
                   type: integer
-                addedIds:
-                  type: array
-                  items:
-                    type: string
+                  deprecated: true
+                  description: >-
+                    Deprecated alias for submittedCount; removed in 3.0.0.
+                    Responses carry Deprecation and Warning headers.
             examples:
               simple:
                 summary: Create a single transaction
                 value:
                   success: true
                   accountId: acct-123
+                  result: ok
+                  submittedCount: 1
                   addedCount: 1
-                  addedIds: ["tx-abc"]
               multiple:
                 summary: Create multiple transactions
                 value:
                   success: true
                   accountId: acct-123
+                  result: ok
+                  submittedCount: 2
                   addedCount: 2
-                  addedIds: ["tx-abc","tx-def"]
 
 accountTransactionsImport:
   post:
@@ -132,6 +144,22 @@ accountTransactionsImport:
                 type: array
                 items:
                   $ref: '../components/schemas.yml#/NewTransaction'
+              opts:
+                type: object
+                description: >-
+                  Forwarded verbatim to the engine's importTransactions.
+                  Omit it to let the engine apply its own defaults.
+                additionalProperties: false
+                properties:
+                  defaultCleared:
+                    type: boolean
+                  dryRun:
+                    type: boolean
+                  reimportDeleted:
+                    type: boolean
+                  payeeNameNormalization:
+                    type: string
+                    enum: [original, title-case]
     responses:
       201:
         description: Transactions imported

@@ -11,6 +11,14 @@ import {
 import { bulkOperationLimiter } from '../middleware/rateLimiters.js';
 import { bulkBodyParser } from '../middleware/bodyParser.js';
 
+// `addedCount` is kept only so existing clients don't break. The engine
+// resolves addTransactions with the string 'ok', so no per-transaction id or
+// real added count is available; both counts report what was submitted.
+const ADDED_COUNT_DEPRECATION_HEADERS = Object.freeze({
+  Deprecation: 'true',
+  Warning: '299 - "addedCount is deprecated; use submittedCount. Removed in 3.0.0"',
+});
+
 const router = express.Router({ mergeParams: true }); // Important: mergeParams to access :accountId
 
 // Use larger body parser for bulk operations
@@ -36,8 +44,15 @@ router.post(
   asyncHandler(async (req, res) => {
     const accountId = req.validatedParams.accountId;
     const { transactions, runTransfers, learnCategories } = req.validatedBody;
-    const addedIds = await transactionsAdd(accountId, transactions, runTransfers, learnCategories);
-    res.status(201).json({ success: true, accountId, addedCount: addedIds.length, addedIds });
+    const result = await transactionsAdd(accountId, transactions, runTransfers, learnCategories);
+    res.set(ADDED_COUNT_DEPRECATION_HEADERS);
+    res.status(201).json({
+      success: true,
+      accountId,
+      result,
+      submittedCount: transactions.length,
+      addedCount: transactions.length,
+    });
   })
 );
 
@@ -48,8 +63,8 @@ router.post(
   validateBody(TransactionsImportSchema),
   asyncHandler(async (req, res) => {
     const accountId = req.validatedParams.accountId;
-    const { transactions } = req.validatedBody;
-    const result = await transactionsImport(accountId, transactions);
+    const { transactions, opts } = req.validatedBody;
+    const result = await transactionsImport(accountId, transactions, opts);
     res.status(201).json({ success: true, accountId, result });
   })
 );
