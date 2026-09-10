@@ -89,16 +89,20 @@ query:
                     example:
                       $sum: amount
                   groupBy:
+                    description: At most 100 fields.
                     oneOf:
                       - type: string
                       - type: array
+                        maxItems: 100
                         items:
                           type: string
                     example: ['category']
                   orderBy:
+                    description: At most 100 fields.
                     oneOf:
                       - type: string
                       - type: array
+                        maxItems: 100
                         items:
                           oneOf:
                             - type: string
@@ -109,6 +113,7 @@ query:
                     type: integer
                     minimum: 1
                     maximum: 10000
+                    description: Ceiling is ACTUAL_QUERY_MAX_RESULTS (default 10000).
                   offset:
                     type: integer
                     minimum: 0

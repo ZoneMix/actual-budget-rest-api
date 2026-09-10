@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import { QUERY_TABLES, QUERY_SPLIT_MODES } from './constants.js';
+import { ACTUAL_QUERY_MAX_RESULTS } from '../config/index.js';
 
 const RecordSchema = z.record(z.string(), z.unknown());
 
@@ -30,7 +31,9 @@ export const QuerySchema = z.object({
     options: z.strictObject({
       splits: z.enum(QUERY_SPLIT_MODES).optional(),
     }).optional(),
-    limit: z.number().int().min(1).max(10000).optional(),
+    // Same ceiling the service truncates at, so the two cannot drift when an
+    // operator retunes ACTUAL_QUERY_MAX_RESULTS.
+    limit: z.number().int().min(1).max(ACTUAL_QUERY_MAX_RESULTS).optional(),
     offset: z.number().int().min(0).optional(),
   }).refine(
     (q) => !(q.select !== undefined && q.calculate !== undefined),

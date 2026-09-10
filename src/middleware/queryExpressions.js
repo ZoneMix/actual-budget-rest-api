@@ -49,6 +49,11 @@ export const validateFieldExpression = (value, label, depth = 0) => {
   }
 
   if (Array.isArray(value)) {
+    // Bounded like select: these are field lists, and an unbounded one is a
+    // cheap way to make the engine build an enormous SQL statement.
+    if (value.length > MAX_SELECT_FIELDS) {
+      throw new ValidationError(`${label} array exceeds maximum length of ${MAX_SELECT_FIELDS} fields`);
+    }
     value.forEach((entry) => validateFieldExpression(entry, label, depth + 1));
     return;
   }

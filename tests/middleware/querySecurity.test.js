@@ -216,6 +216,27 @@ describe('Query Security', () => {
         expect(() => validateQuery({ table: 'transactions', ...extra })).not.toThrow();
       });
 
+      it('rejects an orderBy array longer than the field cap', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          orderBy: Array(101).fill('date'),
+        })).toThrow(ValidationError);
+      });
+
+      it('rejects a groupBy array longer than the field cap', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          groupBy: Array(101).fill('category'),
+        })).toThrow(ValidationError);
+      });
+
+      it('accepts an array right at the field cap', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          orderBy: Array(100).fill('date'),
+        })).not.toThrow();
+      });
+
       it('ignores non-string leaves such as booleans and numbers', () => {
         expect(() => validateQuery({
           table: 'transactions',
