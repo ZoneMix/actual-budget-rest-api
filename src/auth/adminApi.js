@@ -5,7 +5,7 @@
  */
 
 import jwt from 'jsonwebtoken';
-import { isTokenRevoked } from './jwt.js';
+import { isTokenRevoked, JWT_VERIFY_OPTIONS } from './jwt.js';
 import { getRow } from '../db/authDb.js';
 import { JWT_SECRET } from '../config/index.js';
 import { isAdmin } from './permissions.js';
@@ -26,7 +26,7 @@ export const authenticateAdminAPI = async (req, res, next) => {
 
   if (token) {
     try {
-      const payload = jwt.verify(token, JWT_SECRET);
+      const payload = jwt.verify(token, JWT_SECRET, JWT_VERIFY_OPTIONS);
       if (payload && !isTokenRevoked(payload.jti)) {
         user = payload;
       }

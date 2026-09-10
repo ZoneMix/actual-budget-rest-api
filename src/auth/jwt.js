@@ -5,8 +5,28 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { insertToken, pruneExpiredTokens, executeQuery, getRow } from '../db/authDb.js';
-import { ACCESS_TTL_SECONDS, REFRESH_TTL_SECONDS, JWT_SECRET, JWT_REFRESH_SECRET } from '../config/index.js';
+import {
+  ACCESS_TTL_SECONDS,
+  REFRESH_TTL_SECONDS,
+  JWT_SECRET,
+  JWT_REFRESH_SECRET,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+} from '../config/index.js';
 import logger, { logAuthEvent, logSuspiciousActivity } from '../logging/logger.js';
+
+/**
+ * Verification options pinned on EVERY jwt.verify() in this codebase.
+ *
+ * Without them jsonwebtoken accepts any token the shared secret validates:
+ * another issuer's, another audience's, or one signed HS512 instead of HS256.
+ * Kept in one exported constant so a new call site cannot quietly omit them.
+ */
+export const JWT_VERIFY_OPTIONS = Object.freeze({
+  algorithms: Object.freeze(['HS256']),
+  issuer: JWT_ISSUER,
+  audience: JWT_AUDIENCE,
+});
 
 /**
  * Validate JTI format (UUID v4 or UUID v4 with '-refresh' suffix for refresh tokens).
@@ -42,13 +62,13 @@ export const issueTokens = async (userId, username, scopes = 'api', role = 'user
   const refreshExpiresAt = new Date(now + REFRESH_TTL_SECONDS * 1000).toISOString();
 
   const accessToken = jwt.sign(
-    { user_id: userId, username, role, scope: scopeString, scopes: scopeArray, iss: 'actual-wrapper', aud: 'n8n' },
+    { user_id: userId, username, role, scope: scopeString, scopes: scopeArray, iss: JWT_ISSUER, aud: JWT_AUDIENCE },
     JWT_SECRET,
     { expiresIn: `${ACCESS_TTL_SECONDS}s`, jwtid: jti }
   );
 
   const refreshToken = jwt.sign(
-    { user_id: userId, username, role, iss: 'actual-wrapper', aud: 'n8n' },
+    { user_id: userId, username, role, iss: JWT_ISSUER, aud: JWT_AUDIENCE },
     JWT_REFRESH_SECRET,
     { expiresIn: `${REFRESH_TTL_SECONDS}s`, jwtid: `${jti}-refresh` }
   );
@@ -118,8 +138,9 @@ export const authenticateJWT = async (req, res, next) => {
   }
 
   try {
-    // Verify signature FIRST - this prevents tampered tokens
-    const payload = jwt.verify(token, JWT_SECRET);
+    // Verify signature, algorithm, issuer and audience FIRST - this prevents
+    // tampered tokens and tokens minted for anything other than this API.
+    const payload = jwt.verify(token, JWT_SECRET, JWT_VERIFY_OPTIONS);
 
     // Then check if token is revoked
     if (await isTokenRevoked(payload.jti)) {
@@ -129,14 +150,10 @@ export const authenticateJWT = async (req, res, next) => {
 
     req.user = payload;
 
-    // Basic scope enforcement (extend as needed)
-    const requiredScope = req.path.startsWith('/accounts') ? 'api' : null;
-    const tokenScopes = payload.scope || 'api';
-    if (requiredScope && !tokenScopes.includes(requiredScope)) {
-      logAuthEvent('AUTH_FAILED', payload.user_id, { reason: 'insufficient_scope', required: requiredScope }, false);
-      return res.status(403).json({ error: 'Insufficient scopes' });
-    }
-
+    // Scope enforcement is requireScopeByMethod()/requireScope() in
+    // src/auth/permissions.js, mounted right after this middleware. The block
+    // that used to live here tested `req.path.startsWith('/accounts')`, which
+    // is router-relative and so never matched a /v2/... mount: dead code.
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
