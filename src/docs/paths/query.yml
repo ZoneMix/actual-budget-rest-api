@@ -83,15 +83,32 @@ query:
                         description: Select specific fields
                     example: ['id', 'amount', 'date']
                   calculate:
-                    description: >-
-                      An aggregate expression such as { "$sum": "amount" }.
-                      Cannot be combined with select; the response data is then
-                      the scalar result rather than a row array.
+                    description: |
+                      Reduces the result to a single value instead of rows.
+                      Cannot be combined with `select`; `data` is then the
+                      scalar result rather than a row array.
+
+                      Two forms, and the difference matters:
+
+                      - **An object** is an aggregate:
+                        `{ "$sum": "amount" }`, `{ "$count": "id" }`. This is
+                        what you almost always want.
+                      - **A bare string** is passed to the engine as-is and
+                        must name a real column of the table. It is not an
+                        aggregate function: `"count"` is rejected by the engine
+                        as an unknown column, not read as COUNT(*). Use
+                        `{ "$count": "id" }` for that.
+
+                      An engine rejection here comes back as 400 with
+                      `code: ENGINE_ERROR` and the engine's own wording, since
+                      only the engine knows the table's columns.
                     oneOf:
                       - type: string
+                        description: A column name on the queried table.
                       - type: object
+                        description: An aggregate, e.g. $sum, $count, $min, $max.
                     example:
-                      $sum: amount
+                      $count: id
                   groupBy:
                     description: At most 100 fields.
                     oneOf:
@@ -176,7 +193,12 @@ query:
                     - id: tx-1
                       amount: -4599
       '400':
-        description: Invalid query (validation failed)
+        description: >-
+          Invalid query. `code: VALIDATION_ERROR` means the schema rejected it
+          before the engine saw it, with the offending fields in `details`.
+          `code: ENGINE_ERROR` means the engine refused it — most often a
+          `calculate` or `orderBy` naming something that is not a column of the
+          table — and `error` carries the engine's own wording.
         content:
           application/json:
             schema:

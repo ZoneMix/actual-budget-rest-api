@@ -188,13 +188,22 @@ accountBankSync:
     summary: Pull new transactions from the linked bank
     description: >-
       Runs a bank sync (GoCardless/SimpleFIN) for this one account. A write:
-      it creates transactions. The account must already have a bank link.
+      it creates transactions.
+
+
+      **An account with no bank link is a 200, not an error.** The engine
+      treats "not linked" as a sync that produced zero errors, so the response
+      is indistinguishable from a real sync that found nothing new. There is no
+      way to tell the two apart from this endpoint; check that the account has
+      a bank link in Actual before relying on it.
     tags: [Accounts]
     security:
       - bearerAuth: []
     responses:
       200:
-        description: Bank sync completed
+        description: >-
+          Bank sync completed — or the account has no bank link and nothing
+          happened. Both look like this.
         content:
           application/json:
             schema:
