@@ -56,8 +56,12 @@ const freezeScopeSet = (set) => {
   return Object.freeze(set);
 };
 
-/** Normalise any accepted input shape into a list of trimmed scope names. */
-const toScopeList = (raw) => {
+/**
+ * Normalise any accepted input shape into a list of trimmed scope names.
+ * Exported for the OAuth2 layer, which has to know what was *requested*
+ * before deciding whether the client may grant it.
+ */
+export const parseScopeList = (raw) => {
   const parts = Array.isArray(raw)
     ? raw
     : (typeof raw === 'string' ? raw.split(SCOPE_SEPARATORS) : []);
@@ -74,7 +78,7 @@ const toScopeList = (raw) => {
  * @returns {ReadonlySet<string>} Frozen set closed under implication
  */
 export const expandScopes = (raw) => {
-  const requested = toScopeList(raw);
+  const requested = parseScopeList(raw);
   const source = requested.length > 0 ? requested : [SCOPES.LEGACY_API];
   const granted = new Set();
   source.forEach((scope) => {
