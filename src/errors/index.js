@@ -106,6 +106,27 @@ export class InternalServerError extends HttpError {
 }
 
 /**
+ * Service unavailable error (503 Service Unavailable).
+ * Used when a downstream resource is saturated and the request cannot be
+ * queued — e.g. the Actual engine queue is at its configured depth cap.
+ */
+export class ServiceUnavailableError extends HttpError {
+  constructor(message = 'Service unavailable', details = null) {
+    super(message, 503, 'SERVICE_UNAVAILABLE', details);
+  }
+}
+
+/**
+ * Gateway timeout error (504 Gateway Timeout).
+ * Used when an upstream/embedded call exceeds its allotted time budget.
+ */
+export class GatewayTimeoutError extends HttpError {
+  constructor(message = 'Upstream operation timed out', details = null) {
+    super(message, 504, 'GATEWAY_TIMEOUT', details);
+  }
+}
+
+/**
  * Helper function to create errors from existing Error objects.
  */
 export const createHttpError = (error, _defaultStatus = 500) => {
