@@ -1,6 +1,6 @@
 {
   "name": "actual-rest-api",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "type": "module",
   "main": "server.js",
   "dependencies": {
