@@ -61,6 +61,9 @@ categoryGroups:
                     type: string
                   is_income:
                     type: boolean
+                  hidden:
+                    type: boolean
+                    description: Create the group hidden from the budget table.
     responses:
       201:
         description: Category group created
@@ -101,10 +104,14 @@ categoryGroupById:
             properties:
               fields:
                 type: object
+                minProperties: 1
+                description: At least one field must be present; an empty object is a 400.
                 properties:
                   name:
                     type: string
                   is_income:
+                    type: boolean
+                  hidden:
                     type: boolean
     responses:
       200:

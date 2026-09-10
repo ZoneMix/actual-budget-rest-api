@@ -61,6 +61,9 @@ categories:
                     type: string
                   group_id:
                     type: string
+                  hidden:
+                    type: boolean
+                    description: Create the category hidden from the budget table.
     responses:
       201:
         description: Category created
@@ -101,11 +104,15 @@ categoryById:
             properties:
               fields:
                 type: object
+                minProperties: 1
+                description: At least one field must be present; an empty object is a 400.
                 properties:
                   name:
                     type: string
                   group_id:
                     type: string
+                  hidden:
+                    type: boolean
     responses:
       200:
         description: Category updated

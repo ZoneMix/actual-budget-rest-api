@@ -125,3 +125,40 @@ loginForm:
     responses:
       302:
         description: Redirect after login
+
+logoutForm:
+  post:
+    summary: End the browser session
+    description: >-
+      Destroys the `sessionId` cookie session used by the /admin dashboard and
+      /docs. Separate from POST /v2/auth/logout, which revokes an API refresh
+      token; this one touches no token and needs no bearer credential.
+    tags: [Authentication]
+    security: []
+    responses:
+      200:
+        description: Session destroyed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+            examples:
+              ok:
+                value:
+                  success: true
+                  message: Logged out successfully
+      500:
+        description: The session store refused to destroy the session
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+            examples:
+              failed:
+                value:
+                  error: Failed to logout

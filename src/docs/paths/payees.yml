@@ -44,11 +44,14 @@ payees:
               payee:
                 type: object
                 required: [name]
+                description: >-
+                  A payee has only a name. `transfer_acct` is set by the engine
+                  when it creates the hidden payee behind a transfer; it is not
+                  accepted here and a value sent for it is rejected.
                 properties:
                   name:
                     type: string
-                  transfer_acct:
-                    type: string
+                    maxLength: 255
     responses:
       201:
         description: Payee created
@@ -89,11 +92,15 @@ payeeById:
             properties:
               fields:
                 type: object
+                minProperties: 1
+                description: >-
+                  At least one field must be present; an empty object is a 400.
+                  Only the name is writable — see the create endpoint on
+                  `transfer_acct`.
                 properties:
                   name:
                     type: string
-                  transfer_acct:
-                    type: string
+                    maxLength: 255
     responses:
       200:
         description: Payee updated
@@ -130,10 +137,15 @@ payeesMerge:
             properties:
               targetId:
                 type: string
+                format: uuid
+                description: The payee that survives the merge.
               mergeIds:
                 type: array
+                minItems: 1
+                description: Payees folded into the target and then removed.
                 items:
                   type: string
+                  format: uuid
     responses:
       200:
         description: Payees merged
