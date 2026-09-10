@@ -42,6 +42,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { asyncHandler } from './middleware/asyncHandler.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { metricsMiddleware } from './middleware/metrics.js';
+import { accessLogMiddleware } from './middleware/accessLog.js';
 import metricsRoutes from './routes/metrics.js';
 import logger from './logging/logger.js';
 
@@ -106,23 +107,8 @@ export const createApp = () => {
     maxAge: 86400, // 24 hours
   }));
 
-  // Request logging with structured logging
-  app.use((req, res, next) => {
-    const started = Date.now();
-    res.on('finish', () => {
-      const duration = Date.now() - started;
-      logger.info('Request completed', {
-        requestId: req.id,
-        method: req.method,
-        url: req.originalUrl,
-        status: res.statusCode,
-        duration: `${duration}ms`,
-        ip: req.ip,
-        userAgent: req.get('user-agent'),
-      });
-    });
-    next();
-  });
+  // Structured access log (path only — see src/middleware/accessLog.js)
+  app.use(accessLogMiddleware);
 
   // Session configuration with security improvements
   // SESSION_SECRET is validated in env.js, but we need a fallback for development
