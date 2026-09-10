@@ -27,7 +27,10 @@ export const authenticateAdminAPI = async (req, res, next) => {
   if (token) {
     try {
       const payload = jwt.verify(token, JWT_SECRET, JWT_VERIFY_OPTIONS);
-      if (payload && !isTokenRevoked(payload.jti)) {
+      // `await` is load-bearing: isTokenRevoked is async, so an un-awaited call
+      // returns a always-truthy Promise, `!promise` is always false, and this
+      // branch never assigned a user — no Bearer token authenticated at all.
+      if (payload && !(await isTokenRevoked(payload.jti))) {
         user = payload;
       }
     } catch {

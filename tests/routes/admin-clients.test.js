@@ -10,15 +10,13 @@
  * src/auth/oauth2/client.js is proven against an actual bound query, not
  * just a unit-level assumption about what it does with the value.
  *
- * Authenticates via session login (POST /login), not a JWT bearer token:
- * src/auth/adminApi.js's JWT branch calls `isTokenRevoked(payload.jti)`
- * without awaiting it (a truthy Promise, so `!isTokenRevoked(...)` is
- * always false) and so never authenticates any JWT at all — a separate,
- * pre-existing bug outside this phase's authorized files (not fixed here;
- * flagged in the report). The session branch of the same middleware is
- * unaffected, and ensureAdminUserHash() (called at real server startup,
- * bypassed by the test harness's createApp()) is invoked directly here to
- * seed the admin user so the login flow is exercised for real.
+ * Authenticates via session login (POST /login) rather than a JWT bearer
+ * token, exercising the session branch of src/auth/adminApi.js. (Its JWT
+ * branch used to be dead — `isTokenRevoked(payload.jti)` was not awaited, so
+ * no Bearer token ever authenticated; that is fixed and covered separately in
+ * tests/routes/admin-auth.test.js.) ensureAdminUserHash() (called at real
+ * server startup, bypassed by the test harness's createApp()) is invoked
+ * directly here to seed the admin user so the login flow is exercised for real.
  */
 import request from 'supertest';
 import crypto from 'crypto';
