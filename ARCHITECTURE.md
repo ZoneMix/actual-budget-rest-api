@@ -90,7 +90,14 @@ src/
 │   ├── query.js      # ActualQL query endpoint
 │   └── ... (other routes)
 ├── services/          # Business logic layer
-│   └── actualApi.js  # Actual Budget API wrapper
+│   ├── actualApi.js  # Re-exports actual/ (the import path routes use)
+│   └── actual/       # Actual Budget API wrapper, split by domain
+│       ├── client.js      # init / get / shutdown / budget recovery
+│       ├── queue.js       # FIFO engine queue (backpressure, timeout, reentrancy)
+│       ├── syncPolicy.js  # interval gate deciding when a read must sync
+│       ├── runner.js      # runWithApi(label, fn, { mode, force }) + metrics
+│       ├── index.js       # barrel
+│       └── ... (accounts, transactions, categories, payees, budgets, ...)
 └── server.js         # Application entry point
 ```
 
