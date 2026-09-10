@@ -3,20 +3,9 @@
  */
 
 import logger from '../../logging/logger.js';
-import { NotFoundError } from '../../errors/index.js';
+import { NotFoundError, isEngineNotFound } from '../../errors/index.js';
 import { runWithApi } from './runner.js';
 import { syncPolicy } from './syncPolicy.js';
-
-/**
- * The engine's "no such row" rejection.
- *
- * `api/get-id-by-name` throws APIError("Not found: <type> with name <name>")
- * (@actual-app/api/dist/index.js:112711) and APIError returns a PLAIN OBJECT —
- * `{ type: 'APIError', message, meta }` — so there is no Error to instanceof
- * against and no status to read.
- */
-const isEngineMiss = (error) =>
-  error?.type === 'APIError' && typeof error.message === 'string' && error.message.startsWith('Not found');
 
 /**
  * Resolves an entity id from its name.
@@ -36,7 +25,7 @@ export const getIdByName = async (type, name) => {
     } catch (error) {
       // A miss is a 404, not the 400 every other APIError maps to. The engine
       // never resolves null here, so the caller cannot detect it any other way.
-      if (isEngineMiss(error)) {
+      if (isEngineNotFound(error)) {
         logger.info('[Actual] getIdByName found no match', { type, name });
         throw new NotFoundError(error.message.replace(/^Not found:\s*/, ''));
       }

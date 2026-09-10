@@ -69,14 +69,34 @@ describe('errorHandler', () => {
 
   it('keeps the engine message on an APIError in production', () => {
     process.env.NODE_ENV = 'production';
-    errorHandler({ type: 'APIError', message: 'No budget file is open' }, req, res, next);
+    errorHandler({ type: 'APIError', message: 'Provide a valid type' }, req, res, next);
     process.env.NODE_ENV = 'test';
 
     // Only 500s are redacted; a 400 must keep its message or the caller cannot
     // tell what they got wrong.
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'No budget file is open' })
+      expect.objectContaining({ error: 'Provide a valid type' })
+    );
+  });
+
+  // Two engine messages mean something other than "bad request", and the
+  // handler has to carry the status createHttpError picked all the way out.
+  it('renders an unopened budget file as a 503', () => {
+    errorHandler({ type: 'APIError', message: 'No budget file is open' }, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'No budget file is open', code: 'SERVICE_UNAVAILABLE' })
+    );
+  });
+
+  it('renders a Not found APIError as a 404', () => {
+    errorHandler({ type: 'APIError', message: 'Not found: payees with name Hy-Vee' }, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'NOT_FOUND' })
     );
   });
 

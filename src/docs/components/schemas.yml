@@ -22,6 +22,12 @@ Error:
         funded account with no `transferAccountId`, an ActualQL `calculate`
         naming something that is not a column, a month with no budget. Only the
         engine can know those, so `error` carries its wording verbatim.
+
+        Two engine rejections are NOT 400s, because rephrasing the request
+        cannot fix either. A missing row ("Not found: ...") is a 404 with
+        `NOT_FOUND`, and a process with no ledger loaded ("No budget file is
+        open") is a 503 with `SERVICE_UNAVAILABLE`, the same answer a saturated
+        engine gives. Both keep the engine's wording.
       enum:
         - VALIDATION_ERROR
         - ENGINE_ERROR

@@ -9,6 +9,8 @@ import {
   HttpError,
   ValidationError,
   EngineError,
+  NotFoundError,
+  ServiceUnavailableError,
   InternalServerError,
 } from '../../src/errors/index.js';
 
@@ -81,7 +83,7 @@ describe('createHttpError', () => {
     });
 
     it('omits details when the engine sends no meta', () => {
-      expect(createHttpError(apiError('No budget file is open')).details).toBeNull();
+      expect(createHttpError(apiError('no such column')).details).toBeNull();
     });
 
     it('still describes an APIError with no message', () => {
@@ -103,6 +105,58 @@ describe('createHttpError', () => {
 
       expect(result).toBeInstanceOf(InternalServerError);
       expect(result.status).toBe(500);
+    });
+  });
+
+  /**
+   * Not every engine rejection is the caller's fault. Two of the messages
+   * APIError carries mean something other than "bad request":
+   *
+   *   - "Not found: ..."        — the row does not exist. A 404.
+   *   - "No budget file is open" — `checkFileOpen()` (dist/index.js:112062);
+   *     the process has no ledger loaded, which the caller cannot fix by
+   *     rephrasing. A 503, the same answer a saturated engine gives.
+   */
+  describe('engine APIError classification', () => {
+    const apiError = (message, meta) => ({ type: 'APIError', message, meta });
+
+    it('maps a Not found APIError to a 404', () => {
+      const result = createHttpError(apiError('Not found: payees with name Hy-Vee'));
+
+      expect(result).toBeInstanceOf(NotFoundError);
+      expect(result.status).toBe(404);
+      expect(result.code).toBe('NOT_FOUND');
+      expect(result.message).toContain('payees with name Hy-Vee');
+    });
+
+    it('keeps the engine meta on a Not found APIError', () => {
+      const result = createHttpError(apiError('Not found: accounts with name X', { type: 'accounts' }));
+
+      expect(result.details).toEqual({ type: 'accounts' });
+    });
+
+    it('maps an unopened budget file to a 503', () => {
+      const result = createHttpError(apiError('No budget file is open'));
+
+      expect(result).toBeInstanceOf(ServiceUnavailableError);
+      expect(result.status).toBe(503);
+      expect(result.code).toBe('SERVICE_UNAVAILABLE');
+      expect(result.message).toBe('No budget file is open');
+    });
+
+    it('leaves every other APIError a 400 ENGINE_ERROR', () => {
+      const result = createHttpError(apiError('Provide a valid type'));
+
+      expect(result).toBeInstanceOf(EngineError);
+      expect(result.status).toBe(400);
+      expect(result.code).toBe('ENGINE_ERROR');
+    });
+
+    it('does not match a message that merely mentions not found', () => {
+      const result = createHttpError(apiError('the rule was not found in the list'));
+
+      expect(result).toBeInstanceOf(EngineError);
+      expect(result.status).toBe(400);
     });
   });
 });
