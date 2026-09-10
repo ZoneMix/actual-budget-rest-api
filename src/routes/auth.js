@@ -25,8 +25,10 @@ import { LoginSchema, LogoutSchema } from '../middleware/validation-schemas.js';
 import logger, { logAuthEvent } from '../logging/logger.js';
 import { loginLimiterWithLogging } from '../middleware/rateLimiters.js';
 import { throwUnauthorized, throwBadRequest } from '../middleware/responseHelpers.js';
+import { standardBodyParser } from '../middleware/bodyParser.js';
 
 const router = express.Router();
+router.use(standardBodyParser);
 
 /**
  * POST /auth/login

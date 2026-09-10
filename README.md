@@ -446,7 +446,7 @@ variables abort startup with a message naming the variable.
 | `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5678` | Comma-separated browser origins. Requests with no `Origin` are always allowed. |
 | `LOG_LEVEL` | `info` | `error` / `warn` / `info` / `debug`. |
 | `ENABLE_CORS` / `ENABLE_HELMET` / `ENABLE_RATE_LIMITING` | `true` | Middleware toggles. |
-| `MAX_REQUEST_SIZE` | `10kb` | Body limit for ordinary routes; bulk and query routes set their own. |
+| `MAX_REQUEST_SIZE` | `10kb` | Body limit for ordinary routes. There is no app-wide parser: each router mounts exactly one, so the bulk routes (transaction add/import, `POST /v2/budgets/batch`) keep their own 1 mb limit and `POST /v2/query` its own 10 kb one, independent of this value. |
 | `ACTUAL_QUERY_MAX_RESULTS` | `10000` | Rows `POST /v2/query` returns before truncating (`truncated: true`). |
 | `ACTUAL_QUERY_MAX_FILTER_DEPTH` | `5` | Maximum `$and`/`$or` nesting before a query is rejected with 400. |
 
