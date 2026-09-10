@@ -28,6 +28,10 @@ tags:
   - name: Categories
   - name: Category Groups
   - name: Payees
+  - name: Tags
+  - name: Notes
+  - name: Preferences
+  - name: Account Groups
   - name: Budgets
   - name: Rules
   - name: Schedules
@@ -79,6 +83,20 @@ paths:
     $ref: './paths/payees.yml#/payeeById'
   /v2/payees/merge:
     $ref: './paths/payees.yml#/payeesMerge'
+  /v2/payees/common:
+    $ref: './paths/payees.yml#/payeesCommon'
+  /v2/tags:
+    $ref: './paths/tags.yml#/tags'
+  /v2/tags/{id}:
+    $ref: './paths/tags.yml#/tagById'
+  /v2/notes/{id}:
+    $ref: './paths/notes.yml#/noteByEntityId'
+  /v2/preferences:
+    $ref: './paths/preferences.yml#/preferences'
+  /v2/account-groups:
+    $ref: './paths/account-groups.yml#/accountGroups'
+  /v2/account-groups/{id}:
+    $ref: './paths/account-groups.yml#/accountGroupById'
   /v2/budgets/months:
     $ref: './paths/budgets.yml#/budgetMonths'
   /v2/budgets/{month}:
@@ -136,6 +154,14 @@ components:
       $ref: './components/schemas.yml#/CategoryGroup'
     Payee:
       $ref: './components/schemas.yml#/Payee'
+    Tag:
+      $ref: './components/schemas.yml#/Tag'
+    Note:
+      $ref: './components/schemas.yml#/Note'
+    AccountGroup:
+      $ref: './components/schemas.yml#/AccountGroup'
+    Preferences:
+      $ref: './components/schemas.yml#/Preferences'
     Schedule:
       $ref: './components/schemas.yml#/Schedule'
     Rule:

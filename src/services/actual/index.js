@@ -14,10 +14,14 @@ export * from './runner.js';
 
 // Domains
 export * from './accounts.js';
+export * from './accountGroups.js';
 export * from './transactions.js';
 export * from './categories.js';
 export * from './categoryGroups.js';
 export * from './payees.js';
+export * from './tags.js';
+export * from './notes.js';
+export * from './preferences.js';
 export * from './budgets.js';
 export * from './rules.js';
 export * from './schedules.js';

@@ -4,6 +4,7 @@ import { authenticateJWT } from '../auth/jwt.js';
 import { requireScopeByMethod } from '../auth/permissions.js';
 import {
   payeesList,
+  payeesCommonList,
   payeeCreate,
   payeeUpdate,
   payeeDelete,
@@ -19,6 +20,13 @@ router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/', asyncHandler(async (req, res) => {
   const payees = await payeesList();
+  res.json({ success: true, payees });
+}));
+
+// Registered before every '/:id' route below: Express matches in declaration
+// order, so a later literal path would be swallowed by the id parameter.
+router.get('/common', asyncHandler(async (req, res) => {
+  const payees = await payeesCommonList();
   res.json({ success: true, payees });
 }));
 

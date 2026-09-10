@@ -1,0 +1,32 @@
+preferences:
+  get:
+    summary: Get synced budget preferences
+    description: >-
+      Returns the budget's synced preferences exactly as the engine holds them.
+      The key space belongs to Actual and grows between releases, so the object
+      is passed through unprojected. There is no write counterpart in
+      @actual-app/api 26.9.0.
+    tags: [Preferences]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Preferences map
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                preferences:
+                  $ref: '../components/schemas.yml#/Preferences'
+            examples:
+              sample:
+                value:
+                  success: true
+                  preferences:
+                    dateFormat: MM/dd/yyyy
+                    numberFormat: comma-dot
+                    hideFraction: "false"
+                    firstDayOfWeekIdx: "0"

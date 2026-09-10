@@ -9,17 +9,27 @@ import {
   categoryGroupDelete
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { validateBody, validateParams } from '../middleware/validation-schemas.js';
-import { IDSchema, CreateCategoryGroupSchema, UpdateCategoryGroupSchema } from '../middleware/validation-schemas.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation-schemas.js';
+import {
+  IDSchema,
+  CreateCategoryGroupSchema,
+  UpdateCategoryGroupSchema,
+  HiddenQuerySchema,
+  DeleteCategoryQuerySchema,
+} from '../middleware/validation-schemas.js';
 import { categoryGroupLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 router.use(authenticateJWT, requireScopeByMethod());
 
-router.get('/', asyncHandler(async (req, res) => {
-  const groups = await categoryGroupsList();
-  res.json({ success: true, categoryGroups: groups });
-}));
+router.get(
+  '/',
+  validateQuery(HiddenQuerySchema),
+  asyncHandler(async (req, res) => {
+    const groups = await categoryGroupsList(req.validatedQuery);
+    res.json({ success: true, categoryGroups: groups });
+  })
+);
 
 router.post(
   '/',
@@ -48,8 +58,9 @@ router.delete(
   '/:id',
   categoryGroupLimiter,
   validateParams(IDSchema),
+  validateQuery(DeleteCategoryQuerySchema),
   asyncHandler(async (req, res) => {
-    await categoryGroupDelete(req.validatedParams.id);
+    await categoryGroupDelete(req.validatedParams.id, req.validatedQuery.transferCategoryId);
     res.json({ success: true });
   })
 );
