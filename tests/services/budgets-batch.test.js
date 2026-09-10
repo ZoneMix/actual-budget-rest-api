@@ -17,6 +17,7 @@ import actualApi, { __reset } from '../mocks/actual-api.js';
 import { budgetBatchUpdate } from '../../src/services/actual/budgets.js';
 import { syncNow } from '../../src/services/actual/misc.js';
 import { syncPolicy } from '../../src/services/actual/syncPolicy.js';
+import { ValidationError } from '../../src/errors/index.js';
 import * as barrel from '../../src/services/actualApi.js';
 
 const CAT_A = '11111111-aaaa-4111-8111-111111111111';
@@ -74,6 +75,26 @@ describe('budgetBatchUpdate', () => {
     await budgetBatchUpdate([{ type: 'setAmount', month: '2026-09', categoryId: CAT_A, amount: 1 }]);
 
     expect(actualApi.sync).toHaveBeenCalled();
+  });
+
+  // The route validates against a discriminated union, so an unknown type
+  // cannot arrive over HTTP today. The dispatch must still refuse it rather
+  // than fall through: silently applying a carryover because an operation was
+  // "not setAmount" is how a future third op type becomes a data-corruption
+  // bug instead of a 400.
+  it('refuses an operation type it does not implement', async () => {
+    await expect(
+      budgetBatchUpdate([{ type: 'setHold', month: '2026-09', categoryId: CAT_A, amount: 1 }])
+    ).rejects.toThrow(ValidationError);
+
+    expect(actualApi.setBudgetCarryover).not.toHaveBeenCalled();
+    expect(actualApi.setBudgetAmount).not.toHaveBeenCalled();
+  });
+
+  it('names the offending type in the error', async () => {
+    await expect(
+      budgetBatchUpdate([{ type: 'setHold', month: '2026-09', categoryId: CAT_A, amount: 1 }])
+    ).rejects.toThrow(/setHold/);
   });
 
   it('is re-exported from the service barrel', () => {

@@ -92,7 +92,12 @@ export const requireScopeByMethod = () => (req, res, next) => {
 };
 
 /**
- * Require the admin role or the admin scope. Always enforced.
+ * Require the `admin` scope in the caller's expanded grant. Always enforced.
+ *
+ * The `role` claim on its own is NOT sufficient — see `isAdmin` in ./scopes.js.
+ * The name is historical: this is a scope gate, not a role gate. It sits
+ * outside the AUTH_SCOPE_ENFORCEMENT rollout deliberately, so admin-only routes
+ * refuse a non-admin even under the shipped `warn` default.
  *
  * @returns {Function} Express middleware
  */

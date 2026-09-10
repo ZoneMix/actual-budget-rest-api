@@ -56,6 +56,33 @@ export const shapeSyncError = (lastSyncError, hideDetails = isProduction) => {
 };
 
 /**
+ * Shapes the actualApi block for the response.
+ *
+ * `serverVersion` is the UPSTREAM Actual server's version, and /v2/health is
+ * mounted without auth. A version string is exactly the input needed to match a
+ * host against a CVE list, so it sits with `lastSyncError`'s message on the
+ * development-only side of the line rather than going to anonymous callers.
+ * The authenticated `GET /v2/server/version` still returns it.
+ *
+ * `hideDetails` is a parameter for the same reason as in `shapeSyncError`:
+ * `isProduction` is resolved at import time, so the production branch cannot be
+ * exercised through the route itself.
+ *
+ * @param {object} check - result of `checkActualApi()`
+ * @param {boolean} [hideDetails] - defaults to the running environment
+ */
+export const shapeActualApiCheck = (check, hideDetails = isProduction) => ({
+  status: check.status,
+  message: check.message,
+  // Queue depth and last sync time are operational, not sensitive, so they are
+  // reported everywhere; lastSyncError is already redacted by shapeSyncError().
+  queueDepth: check.queueDepth,
+  lastSyncAt: check.lastSyncAt,
+  lastSyncError: check.lastSyncError,
+  ...(hideDetails ? {} : { serverVersion: check.serverVersion, error: check.error }),
+});
+
+/**
  * The Actual server's version, or null when it cannot be determined.
  *
  * Called on the engine instance DIRECTLY, never through the `serverVersion()`
