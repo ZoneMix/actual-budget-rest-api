@@ -12,7 +12,7 @@
  * still holds.
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, afterEach, beforeAll } from '@jest/globals';
 import request from 'supertest';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
@@ -39,6 +39,13 @@ beforeAll(async () => {
   userId = row.id;
 });
 
+// The scope narrowing test below mutates users.scopes. Without this the next
+// test in the file inherits the narrowed row and passes (or fails) for the
+// wrong reason.
+afterEach(async () => {
+  await executeQuery('UPDATE users SET scopes = ?, is_active = TRUE WHERE id = ?', ['api,admin', userId]);
+});
+
 describe('refresh-token login', () => {
   it('keeps the granted scope instead of widening to the user row', async () => {
     // Granted `read`, though the user's row holds api,admin.
@@ -60,5 +67,38 @@ describe('refresh-token login', () => {
     expect(res.status).toBe(200);
     expect(res.body.scope).toBe('api');
     expect(res.body.scope).not.toContain('admin');
+  });
+});
+
+/**
+ * A refresh token outlives the account it was minted for: it is valid for
+ * JWT_REFRESH_TTL and nothing revokes it when the user is deactivated or
+ * deleted. This route selected `role, scopes` with no `is_active` filter and no
+ * missing-row guard, and `expandScopes(undefined)` then fell back to the legacy
+ * `api` grant — so a disabled account kept minting full access tokens. The
+ * OAuth grant already refuses both cases; this mirrors it.
+ */
+describe('refresh-token login for a user who should no longer hold one', () => {
+  it('refuses a deactivated user', async () => {
+    const { refresh_token } = await issueTokens(userId, username, 'api', 'user');
+    await executeQuery('UPDATE users SET is_active = FALSE WHERE id = ?', [userId]);
+
+    const res = await request(app).post('/v2/auth/login').send({ refresh_token });
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('AUTHENTICATION_ERROR');
+    expect(res.body.access_token).toBeUndefined();
+  });
+
+  it('refuses a user whose row is gone', async () => {
+    const ghostId = 999999;
+    expect(await getRow('SELECT id FROM users WHERE id = ?', [ghostId])).toBeFalsy();
+    const { refresh_token } = await issueTokens(ghostId, 'deleted-user', 'api', 'user');
+
+    const res = await request(app).post('/v2/auth/login').send({ refresh_token });
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('AUTHENTICATION_ERROR');
+    expect(res.body.access_token).toBeUndefined();
   });
 });

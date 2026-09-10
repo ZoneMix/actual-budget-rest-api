@@ -51,9 +51,18 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
         throwUnauthorized('Refresh token revoked');
       }
 
-      // Get user's current role and scopes from database
-      const user = await getRow('SELECT role, scopes FROM users WHERE id = ?', [decoded.user_id]);
-      const role = user?.role || decoded.role || 'user';
+      // A refresh token outlives the account: it stays valid for
+      // JWT_REFRESH_TTL and nothing revokes it when the user is deactivated or
+      // deleted. Without the is_active filter and this guard, a disabled
+      // account kept minting access tokens — and expandScopes(undefined) would
+      // hand the missing row the legacy `api` grant on the way out. Mirrors
+      // resolveRefreshSubject() in src/auth/oauth2/grants.js.
+      const user = await getRow('SELECT role, scopes FROM users WHERE id = ? AND is_active = TRUE', [decoded.user_id]);
+      if (!user) {
+        logAuthEvent('REFRESH_FAILED', decoded.user_id, { reason: 'user_inactive_or_missing' }, false);
+        throwUnauthorized('User is no longer active');
+      }
+      const role = user.role || decoded.role || 'user';
 
       // The refresh token's scope claim is what was granted; the user's row is
       // what they still hold. Narrow to both. Reading the user's row first (as
@@ -61,8 +70,8 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
       // asked for — the same widening /oauth/token was fixed for. The fallback
       // is only for refresh tokens minted before the claim existed.
       const scopeArray = intersectScopes(
-        parseScopeList(decoded.scope || user?.scopes || SCOPES.LEGACY_API),
-        expandScopes(user?.scopes)
+        parseScopeList(decoded.scope || user.scopes || SCOPES.LEGACY_API),
+        expandScopes(user.scopes)
       );
       if (scopeArray.length === 0) {
         logAuthEvent('REFRESH_FAILED', decoded.user_id, { reason: 'scopes_no_longer_held' }, false);
