@@ -51,11 +51,13 @@ describe('domain services', () => {
       expect(actualApi.getTransactions).toHaveBeenCalledWith('a1', '1970-01-01', '2099-12-31');
     });
 
-    // Known wrong shape: the SDK takes an options object, not positional flags.
-    it('transactionsAdd forwards positional runTransfers/learnCategories flags', async () => {
+    it('transactionsAdd forwards runTransfers/learnCategories as an options object', async () => {
       const transactions = [{ date: '2026-01-01', amount: -500 }];
       await transactionsAdd('a1', transactions, true, false);
-      expect(actualApi.addTransactions).toHaveBeenCalledWith('a1', transactions, true, false);
+      expect(actualApi.addTransactions).toHaveBeenCalledWith('a1', transactions, {
+        learnCategories: false,
+        runTransfers: true,
+      });
     });
   });
 

@@ -44,6 +44,14 @@ export const transactionsList = async (accountId, startDate = undefined, endDate
   });
 };
 
+/**
+ * Adds transactions to an account.
+ *
+ * The SDK takes the two flags as a single options object, NOT as positional
+ * arguments (@actual-app/api/@types/methods.d.ts:57), and resolves with the
+ * literal string 'ok' — never a list of created ids. Callers must not treat
+ * the resolved value as a collection.
+ */
 export const transactionsAdd = async (accountId, transactions, runTransfers = false, learnCategories = false) => {
   return runWithApi(
     'transactionsAdd',
@@ -54,7 +62,7 @@ export const transactionsAdd = async (accountId, transactions, runTransfers = fa
         runTransfers,
         learnCategories
       });
-      const result = await apiInstance.addTransactions(accountId, transactions, runTransfers, learnCategories);
+      const result = await apiInstance.addTransactions(accountId, transactions, { learnCategories, runTransfers });
       logger.info('[Actual] transactionsAdd completed', {
         accountId,
         transactionCount: transactions.length,
@@ -66,21 +74,31 @@ export const transactionsAdd = async (accountId, transactions, runTransfers = fa
   );
 };
 
-export const transactionsImport = async (accountId, transactions) => {
+/**
+ * Imports transactions with reconciliation.
+ *
+ * `opts` is the SDK's ImportTransactionsOpts
+ * (@actual-app/api/@types/methods.d.ts:61). Passing `undefined` is deliberate:
+ * the SDK then applies its own defaults, which an empty object would not.
+ * The engine result ({ added, updated, updatedPreview, errors }) is returned
+ * unchanged.
+ */
+export const transactionsImport = async (accountId, transactions, opts = undefined) => {
   return runWithApi(
     'transactionsImport',
     async (apiInstance) => {
       logger.debug('[Actual] Importing transactions', {
         accountId,
-        transactionCount: transactions.length
+        transactionCount: transactions.length,
+        optsKeys: opts ? Object.keys(opts) : []
       });
-      const result = await apiInstance.importTransactions(accountId, transactions);
+      const result = await apiInstance.importTransactions(accountId, transactions, opts);
       logger.info('[Actual] transactionsImport completed', {
         accountId,
         transactionCount: transactions.length,
-        newTransactions: result.newTransactions?.length || 0,
-        matchedTransactions: result.matchedTransactions?.length || 0,
-        errors: result.errors?.length || 0
+        added: result?.added?.length ?? 0,
+        updated: result?.updated?.length ?? 0,
+        errors: result?.errors?.length ?? 0
       });
       return result;
     },
