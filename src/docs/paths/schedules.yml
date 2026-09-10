@@ -92,6 +92,15 @@ scheduleById:
     tags: [Schedules]
     security:
       - bearerAuth: []
+    parameters:
+      - in: query
+        name: resetNextDate
+        required: false
+        description: >-
+          Recompute the schedule's next occurrence from the updated date.
+          Omit it to leave the engine's own default in place.
+        schema:
+          type: boolean
     requestBody:
       required: true
       content:
