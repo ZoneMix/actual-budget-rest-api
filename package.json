@@ -53,5 +53,8 @@
     ".env*": [
       "git rm --cached"
     ]
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

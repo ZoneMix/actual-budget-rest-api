@@ -8,31 +8,37 @@ src/node_modules
 .env.keys
 !.env.example
 
-# Git
+# Git / tooling
 .git
 .gitignore
+.github/
+.husky/
+.claude/
+.superpowers/
+.worktrees/
+
+# Not needed in the image
+tests/
+coverage/
+monitoring/
+scripts/
+n8n-nodes-actual-budget-rest-api/
+docker-compose*.yml
+Dockerfile*
+.dockerignore
 
 # Documentation
 README.md
 *.md
-SECURITY_*.md
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
 .DS_Store
 
-# Build files
+# Logs
 npm-debug.log
 yarn-error.log
 
 # Data directories
 data/
-
-# Docker
-docker-compose*.yml
-Dockerfile*
-.dockerignore
-
-# GitHub
-.github/
