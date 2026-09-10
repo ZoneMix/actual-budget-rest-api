@@ -22,9 +22,12 @@ import { syncPolicy } from './syncPolicy.js';
 const getOrCreate = (name, Metric, options) =>
   register.getSingleMetric(name) ?? new Metric({ name, registers: [register], ...options });
 
+// `outcome` is on the histogram rather than in a separate failure counter so a
+// failing engine still produces latency data and the success rate is derivable
+// from one metric: sum by (outcome) of actual_engine_op_duration_seconds_count.
 const opDuration = getOrCreate('actual_engine_op_duration_seconds', Histogram, {
-  help: 'Duration of Actual engine operations in seconds',
-  labelNames: ['label', 'mode'],
+  help: 'Duration of Actual engine operations in seconds, by outcome',
+  labelNames: ['label', 'mode', 'outcome'],
   buckets: [0.005, 0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60],
 });
 
@@ -93,24 +96,35 @@ const syncAfterWrite = async (instance, label) => {
  */
 export const runWithApi = async (label, fn, { mode = 'read', force = false } = {}) =>
   withEngine(label, async () => {
-    const instance = await getActualApi();
     const started = Date.now();
     queueDepth.set(getQueueDepth());
 
-    if (mode === 'read' && syncPolicy.shouldSyncBefore({ force })) {
-      await syncBeforeRead(instance, label);
+    // Pessimistic default: only the success path clears it, so anything that
+    // throws — init, pre-read sync, or fn itself — is still observed.
+    let outcome = 'error';
+    try {
+      const instance = await getActualApi();
+
+      if (mode === 'read' && syncPolicy.shouldSyncBefore({ force })) {
+        await syncBeforeRead(instance, label);
+      }
+
+      const result = await fn(instance);
+
+      if (mode === 'write') {
+        await syncAfterWrite(instance, label);
+      }
+
+      outcome = 'success';
+      return result;
+    } finally {
+      const duration = Date.now() - started;
+      if (outcome === 'success') {
+        logger.info('[Actual] operation completed', { label, durationMs: duration });
+      } else {
+        logger.warn('[Actual] operation failed', { label, mode, durationMs: duration });
+      }
+      opDuration.observe({ label, mode, outcome }, duration / 1000);
+      queueDepth.set(getQueueDepth());
     }
-
-    const result = await fn(instance);
-
-    if (mode === 'write') {
-      await syncAfterWrite(instance, label);
-    }
-
-    const duration = Date.now() - started;
-    logger.info('[Actual] operation completed', { label, durationMs: duration });
-    opDuration.observe({ label, mode }, duration / 1000);
-    queueDepth.set(getQueueDepth());
-
-    return result;
   });

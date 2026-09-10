@@ -42,12 +42,32 @@ const checkDatabase = async () => {
 /**
  * Check Actual API connectivity.
  */
+/**
+ * Shapes the last sync error for the response.
+ *
+ * The message is the raw error from `instance.sync()`, so it can carry the
+ * Actual server's host, port or connection details — and /v2/health is mounted
+ * without auth. In production only the timestamp is emitted, which is enough to
+ * see that syncs are failing and for how long; the message stays in the logs.
+ *
+ * Exported for testing: `isProduction` is resolved at import time, so the
+ * environment-dependent branch cannot be exercised through the route itself.
+ *
+ * @param {object|null} lastSyncError - `{ message, at }` from the sync policy
+ * @param {boolean} [hideDetails] - defaults to the running environment
+ */
+export const shapeSyncError = (lastSyncError, hideDetails = isProduction) => {
+  if (!lastSyncError) return null;
+  return hideDetails ? { at: lastSyncError.at } : lastSyncError;
+};
+
 const checkActualApi = async () => {
-  // Engine state is operational, not sensitive: reported in every environment.
+  // Queue depth and last sync time are operational, not sensitive, so they are
+  // reported everywhere; the sync error message is redacted in production.
   const engine = {
     queueDepth: getQueueDepth(),
     lastSyncAt: syncPolicy.lastSyncAt(),
-    lastSyncError: syncPolicy.lastSyncError(),
+    lastSyncError: shapeSyncError(syncPolicy.lastSyncError()),
   };
 
   try {
@@ -128,7 +148,8 @@ router.get('/', async (req, res) => {
       actualApi: {
         status: actualApiCheck.status,
         message: actualApiCheck.message,
-        // Engine queue and sync state (safe in production)
+        // Engine queue and sync state; lastSyncError is already redacted for
+        // production by shapeSyncError() in checkActualApi().
         queueDepth: actualApiCheck.queueDepth,
         lastSyncAt: actualApiCheck.lastSyncAt,
         lastSyncError: actualApiCheck.lastSyncError,

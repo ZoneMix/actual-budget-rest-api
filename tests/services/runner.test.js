@@ -100,20 +100,57 @@ describe('runWithApi', () => {
   });
 
   describe('metrics', () => {
-    it('observes the operation duration with its label and mode', async () => {
-      await runWithApi('metered-op', async () => 'ok', { mode: 'read' });
-
+    const durationCount = async (label, outcome) => {
       const durations = register.getSingleMetric('actual_engine_op_duration_seconds');
       expect(durations).toBeDefined();
 
+      const { values } = await durations.get();
+      return values.find(
+        (entry) =>
+          entry.metricName === 'actual_engine_op_duration_seconds_count' &&
+          entry.labels.label === label &&
+          entry.labels.outcome === outcome
+      )?.value;
+    };
+
+    it('observes the operation duration with its label, mode and outcome', async () => {
+      await runWithApi('metered-op', async () => 'ok', { mode: 'read' });
+
+      const durations = register.getSingleMetric('actual_engine_op_duration_seconds');
       const { values } = await durations.get();
       const counted = values.find(
         (entry) =>
           entry.metricName === 'actual_engine_op_duration_seconds_count' &&
           entry.labels.label === 'metered-op' &&
-          entry.labels.mode === 'read'
+          entry.labels.mode === 'read' &&
+          entry.labels.outcome === 'success'
       );
       expect(counted?.value).toBe(1);
+    });
+
+    it('still observes the duration when the operation throws, labelled outcome=error', async () => {
+      await expect(
+        runWithApi(
+          'failing-op',
+          async () => {
+            throw new Error('engine exploded');
+          },
+          { mode: 'read' }
+        )
+      ).rejects.toThrow('engine exploded');
+
+      expect(await durationCount('failing-op', 'error')).toBe(1);
+      expect(await durationCount('failing-op', 'success')).toBeUndefined();
+    });
+
+    it('observes a failed pre-read sync as an error too', async () => {
+      actualApi.sync.mockRejectedValueOnce(new Error('server unreachable'));
+
+      await expect(
+        runWithApi('sync-failing-op', async () => 'never', { mode: 'read' })
+      ).rejects.toThrow(/Failed to sync with Actual Budget server/);
+
+      expect(await durationCount('sync-failing-op', 'error')).toBe(1);
     });
 
     it('reports the current queue depth as a gauge', async () => {
