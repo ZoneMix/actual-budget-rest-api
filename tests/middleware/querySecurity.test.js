@@ -4,6 +4,7 @@
 
 import { validateQuery, secureQueryMiddleware, limitQueryResults } from '../../src/middleware/querySecurity.js';
 import { ValidationError } from '../../src/errors/index.js';
+import { ACTUAL_QUERY_MAX_RESULTS, ACTUAL_QUERY_MAX_FILTER_DEPTH } from '../../src/config/index.js';
 
 describe('Query Security', () => {
   describe('validateQuery', () => {
@@ -144,6 +145,41 @@ describe('Query Security', () => {
         options: { splits: 'inline' },
       })).not.toThrow();
     });
+
+    // orderBy / groupBy / calculate reach the engine as field expressions just
+    // like select does, so they get the same path-traversal check.
+    describe('field-expression checks', () => {
+      it.each([
+        ['orderBy string', { orderBy: '../secrets' }],
+        ['orderBy array entry', { orderBy: ['date', '../secrets'] }],
+        ['orderBy object key', { orderBy: [{ '../secrets': 'desc' }] }],
+        ['orderBy object value', { orderBy: [{ field: 'a/b' }] }],
+        ['groupBy string', { groupBy: 'a\\b' }],
+        ['groupBy array entry', { groupBy: ['category', '../secrets'] }],
+        ['calculate string', { calculate: '../secrets' }],
+        ['calculate object key', { calculate: { '../secrets': 'amount' } }],
+        ['calculate object value', { calculate: { $sum: '../secrets' } }],
+      ])('rejects a traversal sequence in %s', (_label, extra) => {
+        expect(() => validateQuery({ table: 'transactions', ...extra })).toThrow(ValidationError);
+      });
+
+      it.each([
+        ['orderBy string', { orderBy: 'date' }],
+        ['orderBy object', { orderBy: [{ date: 'desc' }] }],
+        ['groupBy array', { groupBy: ['category', 'payee'] }],
+        ['calculate object', { calculate: { $sum: 'amount' } }],
+      ])('accepts a clean %s', (_label, extra) => {
+        expect(() => validateQuery({ table: 'transactions', ...extra })).not.toThrow();
+      });
+
+      it('ignores non-string leaves such as booleans and numbers', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          orderBy: [{ date: 'desc', nulls: null }],
+          groupBy: 'category',
+        })).not.toThrow();
+      });
+    });
   });
 
   describe('limitQueryResults', () => {
@@ -156,6 +192,25 @@ describe('Query Security', () => {
       const results = Array(15000).fill({ id: 1 });
       const limited = limitQueryResults(results);
       expect(limited).toHaveLength(10000);
+    });
+
+    it('truncates at the configured cap rather than a hardcoded literal', () => {
+      const results = Array(ACTUAL_QUERY_MAX_RESULTS + 1).fill({ id: 1 });
+      expect(limitQueryResults(results)).toHaveLength(ACTUAL_QUERY_MAX_RESULTS);
+    });
+
+    it('returns an at-the-cap result untouched', () => {
+      const results = Array(ACTUAL_QUERY_MAX_RESULTS).fill({ id: 1 });
+      expect(limitQueryResults(results)).toBe(results);
+    });
+
+    it('rejects a filter one level past the configured depth', () => {
+      // Nest $and exactly ACTUAL_QUERY_MAX_FILTER_DEPTH + 1 levels deep.
+      let filter = { test: 'value' };
+      for (let i = 0; i <= ACTUAL_QUERY_MAX_FILTER_DEPTH; i += 1) {
+        filter = { $and: [filter] };
+      }
+      expect(() => validateQuery({ table: 'transactions', filter })).toThrow(ValidationError);
     });
 
     it('should return non-array results as-is', () => {
