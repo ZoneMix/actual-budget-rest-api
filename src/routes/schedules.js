@@ -8,8 +8,13 @@ import {
   scheduleDelete
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { validateBody, validateParams } from '../middleware/validation-schemas.js';
-import { IDSchema, CreateScheduleSchema, UpdateScheduleSchema } from '../middleware/validation-schemas.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation-schemas.js';
+import {
+  IDSchema,
+  CreateScheduleSchema,
+  UpdateScheduleSchema,
+  ScheduleUpdateQuerySchema,
+} from '../middleware/validation-schemas.js';
 import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
@@ -35,10 +40,13 @@ router.put(
   '/:id',
   standardWriteLimiter,
   validateParams(IDSchema),
+  validateQuery(ScheduleUpdateQuerySchema),
   validateBody(UpdateScheduleSchema),
   asyncHandler(async (req, res) => {
     const { fields } = req.validatedBody;
-    const updated = await scheduleUpdate(req.validatedParams.id, fields);
+    // Stays undefined when the caller omits it, so the engine keeps its default.
+    const { resetNextDate } = req.validatedQuery;
+    const updated = await scheduleUpdate(req.validatedParams.id, fields, resetNextDate);
     res.json({ success: true, schedule: updated });
   })
 );

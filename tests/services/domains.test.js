@@ -103,10 +103,9 @@ describe('domain services', () => {
   });
 
   describe('schedules', () => {
-    // Known wrong shape: the SDK takes the schedule directly, not { schedule }.
-    it('scheduleCreate(schedule) calls createSchedule({ schedule })', async () => {
+    it('scheduleCreate(schedule) calls createSchedule(schedule)', async () => {
       await scheduleCreate({ name: 'Rent' });
-      expect(actualApi.createSchedule).toHaveBeenCalledWith({ schedule: { name: 'Rent' } });
+      expect(actualApi.createSchedule).toHaveBeenCalledWith({ name: 'Rent' });
     });
   });
 
