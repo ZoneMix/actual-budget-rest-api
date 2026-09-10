@@ -119,10 +119,9 @@ describe('domain services', () => {
   });
 
   describe('misc', () => {
-    // Known wrong shape: the SDK takes (type, name) positionally.
-    it('getIdByName(type, name) calls getIDByName({ type, name })', async () => {
+    it('getIdByName(type, name) calls getIDByName(type, name)', async () => {
       await getIdByName('accounts', 'Checking');
-      expect(actualApi.getIDByName).toHaveBeenCalledWith({ type: 'accounts', name: 'Checking' });
+      expect(actualApi.getIDByName).toHaveBeenCalledWith('accounts', 'Checking');
     });
   });
 
