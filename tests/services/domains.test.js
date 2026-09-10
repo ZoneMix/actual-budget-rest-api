@@ -90,10 +90,15 @@ describe('domain services', () => {
   });
 
   describe('rules', () => {
-    // Known wrong shape: the SDK takes a whole rule object, not (id, fields).
-    it('ruleUpdate(id, fields) calls updateRule(id, fields)', async () => {
+    it('ruleUpdate(id, fields) merges onto the current rule and calls updateRule(rule)', async () => {
+      actualApi.getRules.mockResolvedValue([{ id: 'r-1', stage: 'post', conditions: [], actions: [] }]);
       await ruleUpdate('r-1', { stage: 'pre' });
-      expect(actualApi.updateRule).toHaveBeenCalledWith('r-1', { stage: 'pre' });
+      expect(actualApi.updateRule).toHaveBeenCalledWith({
+        id: 'r-1',
+        stage: 'pre',
+        conditions: [],
+        actions: [],
+      });
     });
   });
 
