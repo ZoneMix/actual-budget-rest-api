@@ -27,13 +27,14 @@ export default {
   // 55.99 stmts / 44.06 branches / 54.44 funcs / 55.63 lines and set
   // 55/40/50/55. The scope-enforcement phase adds the auth/scopes,
   // permissions, jwt, oauth2-scopes, route-scope, admin-auth, auth-refresh and
-  // logger suites; re-measured on the merged codebase after the rebase.
+  // logger suites. Re-measured on the merged codebase after the rebase onto
+  // main: 67.96 stmts / 57.66 branches / 67.01 funcs / 67.23 lines.
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 60,
-      lines: 60,
-      statements: 60,
+      branches: 55,
+      functions: 65,
+      lines: 65,
+      statements: 65,
     },
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
