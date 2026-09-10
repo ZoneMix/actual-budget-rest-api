@@ -2,6 +2,7 @@
  * Admin OAuth client schemas.
  */
 import { z } from 'zod';
+import { atLeastOneKey } from './common.js';
 import { SCOPES } from './constants.js';
 
 const splitCommaScopes = (value) => (
@@ -20,16 +21,14 @@ export const CreateClientSchema = z.object({
   ]).optional().default(''),
 });
 
-export const UpdateClientSchema = z.object({
+export const UpdateClientSchema = atLeastOneKey(z.object({
   client_secret: z.string().min(32).optional(),
   allowed_scopes: AllowedScopesSchema.optional(),
   redirect_uris: z.union([
     z.string(),
     z.array(z.string().url()),
   ]).optional(),
-}).refine((obj) => Object.keys(obj).length > 0, {
-  message: 'At least one field must be updated',
-});
+}));
 
 export const ClientIdParamsSchema = z.object({
   clientId: z.string().min(1).max(255),

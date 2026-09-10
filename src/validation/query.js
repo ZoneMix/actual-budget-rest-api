@@ -5,7 +5,7 @@
  * table/filter/select/options shape at runtime and is untouched here.
  */
 import { z } from 'zod';
-import { QUERY_TABLES } from './constants.js';
+import { QUERY_TABLES, QUERY_SPLIT_MODES } from './constants.js';
 
 const RecordSchema = z.record(z.string(), z.unknown());
 
@@ -28,7 +28,7 @@ export const QuerySchema = z.object({
     groupBy: GroupBySchema.optional(),
     calculate: CalculateSchema.optional(),
     options: z.strictObject({
-      splits: z.enum(['inline', 'grouped', 'all']).optional(),
+      splits: z.enum(QUERY_SPLIT_MODES).optional(),
     }).optional(),
     limit: z.number().int().min(1).max(10000).optional(),
     offset: z.number().int().min(0).optional(),

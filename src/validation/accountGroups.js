@@ -2,6 +2,7 @@
  * Account group schemas.
  */
 import { z } from 'zod';
+import { atLeastOneKey } from './common.js';
 
 export const CreateAccountGroupSchema = z.object({
   group: z.object({
@@ -10,7 +11,7 @@ export const CreateAccountGroupSchema = z.object({
 });
 
 export const UpdateAccountGroupSchema = z.object({
-  fields: z.object({
+  fields: atLeastOneKey(z.object({
     name: z.string().min(1).max(255).optional(),
-  }).refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be updated' }),
+  })),
 });

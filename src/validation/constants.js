@@ -1,6 +1,9 @@
 /**
- * Shared literal lists for validation schemas — the single source of truth
- * for every enum used across more than one schema file.
+ * Every enum literal used by a validation schema lives here — the single
+ * source of truth, whether it's shared by several schema files or used by
+ * only one. Schema files import from here rather than inlining a literal
+ * array; see tests/validation/constants.test.js for how the rule-engine
+ * lists are pinned against the installed SDK.
  */
 
 // Fields a rule condition/action may reference — FIELD_INFO's keys
@@ -38,6 +41,28 @@ export const RULE_ACTION_OPS = [
 // APIRuleEntity adds 'default' on top of RuleEntity['stage'] ('pre'|null|'post')
 // (node_modules/@actual-app/core/@types/src/server/api-models.d.ts:71-73).
 export const RULE_STAGES = ['pre', 'default', 'post'];
+
+// A rule's `conditionsOp` (how its `conditions` combine) — NewRuleEntity
+// ['conditionsOp'] (rule.d.ts:4): 'or' | 'and'.
+export const RULE_CONDITIONS_OP = ['and', 'or'];
+
+// RuleConditionSchema/RuleActionSchema's optional `type` hint — the four
+// primitive value kinds Condition/Action parse against, plus 'id'
+// (BaseConditionEntity['type'], rule.d.ts:43).
+export const RULE_CONDITION_VALUE_TYPES = ['id', 'string', 'number', 'date', 'boolean'];
+
+// ScheduleDateSchema's recurring-date `frequency`.
+export const SCHEDULE_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
+
+// ScheduleDateSchema's recurring-date `weekendSolveMode`.
+export const SCHEDULE_WEEKEND_SOLVE_MODES = ['before', 'after'];
+
+// CreateScheduleSchema/UpdateScheduleSchema's `amountOp` — AmountOPType
+// (api-models.d.ts:97): 'is' | 'isapprox' | 'isbetween'.
+export const SCHEDULE_AMOUNT_OPS = ['is', 'isapprox', 'isbetween'];
+
+// QuerySchema's `options.splits`.
+export const QUERY_SPLIT_MODES = ['inline', 'grouped', 'all'];
 
 // OAuth client scopes (this wrapper's own admin API, not an Actual SDK concept).
 export const SCOPES = ['read', 'write', 'admin', 'api'];
