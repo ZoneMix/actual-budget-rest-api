@@ -6,7 +6,7 @@ ARG NODE_IMAGE=node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff623
 FROM ${NODE_IMAGE} AS builder
 
 # Build dependencies for native modules (better-sqlite3)
-RUN apk add --no-cache python3 make g++
+RUN apk upgrade --no-cache && apk add --no-cache python3 make g++
 
 WORKDIR /app
 
@@ -21,9 +21,11 @@ FROM ${NODE_IMAGE}
 
 ENV NODE_ENV=production
 
-# Drop the bundled package managers: unused at runtime and a recurring source of
+# Apply alpine security updates on top of the pinned base (e.g. openssl 3.5.8 for CVE-2026-14456),
+# drop the bundled package managers (unused at runtime, recurring source of
 # image-scan findings. Then create the unprivileged runtime user.
-RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx \
+RUN apk upgrade --no-cache && \
+    rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx \
            /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn* && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 -G nodejs
