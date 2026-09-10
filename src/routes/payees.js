@@ -1,6 +1,7 @@
 // src/routes/payees.js - CRUD for payees + merge
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import {
   payeesList,
   payeeCreate,
@@ -14,7 +15,7 @@ import { IDSchema, CreatePayeeSchema, UpdatePayeeSchema, MergePayeesSchema } fro
 import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/', asyncHandler(async (req, res) => {
   const payees = await payeesList();

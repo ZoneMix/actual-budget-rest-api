@@ -12,6 +12,8 @@
 import express from 'express';
 import { getMetrics, resetMetrics, register } from '../middleware/metrics.js';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScope } from '../auth/permissions.js';
+import { SCOPES } from '../auth/scopes.js';
 import { sendSuccess } from '../middleware/responseHelpers.js';
 import { NODE_ENV } from '../config/index.js';
 
@@ -76,10 +78,17 @@ router.get('/summary', (req, res) => {
 /**
  * POST /metrics/reset
  *
- * Resets all metrics counters.
- * Requires authentication (admin recommended).
+ * Resets all metrics counters. Destroys observability data, so it is the one
+ * metrics endpoint that is admin-only in every environment: the router-level
+ * `authenticateJWT` above only applies in production, so outside production
+ * this route authenticates on its own. The admin scope check follows
+ * AUTH_SCOPE_ENFORCEMENT like every other requireScope() call.
  */
-router.post('/reset', (req, res) => {
+const resetGuards = isProduction
+  ? [requireScope(SCOPES.ADMIN)]
+  : [authenticateJWT, requireScope(SCOPES.ADMIN)];
+
+router.post('/reset', ...resetGuards, (req, res) => {
   resetMetrics();
   
   sendSuccess(res, { message: 'Metrics reset successfully' });

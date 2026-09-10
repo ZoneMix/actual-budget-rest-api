@@ -1,6 +1,7 @@
 // src/routes/budgets.js - Budget-specific endpoints
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import {
   budgetMonthsList,
   budgetMonthGet,
@@ -21,7 +22,7 @@ import {
 import { budgetLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/months', asyncHandler(async (req, res) => {
   const months = await budgetMonthsList();

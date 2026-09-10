@@ -1,6 +1,7 @@
 // src/routes/schedules.js - CRUD for schedules
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import {
   schedulesList,
   scheduleCreate,
@@ -18,7 +19,7 @@ import {
 import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/', asyncHandler(async (req, res) => {
   const schedules = await schedulesList();

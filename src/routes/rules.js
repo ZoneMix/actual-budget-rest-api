@@ -1,6 +1,7 @@
 // src/routes/rules.js - CRUD for rules + payee-specific rules
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import {
   rulesList,
   payeeRulesList,
@@ -14,7 +15,7 @@ import { IDSchema, CreateRuleSchema, UpdateRuleSchema, PayeeIdParamsSchema } fro
 import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/', asyncHandler(async (req, res) => {
   const rules = await rulesList();
