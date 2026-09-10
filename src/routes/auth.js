@@ -11,6 +11,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticateUser } from '../auth/user.js';
 import { issueTokens, revokeToken, isTokenRevoked, authenticateJWT, JWT_VERIFY_OPTIONS } from '../auth/jwt.js';
+import { expandScopes, formatScopes, intersectScopes, parseScopeList, SCOPES } from '../auth/scopes.js';
 import { insertToken, getRow } from '../db/authDb.js';
 import {
   ACCESS_TTL_SECONDS,
@@ -51,9 +52,21 @@ router.post('/login', loginLimiterWithLogging, validateBody(LoginSchema), async 
       // Get user's current role and scopes from database
       const user = await getRow('SELECT role, scopes FROM users WHERE id = ?', [decoded.user_id]);
       const role = user?.role || decoded.role || 'user';
-      const scopes = user?.scopes || decoded.scope || 'api';
-      const scopeArray = Array.isArray(scopes) ? scopes : scopes.split(',').map(s => s.trim()).filter(Boolean);
-      const scopeString = Array.isArray(scopes) ? scopes.join(',') : scopes;
+
+      // The refresh token's scope claim is what was granted; the user's row is
+      // what they still hold. Narrow to both. Reading the user's row first (as
+      // this did) hands a token granted `read` everything the user could have
+      // asked for — the same widening /oauth/token was fixed for. The fallback
+      // is only for refresh tokens minted before the claim existed.
+      const scopeArray = intersectScopes(
+        parseScopeList(decoded.scope || user?.scopes || SCOPES.LEGACY_API),
+        expandScopes(user?.scopes)
+      );
+      if (scopeArray.length === 0) {
+        logAuthEvent('REFRESH_FAILED', decoded.user_id, { reason: 'scopes_no_longer_held' }, false);
+        throwUnauthorized('Refresh token grants no scope the user still holds');
+      }
+      const scopeString = formatScopes(scopeArray);
 
       // Generate new access token with new JTI
       const newJti = crypto.randomUUID();
