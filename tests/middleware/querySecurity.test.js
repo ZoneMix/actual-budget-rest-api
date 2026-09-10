@@ -60,6 +60,50 @@ describe('Query Security', () => {
       })).not.toThrow();
     });
 
+    // QuerySchema's FilterSchema accepts an array of filter expressions, and
+    // buildQuery turns each entry into its own .filter() call, so the security
+    // layer has to accept the same shape or that branch is unreachable.
+    describe('array filters', () => {
+      it('accepts an array of filter expressions', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          filter: [{ cleared: true }, { amount: { $lt: 0 } }],
+        })).not.toThrow();
+      });
+
+      it('accepts an empty array', () => {
+        expect(() => validateQuery({ table: 'transactions', filter: [] })).not.toThrow();
+      });
+
+      it('still rejects a dangerous operator inside an array entry', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          filter: [{ cleared: true }, { $exec: 'malicious code' }],
+        })).toThrow(ValidationError);
+      });
+
+      it('rejects an array longer than the condition-array cap', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          filter: Array(51).fill({ cleared: true }),
+        })).toThrow(ValidationError);
+      });
+
+      it('rejects an array nested inside an array', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          filter: [[{ cleared: true }]],
+        })).toThrow(ValidationError);
+      });
+
+      it('rejects a non-object entry', () => {
+        expect(() => validateQuery({
+          table: 'transactions',
+          filter: [{ cleared: true }, 'nope'],
+        })).toThrow(ValidationError);
+      });
+    });
+
     it('should reject filter with dangerous operator', () => {
       expect(() => validateQuery({
         table: 'transactions',

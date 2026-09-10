@@ -77,6 +77,28 @@ const validateConditionGroup = (group, key, depth) => {
 };
 
 /**
+ * Validates a list of sibling filter expressions.
+ *
+ * `FilterSchema` accepts an array, and buildQuery turns each entry into its own
+ * `.filter()` call, so entries are siblings rather than nesting and are checked
+ * at the SAME depth. An entry may not itself be an array: that has no meaning
+ * for the builder, and allowing it would let a caller recurse without ever
+ * advancing the depth counter.
+ */
+const validateFilterList = (filters, depth) => {
+  if (filters.length > MAX_CONDITION_ARRAY_LENGTH) {
+    throw new ValidationError(`Filter array exceeds maximum length of ${MAX_CONDITION_ARRAY_LENGTH}`);
+  }
+  filters.forEach((entry) => {
+    if (Array.isArray(entry)) {
+      throw new ValidationError('Filter array entries must be filter objects');
+    }
+    // eslint-disable-next-line no-use-before-define
+    validateFilter(entry, depth);
+  });
+};
+
+/**
  * Validates filter object structure and depth.
  */
 export const validateFilter = (filter, depth = 0) => {
@@ -84,7 +106,12 @@ export const validateFilter = (filter, depth = 0) => {
     throw new ValidationError('Filter depth exceeds maximum allowed depth');
   }
 
-  if (typeof filter !== 'object' || filter === null || Array.isArray(filter)) {
+  if (Array.isArray(filter)) {
+    validateFilterList(filter, depth);
+    return;
+  }
+
+  if (typeof filter !== 'object' || filter === null) {
     throw new ValidationError('Invalid filter structure');
   }
 
