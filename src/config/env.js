@@ -43,7 +43,19 @@ const envSchema = z.object({
   ACTUAL_SERVER_URL: z.string().url('ACTUAL_SERVER_URL must be a valid URL'),
   ACTUAL_PASSWORD: z.string().min(1, 'ACTUAL_PASSWORD is required'),
   ACTUAL_SYNC_ID: z.string().min(1, 'ACTUAL_SYNC_ID is required'),
+  // End-to-end encryption password for the budget file (only set when the file is E2E encrypted)
+  ACTUAL_FILE_PASSWORD: z.string().optional(),
   DATA_DIR: z.string().default('/app/.actual-cache'),
+
+  // ============================================================================
+  // Actual Engine Queue & Sync Policy
+  // ============================================================================
+  // Maximum number of pending engine operations before new ones are rejected with 503
+  ACTUAL_QUEUE_MAX_DEPTH: z.string().transform(Number).pipe(z.number().int().positive()).default(100),
+  // Per-operation caller timeout; the engine call itself is NOT cancelled (504 to the caller)
+  ACTUAL_OP_TIMEOUT_MS: z.string().transform(Number).pipe(z.number().int().positive()).default(60000),
+  // Minimum age of the last successful sync before a read triggers another one
+  ACTUAL_SYNC_MIN_INTERVAL_MS: z.string().transform(Number).pipe(z.number().int().nonnegative()).default(5000),
 
   // ============================================================================
   // CORS Configuration

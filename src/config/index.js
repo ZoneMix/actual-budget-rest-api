@@ -21,6 +21,18 @@ export const POSTGRES_DB = env.POSTGRES_DB;
 export const POSTGRES_USER = env.POSTGRES_USER;
 export const POSTGRES_PASSWORD = env.POSTGRES_PASSWORD;
 export { isPostgresConfigured };
+
+// Actual Budget engine connection
+export const ACTUAL_SERVER_URL = env.ACTUAL_SERVER_URL;
+export const ACTUAL_PASSWORD = env.ACTUAL_PASSWORD;
+export const ACTUAL_SYNC_ID = env.ACTUAL_SYNC_ID;
+export const ACTUAL_FILE_PASSWORD = env.ACTUAL_FILE_PASSWORD;
+
+// Actual engine queue & sync policy tuning
+export const ACTUAL_QUEUE_MAX_DEPTH = env.ACTUAL_QUEUE_MAX_DEPTH;
+export const ACTUAL_OP_TIMEOUT_MS = env.ACTUAL_OP_TIMEOUT_MS;
+export const ACTUAL_SYNC_MIN_INTERVAL_MS = env.ACTUAL_SYNC_MIN_INTERVAL_MS;
+
 export const NODE_ENV = env.NODE_ENV;
 export const TRUST_PROXY = env.TRUST_PROXY;
 export const LOG_LEVEL = env.LOG_LEVEL;
