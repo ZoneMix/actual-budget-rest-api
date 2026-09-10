@@ -114,6 +114,10 @@ ruleById:
         type: string
   put:
     summary: Update rule
+    description: >-
+      Partial update. Actual's engine replaces the whole rule, so the wrapper
+      reads the current rule first and merges these fields onto it; an unknown
+      id is a 404 and nothing is written.
     tags: [Rules]
     security:
       - bearerAuth: []
@@ -153,6 +157,17 @@ ruleById:
                     actions:
                       - type: set-category
                         value: cat-gas
+      404:
+        description: No rule with that id
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+            examples:
+              missing:
+                value:
+                  error: Rule r-abc not found
+                  code: NOT_FOUND
   delete:
     summary: Delete rule
     tags: [Rules]
