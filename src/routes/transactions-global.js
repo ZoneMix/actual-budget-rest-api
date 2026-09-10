@@ -1,6 +1,7 @@
 // src/routes/transactions-global.js - Global update/delete by transaction ID
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import { transactionUpdate, transactionDelete } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
@@ -8,7 +9,7 @@ import { IDSchema, UpdateTransactionSchema } from '../middleware/validation-sche
 import { highFrequencyLimiter, standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.put(
   '/:id',

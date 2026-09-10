@@ -1,6 +1,7 @@
 // src/routes/categories.js - CRUD for categories (pattern repeated for other resources)
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import { categoriesList, categoryCreate, categoryUpdate, categoryDelete } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams } from '../middleware/validation-schemas.js';
@@ -8,7 +9,7 @@ import { IDSchema, CreateCategorySchema, UpdateCategorySchema } from '../middlew
 import { standardWriteLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/', asyncHandler(async (req, res) => {
   const categories = await categoriesList();

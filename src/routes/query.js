@@ -13,6 +13,7 @@
 
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import { runActualQuery } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody } from '../middleware/validation-schemas.js';
@@ -24,7 +25,7 @@ import { queryBodyParser } from '../middleware/bodyParser.js';
 import logger from '../logging/logger.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 router.use(queryBodyParser); // Smaller limit for queries
 
 router.post(

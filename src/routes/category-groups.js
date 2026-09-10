@@ -1,6 +1,7 @@
 // src/routes/category-groups.js - CRUD for category groups
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import {
   categoryGroupsList,
   categoryGroupCreate,
@@ -13,7 +14,7 @@ import { IDSchema, CreateCategoryGroupSchema, UpdateCategoryGroupSchema } from '
 import { categoryGroupLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/', asyncHandler(async (req, res) => {
   const groups = await categoryGroupsList();

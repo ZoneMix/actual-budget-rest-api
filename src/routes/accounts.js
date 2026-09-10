@@ -11,6 +11,7 @@
  */
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';
+import { requireScopeByMethod } from '../auth/permissions.js';
 import {
   accountsList,
   accountCreate,
@@ -34,7 +35,7 @@ import { sendSuccess, sendCreated } from '../middleware/responseHelpers.js';
 import transactionsNestedRoutes from './transactions-nested.js';
 
 const router = express.Router();
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireScopeByMethod());
 
 router.get('/', asyncHandler(async (req, res) => {
   const accounts = await accountsList();
