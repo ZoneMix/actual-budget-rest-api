@@ -6,6 +6,7 @@ import request from 'supertest';
 import { buildTestApp } from '../helpers/app.js';
 import { syncPolicy } from '../../src/services/actualApi.js';
 import { shapeSyncError } from '../../src/routes/health.js';
+import actualApi from '../mocks/actual-api.js';
 
 describe('shapeSyncError', () => {
   // The message is the raw error from instance.sync(), so it can name the
@@ -76,5 +77,38 @@ describe('GET /v2/health', () => {
     expect(res.body.checks.actualApi.lastSyncError).toMatchObject({
       message: 'sync went sideways',
     });
+  });
+
+  // The Actual server version answers "which server am I actually talking to",
+  // which is the first question when a sync starts failing. It is best-effort:
+  // getServerVersion() has its own failure arm, and a health check must not
+  // turn that into a 500.
+  it('reports the Actual server version alongside the engine state', async () => {
+    actualApi.getServerVersion.mockResolvedValueOnce({ version: '25.9.0' });
+
+    const app = buildTestApp();
+    const res = await request(app).get('/v2/health');
+
+    expect(res.body.checks.actualApi.serverVersion).toBe('25.9.0');
+  });
+
+  it('reports a null server version rather than failing when the server is unreachable', async () => {
+    actualApi.getServerVersion.mockResolvedValueOnce({ error: 'network-failure' });
+
+    const app = buildTestApp();
+    const res = await request(app).get('/v2/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.checks.actualApi.serverVersion).toBeNull();
+  });
+
+  it('reports a null server version when the version call itself throws', async () => {
+    actualApi.getServerVersion.mockRejectedValueOnce(new Error('boom'));
+
+    const app = buildTestApp();
+    const res = await request(app).get('/v2/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.checks.actualApi.serverVersion).toBeNull();
   });
 });

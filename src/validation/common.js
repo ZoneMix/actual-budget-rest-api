@@ -2,6 +2,7 @@
  * Small, reusable pieces shared by more than one domain schema file.
  */
 import { z } from 'zod';
+import { LOOKUP_TYPES } from './constants.js';
 
 // Loose identifier accepted by most path params. Many documented API calls
 // (and callers in this wrapper) use non-UUID ids, so this stays permissive.
@@ -36,8 +37,11 @@ export const HiddenQuerySchema = z.object({
   hidden: BooleanQuerySchema.optional(),
 });
 
-// Generic name-based lookup (e.g. resolving an id via the SDK's getIDByName).
+// Name-based id lookup via the SDK's getIDByName(type, name). `type` is a
+// closed union in the SDK, so an unlisted table is rejected here rather than
+// forwarded to the engine.
 export const LookupParamsSchema = z.object({
+  type: z.enum(LOOKUP_TYPES),
   name: z.string().min(1).max(255),
 });
 

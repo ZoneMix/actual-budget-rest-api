@@ -4,6 +4,7 @@
 
 import logger from '../../logging/logger.js';
 import { runWithApi } from './runner.js';
+import { withEngineExclusive } from './queue.js';
 
 export const budgetMonthsList = async () => {
   return runWithApi('budgetMonthsList', async (apiInstance) => {
@@ -57,6 +58,52 @@ export const budgetHoldNextMonth = async (month, amount) => {
       return result;
     },
     { mode: 'write' }
+  );
+};
+
+/**
+ * Applies one operation from a batch. Split out so `budgetBatchUpdate` stays
+ * readable and the op-type dispatch is testable in isolation.
+ */
+const applyBatchOperation = async (apiInstance, operation) => {
+  if (operation.type === 'setAmount') {
+    return apiInstance.setBudgetAmount(operation.month, operation.categoryId, operation.amount);
+  }
+  return apiInstance.setBudgetCarryover(operation.month, operation.categoryId, operation.flag);
+};
+
+/**
+ * Applies many budget edits as one engine transaction.
+ *
+ * `withEngineExclusive` holds the engine for the whole span, so no other
+ * request can interleave a sync or a mutation between the individual edits.
+ * The inner `runWithApi` runs inline rather than re-queueing (the queue is
+ * reentrant by design) and contributes the post-write sync every other
+ * mutation gets.
+ *
+ * Operations are applied strictly in the order the caller listed them: two
+ * edits to the same month/category must resolve last-write-wins the way the
+ * client wrote them, so this loop is deliberately sequential.
+ *
+ * @param {Array<object>} operations - validated setAmount/setCarryover ops
+ * @returns {Promise<number>} how many operations were applied
+ */
+export const budgetBatchUpdate = async (operations) => {
+  return withEngineExclusive('budgetBatchUpdate', () =>
+    runWithApi(
+      'budgetBatchUpdate',
+      async (apiInstance) => {
+        logger.debug('[Actual] Applying budget batch', { count: operations.length });
+        await apiInstance.batchBudgetUpdates(async () => {
+          for (const operation of operations) {
+            await applyBatchOperation(apiInstance, operation);
+          }
+        });
+        logger.info('[Actual] budgetBatchUpdate completed', { count: operations.length });
+        return operations.length;
+      },
+      { mode: 'write' }
+    )
   );
 };
 

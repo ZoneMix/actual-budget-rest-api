@@ -13,7 +13,7 @@
 
 import express from 'express';
 import { getRow } from '../db/authDb.js';
-import { getActualApi, getQueueDepth, syncPolicy } from '../services/actualApi.js';
+import { getActualApi, getQueueDepth, syncPolicy, serverVersion } from '../services/actualApi.js';
 import { NODE_ENV } from '../config/index.js';
 import logger from '../logging/logger.js';
 
@@ -61,6 +61,25 @@ export const shapeSyncError = (lastSyncError, hideDetails = isProduction) => {
   return hideDetails ? { at: lastSyncError.at } : lastSyncError;
 };
 
+/**
+ * The Actual server's version, or null when it cannot be determined.
+ *
+ * Best-effort on purpose: `getServerVersion()` has its own failure arm
+ * (`{ error: 'no-server' | 'network-failure' }`) and can also throw, and a
+ * health check that 500s because a nice-to-have field is unavailable is worse
+ * than one that reports null. The version answers "which server am I actually
+ * talking to", which is the first question when syncs start failing.
+ */
+const readServerVersion = async () => {
+  try {
+    const result = await serverVersion();
+    return result?.version ?? null;
+  } catch (error) {
+    logger.warn('Actual server version check failed', { error: error.message });
+    return null;
+  }
+};
+
 const checkActualApi = async () => {
   // Queue depth and last sync time are operational, not sensitive, so they are
   // reported everywhere; the sync error message is redacted in production.
@@ -68,6 +87,7 @@ const checkActualApi = async () => {
     queueDepth: getQueueDepth(),
     lastSyncAt: syncPolicy.lastSyncAt(),
     lastSyncError: shapeSyncError(syncPolicy.lastSyncError()),
+    serverVersion: await readServerVersion(),
   };
 
   try {
@@ -153,6 +173,7 @@ router.get('/', async (req, res) => {
         queueDepth: actualApiCheck.queueDepth,
         lastSyncAt: actualApiCheck.lastSyncAt,
         lastSyncError: actualApiCheck.lastSyncError,
+        serverVersion: actualApiCheck.serverVersion,
         // Only include error details in development
         ...(isProduction ? {} : { error: actualApiCheck.error }),
       },

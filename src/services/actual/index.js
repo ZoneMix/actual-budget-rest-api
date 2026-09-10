@@ -23,6 +23,7 @@ export * from './tags.js';
 export * from './notes.js';
 export * from './preferences.js';
 export * from './budgets.js';
+export * from './files.js';
 export * from './rules.js';
 export * from './schedules.js';
 export * from './query.js';

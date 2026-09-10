@@ -19,7 +19,8 @@ import {
   accountDelete,
   accountClose,
   accountReopen,
-  accountBalance
+  accountBalance,
+  bankSync
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validation-schemas.js';
@@ -29,6 +30,7 @@ import {
   UpdateAccountSchema,
   CloseAccountSchema,
   AccountBalanceQuerySchema,
+  AccountIdParamsSchema,
 } from '../middleware/validation-schemas.js';
 import { standardWriteLimiter, deleteLimiter } from '../middleware/rateLimiters.js';
 import { sendSuccess, sendCreated } from '../middleware/responseHelpers.js';
@@ -106,6 +108,21 @@ router.get(
     const { cutoff } = req.validatedQuery;
     const balance = await accountBalance(req.validatedParams.id, cutoff ? new Date(cutoff) : undefined);
     sendSuccess(res, { balance });
+  })
+);
+
+// Pulls new transactions from the account's linked bank. A write: it creates
+// transactions. Uses AccountIdParamsSchema (a strict UUID) rather than the
+// looser IDSchema the other account routes take, because runBankSync resolves
+// the id against the bank link rather than the local account table.
+router.post(
+  '/:accountId/bank-sync',
+  standardWriteLimiter,
+  validateParams(AccountIdParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { accountId } = req.validatedParams;
+    await bankSync(accountId);
+    sendSuccess(res, { accountId });
   })
 );
 

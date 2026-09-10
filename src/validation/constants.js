@@ -75,3 +75,8 @@ export const QUERY_TABLES = [
 
 // TransactionsImportSchema.opts.payeeNameNormalization values.
 export const PAYEE_NAME_NORMALIZATIONS = ['title-case', 'original'];
+
+// The tables getIDByName() can resolve a name against — a closed union in the
+// SDK signature (node_modules/@actual-app/api/@types/methods.d.ts:125), so a
+// name outside this list is a client error, not an engine round trip.
+export const LOOKUP_TYPES = ['accounts', 'schedules', 'categories', 'payees'];

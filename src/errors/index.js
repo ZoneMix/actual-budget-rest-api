@@ -118,6 +118,20 @@ export class ServiceUnavailableError extends HttpError {
 }
 
 /**
+ * Bad gateway error (502 Bad Gateway).
+ * Used when the embedded engine reached the upstream Actual server and got an
+ * unusable answer back — e.g. `getServerVersion()` resolving to
+ * `{ error: 'no-server' }` or `{ error: 'network-failure' }`. The wrapper and
+ * the request are both fine; the dependency is not, so this is neither a 4xx
+ * nor a plain 500.
+ */
+export class BadGatewayError extends HttpError {
+  constructor(message = 'Upstream server error', details = null) {
+    super(message, 502, 'BAD_GATEWAY', details);
+  }
+}
+
+/**
  * Gateway timeout error (504 Gateway Timeout).
  * Used when an upstream/embedded call exceeds its allotted time budget.
  */

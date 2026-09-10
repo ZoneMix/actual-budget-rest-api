@@ -130,3 +130,24 @@ export const accountDelete = async (id) => {
     { mode: 'write' }
   );
 };
+
+/**
+ * Pulls new transactions from the account's linked bank (GoCardless/SimpleFIN).
+ *
+ * `runBankSync(args?)` takes an OBJECT (methods.d.ts:29-31); calling it with a
+ * bare id would be read as "no args" and sync every linked account instead of
+ * this one. It is a write: it creates transactions.
+ *
+ * @param {string} accountId - account to sync
+ */
+export const bankSync = async (accountId) => {
+  return runWithApi(
+    'bankSync',
+    async (apiInstance) => {
+      logger.debug('[Actual] Running bank sync', { accountId });
+      await apiInstance.runBankSync({ accountId });
+      logger.info('[Actual] bankSync completed', { accountId });
+    },
+    { mode: 'write' }
+  );
+};

@@ -82,6 +82,15 @@ health:
                             at:
                               type: string
                               format: date-time
+                        serverVersion:
+                          type: string
+                          nullable: true
+                          description: |
+                            Version of the Actual server the engine syncs with.
+                            Best-effort: null when the server is unreachable or
+                            the version call fails, since a health check must not
+                            500 over a nice-to-have field.
+                          example: '25.9.0'
                         error:
                           type: string
                           description: Error details (development only)

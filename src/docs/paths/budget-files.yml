@@ -1,0 +1,114 @@
+budgetFiles:
+  get:
+    summary: List budget files
+    description: >-
+      Every budget file the engine knows about, local and remote. The `id` of
+      one of these is what POST /v2/budget/load takes.
+    tags: [Budget Files]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Budget files list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                files:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/BudgetFile'
+            examples:
+              sample:
+                value:
+                  success: true
+                  files:
+                    - id: c3d4e5f6-9999-40a1-b2c3-d4e5f6708192
+                      cloudFileId: 8f7e6d5c-0000-4192-a3b4-c5d6e7f80192
+                      groupId: 1a2b3c4d-1111-4293-b4c5-d6e7f8091a2b
+                      name: Belisario Ledger
+                      state: remote
+
+budgetLoad:
+  post:
+    summary: Load a budget file
+    description: >-
+      Opens a different budget file for the WHOLE process — every subsequent
+      request reads and writes that file. Admin only, in every
+      AUTH_SCOPE_ENFORCEMENT mode. The next read is forced to sync so it
+      reflects the newly-opened file rather than the previous one's freshness.
+    tags: [Budget Files]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [budgetId]
+            properties:
+              budgetId:
+                type: string
+                maxLength: 255
+                description: An `id` from GET /v2/budget/files.
+          examples:
+            load:
+              value:
+                budgetId: c3d4e5f6-9999-40a1-b2c3-d4e5f6708192
+    responses:
+      200:
+        description: Budget loaded
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                budgetId:
+                  type: string
+            examples:
+              ok:
+                value:
+                  success: true
+                  budgetId: c3d4e5f6-9999-40a1-b2c3-d4e5f6708192
+      403:
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+budgetExport:
+  post:
+    summary: Export the open budget as a zip
+    description: >-
+      Streams the whole ledger as an Actual `.zip` export — the same archive the
+      desktop app produces. The body is raw zip bytes, never base64 inside a
+      JSON envelope. Admin only, in every AUTH_SCOPE_ENFORCEMENT mode.
+    tags: [Budget Files]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Zip archive of the open budget
+        headers:
+          Content-Disposition:
+            description: 'attachment; filename="actual-budget-YYYY-MM-DD.zip" (UTC date)'
+            schema:
+              type: string
+        content:
+          application/zip:
+            schema:
+              type: string
+              format: binary
+      403:
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'

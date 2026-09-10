@@ -1,0 +1,121 @@
+serverVersion:
+  get:
+    summary: Get the Actual server version
+    description: >-
+      Answers 502 when the engine cannot reach the Actual server — the SDK
+      reports that as `{ error: 'no-server' }` or `{ error: 'network-failure' }`
+      rather than throwing, and an unreachable dependency is an upstream fault,
+      not a bad request.
+    tags: [System]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Server version
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/ServerVersion'
+            examples:
+              ok:
+                value:
+                  success: true
+                  version: 25.9.0
+      502:
+        description: The Actual server could not be reached
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+            examples:
+              unreachable:
+                value:
+                  error: 'Actual server version unavailable: network-failure'
+                  code: BAD_GATEWAY
+
+sync:
+  post:
+    summary: Sync with the Actual server now
+    description: >-
+      Forces a sync regardless of how recently one ran, pushing pending local
+      changes upstream and pulling remote ones down. Requires the write scope:
+      it mutates nothing locally but is an outbound operation a read-only token
+      should not be able to trigger.
+    tags: [System]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Sync completed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                syncedAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: When the sync completed, ISO 8601.
+            examples:
+              ok:
+                value:
+                  success: true
+                  syncedAt: '2026-09-10T18:42:07.412Z'
+
+lookupByName:
+  parameters:
+    - in: path
+      name: type
+      required: true
+      description: Which table to resolve the name against.
+      schema:
+        type: string
+        enum: [accounts, schedules, categories, payees]
+      example: payees
+    - in: path
+      name: name
+      required: true
+      description: >-
+        The entity's exact name, URL-encoded. Express decodes it once before the
+        handler sees it.
+      schema:
+        type: string
+        maxLength: 255
+      example: Trader%20Joe%27s
+  get:
+    summary: Resolve an entity id from its name
+    tags: [System]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: The matching id
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                type:
+                  type: string
+                name:
+                  type: string
+                id:
+                  type: string
+            examples:
+              found:
+                value:
+                  success: true
+                  type: payees
+                  name: "Trader Joe's"
+                  id: d4e5f607-aaaa-41b2-c3d4-e5f607081920
+      404:
+        description: No entity of that type carries that name
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'

@@ -18,11 +18,15 @@ import {
   SCOPES,
   QUERY_TABLES,
   PAYEE_NAME_NORMALIZATIONS,
+  LOOKUP_TYPES,
 } from '../../src/validation/constants.js';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const sdkPath = path.resolve(dirname, '../../node_modules/@actual-app/api/dist/index.js');
 const sdkSource = fs.readFileSync(sdkPath, 'utf8');
+
+const sdkTypesPath = path.resolve(dirname, '../../node_modules/@actual-app/api/@types/methods.d.ts');
+const sdkTypesSource = fs.readFileSync(sdkTypesPath, 'utf8');
 
 /** Slices `source` from `startAnchor` up to the next `endAnchor` — throws (not empty-string) if either is missing, so a moved/renamed SDK internal fails loud. */
 const sliceBetween = (source, startAnchor, endAnchor) => {
@@ -115,5 +119,20 @@ describe('other constants (not derived from the @actual-app/api rule engine)', (
 
   it('PAYEE_NAME_NORMALIZATIONS has the two import-opts values', () => {
     expect(PAYEE_NAME_NORMALIZATIONS).toEqual(['title-case', 'original']);
+  });
+
+  // Derived from the installed SDK's own declaration rather than a hand copy:
+  // getIDByName's first parameter is a closed union, and /v2/lookup rejects
+  // anything outside it before touching the engine.
+  it('LOOKUP_TYPES matches getIDByName\'s type union (@types/methods.d.ts)', () => {
+    const unionText = sliceBetween(
+      sdkTypesSource,
+      'export declare function getIDByName(type: ',
+      ', name: string)'
+    );
+    const sdkTypes = Array.from(unionText.matchAll(/'([^']+)'/g)).map((m) => m[1]);
+
+    expect(sdkTypes.length).toBeGreaterThan(0);
+    expect(LOOKUP_TYPES.slice().sort()).toEqual(sdkTypes.slice().sort());
   });
 });
