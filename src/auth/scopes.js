@@ -129,13 +129,23 @@ export const hasScope = (user, requiredScopes) => {
 };
 
 /**
- * Admin means the `admin` role or the `admin` scope — never legacy `api`.
+ * Admin means the grant carries the `admin` scope — never legacy `api`, and
+ * never the `role` claim on its own.
+ *
+ * The role is who the caller *is*; the scope is what this particular token is
+ * *allowed to do*. An admin can deliberately issue a narrow token — through an
+ * `api`-only OAuth client, say — and that token must not reach an admin-gated
+ * route just because the person behind it happens to be an admin. Accepting
+ * the role alone made every token an admin ever issued an admin token.
+ *
+ * The session path is unaffected: `authenticateAdminAPI` builds its user from
+ * the DB row, where an admin carries `scopes = 'api,admin'`, and the `/admin`
+ * dashboard checks the DB role directly in `authenticateAdminDashboard`.
  *
  * @param {object} user - User object from a JWT (req.user)
- * @returns {boolean} True when the user is an admin
+ * @returns {boolean} True when the user's grant includes the admin scope
  */
 export const isAdmin = (user) => {
   if (!user) return false;
-  if (user.role === SCOPES.ADMIN) return true;
   return hasScope(user, SCOPES.ADMIN);
 };

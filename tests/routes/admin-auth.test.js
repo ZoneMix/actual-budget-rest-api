@@ -52,6 +52,31 @@ describe('GET /admin/oauth-clients with a Bearer token', () => {
     expect(res.status).toBe(403);
   });
 
+  // `isAdmin` checks the GRANT, not the role claim: an admin can deliberately
+  // issue a narrow token (an `api`-only OAuth client, for instance) and that
+  // token must not reach the admin API just because the person is an admin.
+  it('refuses an admin-role JWT whose scopes stop short of admin', async () => {
+    const token = signTestToken({ role: 'admin', scopes: 'read' });
+
+    const res = await request(app)
+      .get('/admin/oauth-clients')
+      .set('Accept', 'application/json')
+      .set(bearer(token));
+
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses an admin-role JWT carrying only the legacy api scope', async () => {
+    const token = signTestToken({ role: 'admin', scopes: 'api' });
+
+    const res = await request(app)
+      .get('/admin/oauth-clients')
+      .set('Accept', 'application/json')
+      .set(bearer(token));
+
+    expect(res.status).toBe(403);
+  });
+
   it('refuses a revoked admin JWT with 401', async () => {
     const jti = crypto.randomUUID();
     await revokeToken(jti);

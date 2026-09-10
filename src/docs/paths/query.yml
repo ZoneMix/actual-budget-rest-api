@@ -18,6 +18,10 @@ query:
       - Query structure is validated for security
       - All queries are audit logged
       
+      **Required scope:** `read`. This is a read over POST — the whitelist above
+      makes a mutation impossible — so a read-only token may call it, unlike
+      every other POST endpoint.
+
       **Rate Limited:** 20 requests per minute
       
       See [ActualQL documentation](https://actualbudget.org/docs/api/actual-ql/) for query syntax.
