@@ -41,6 +41,11 @@ export const CloseAccountSchema = z.object({
   transferCategoryId: z.string().optional(),
 });
 
+// getAccountBalance takes a Date (@actual-app/api/@types/methods.d.ts:81), so
+// the route converts this string with `new Date(...)`. Accept either a
+// calendar date or a full ISO timestamp, and reject anything that would become
+// an Invalid Date — z.iso.date() checks the calendar, so 2026-13-45 fails here
+// rather than blowing up on `.toISOString()` further down.
 export const AccountBalanceQuerySchema = z.object({
-  cutoff: z.iso.datetime().optional(),
+  cutoff: z.union([z.iso.date(), z.iso.datetime({ offset: true })]).optional(),
 });

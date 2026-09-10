@@ -21,8 +21,14 @@ import {
   accountBalance
 } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { validateBody, validateParams } from '../middleware/validation-schemas.js';
-import { IDSchema, CreateAccountSchema, UpdateAccountSchema, CloseAccountSchema } from '../middleware/validation-schemas.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation-schemas.js';
+import {
+  IDSchema,
+  CreateAccountSchema,
+  UpdateAccountSchema,
+  CloseAccountSchema,
+  AccountBalanceQuerySchema,
+} from '../middleware/validation-schemas.js';
 import { standardWriteLimiter, deleteLimiter } from '../middleware/rateLimiters.js';
 import { sendSuccess, sendCreated } from '../middleware/responseHelpers.js';
 import transactionsNestedRoutes from './transactions-nested.js';
@@ -93,9 +99,11 @@ router.post(
 router.get(
   '/:id/balance',
   validateParams(IDSchema),
+  validateQuery(AccountBalanceQuerySchema),
   asyncHandler(async (req, res) => {
-    const cutoff = req.query.cutoff ? new Date(req.query.cutoff) : undefined;
-    const balance = await accountBalance(req.validatedParams.id, cutoff);
+    // Validated upstream, so `new Date` here can never produce an Invalid Date.
+    const { cutoff } = req.validatedQuery;
+    const balance = await accountBalance(req.validatedParams.id, cutoff ? new Date(cutoff) : undefined);
     sendSuccess(res, { balance });
   })
 );

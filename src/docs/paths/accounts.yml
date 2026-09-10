@@ -149,8 +149,15 @@ accountBalance:
         name: cutoff
         schema:
           type: string
-          format: date
-        description: Calculate balance as of this date (YYYY-MM-DD)
+        description: >-
+          Calculate the balance as of this point in time. Either a calendar
+          date (YYYY-MM-DD) or a full ISO 8601 timestamp. A value that is not a
+          real date is rejected with 400.
+        examples:
+          date:
+            value: '2026-03-01'
+          timestamp:
+            value: '2026-03-01T12:30:00.000Z'
     responses:
       200:
         description: Account balance
