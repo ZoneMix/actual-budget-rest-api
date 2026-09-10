@@ -51,6 +51,47 @@ describe('account service call shapes', () => {
 
       expect(actualApi.createAccount).toHaveBeenCalledWith(account, 2500);
     });
+
+    // The engine's api/account-create handler reads only name, offbudget and
+    // closed off the account (dist/index.js:112351-112359), so a group set at
+    // creation time is silently dropped. api/account-update does honour it.
+    describe('account_group_id', () => {
+      it('applies the group with a follow-up update after the create', async () => {
+        actualApi.createAccount.mockResolvedValueOnce('acc-new');
+
+        await accountCreate({ name: 'Savings', account_group_id: 'grp-1' }, 0);
+
+        expect(actualApi.updateAccount).toHaveBeenCalledWith('acc-new', {
+          account_group_id: 'grp-1',
+        });
+        expect(actualApi.createAccount.mock.invocationCallOrder[0]).toBeLessThan(
+          actualApi.updateAccount.mock.invocationCallOrder[0]
+        );
+      });
+
+      it('still resolves with the created id, not the update result', async () => {
+        actualApi.createAccount.mockResolvedValueOnce('acc-new');
+
+        await expect(accountCreate({ name: 'Savings', account_group_id: 'grp-1' }))
+          .resolves.toBe('acc-new');
+      });
+
+      it('issues no follow-up update when the account carries no group', async () => {
+        await accountCreate({ name: 'Savings' }, 0);
+
+        expect(actualApi.updateAccount).not.toHaveBeenCalled();
+      });
+
+      it('applies an explicitly null group, because the caller asked for it', async () => {
+        actualApi.createAccount.mockResolvedValueOnce('acc-new');
+
+        await accountCreate({ name: 'Savings', account_group_id: null }, 0);
+
+        expect(actualApi.updateAccount).toHaveBeenCalledWith('acc-new', {
+          account_group_id: null,
+        });
+      });
+    });
   });
 
   describe('accountUpdate', () => {

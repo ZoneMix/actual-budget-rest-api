@@ -47,12 +47,31 @@ export const accountBalance = async (id, cutoff = undefined) => {
   });
 };
 
+/**
+ * Creates an account.
+ *
+ * The engine's `api/account-create` handler reads only `name`, `offbudget` and
+ * `closed` off the account (dist/index.js:112351-112359), so a group supplied
+ * at creation time is silently dropped. `api/account-update` does honour it —
+ * `accountModel.fromExternal` spreads every field (dist/index.js:111858-111863)
+ * — so the group is applied with a follow-up update, inside the same write
+ * operation so nothing else can slip into the engine queue between the two.
+ */
 export const accountCreate = async (account, initialBalance = 0) => {
   return runWithApi(
     'accountCreate',
     async (apiInstance) => {
       logger.debug('[Actual] Creating account', { accountName: account.name, initialBalance });
       const id = await apiInstance.createAccount(account, initialBalance);
+
+      if (account.account_group_id !== undefined) {
+        logger.debug('[Actual] Applying account group after create', {
+          accountId: id,
+          accountGroupId: account.account_group_id,
+        });
+        await apiInstance.updateAccount(id, { account_group_id: account.account_group_id });
+      }
+
       logger.info('[Actual] accountCreate result', { accountId: id, accountName: account.name });
       return id;
     },

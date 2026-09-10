@@ -36,6 +36,10 @@ accounts:
                       closed: false
   post:
     summary: Create account
+    description: >-
+      Actual's create call ignores account_group_id, so when one is supplied the
+      wrapper applies it with a follow-up update in the same operation. The
+      account is therefore created first and grouped a moment later.
     tags: [Accounts]
     security:
       - bearerAuth: []
