@@ -48,6 +48,38 @@ describe('errorHandler', () => {
     );
   });
 
+  // End of the path the createHttpError unit test starts: an engine rejection
+  // is a plain object, so it has to survive normalisation AND rendering to
+  // reach the caller as a 400 with the engine's own wording.
+  it('renders an engine APIError as a 400 with the engine message', () => {
+    const engineError = {
+      type: 'APIError',
+      message: 'balance is non-zero: transferAccountId is required',
+    };
+    errorHandler(engineError, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'balance is non-zero: transferAccountId is required',
+        code: 'ENGINE_ERROR',
+      })
+    );
+  });
+
+  it('keeps the engine message on an APIError in production', () => {
+    process.env.NODE_ENV = 'production';
+    errorHandler({ type: 'APIError', message: 'No budget file is open' }, req, res, next);
+    process.env.NODE_ENV = 'test';
+
+    // Only 500s are redacted; a 400 must keep its message or the caller cannot
+    // tell what they got wrong.
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'No budget file is open' })
+    );
+  });
+
   it('should handle AuthenticationError with 401 status', () => {
     const error = new AuthenticationError('Unauthorized');
     errorHandler(error, req, res, next);
