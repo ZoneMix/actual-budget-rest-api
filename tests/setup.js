@@ -4,6 +4,7 @@
  */
 
 import { jest } from '@jest/globals';
+import { mkdirSync } from 'fs';
 
 // Make jest available globally
 global.jest = jest;
@@ -24,4 +25,8 @@ process.env.DATA_DIR = './tests/data';
 process.env.SESSION_SECRET = 'test-session-secret-32-characters-long';
 process.env.DB_TYPE = 'sqlite'; // Use SQLite for tests
 process.env.DATABASE_URL = './tests/data/auth.db';
+
+// tests/data is gitignored (runtime state) and won't exist on a fresh checkout;
+// better-sqlite3 opens a missing db FILE but not a missing parent directory.
+mkdirSync(process.env.DATA_DIR, { recursive: true });
 
