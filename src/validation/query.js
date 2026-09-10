@@ -38,5 +38,10 @@ export const QuerySchema = z.object({
   }).refine(
     (q) => !(q.select !== undefined && q.calculate !== undefined),
     { message: 'select and calculate cannot be used together', path: ['select'] }
+  ).refine(
+    // An aggregate yields exactly one row; an OFFSET skips it and the engine
+    // answers `null` (observed live), so the combination is refused up front.
+    (q) => !(q.calculate !== undefined && q.offset !== undefined),
+    { message: 'offset cannot be used together with calculate', path: ['offset'] }
   ),
 });

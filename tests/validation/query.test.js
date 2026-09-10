@@ -87,4 +87,20 @@ describe('QuerySchema', () => {
   it('rejects a negative offset', () => {
     expect(QuerySchema.safeParse({ query: { table: 'transactions', offset: -1 } }).success).toBe(false);
   });
+
+  // An aggregate produces exactly one row; an OFFSET skips it and the engine
+  // answers `null` (seen live), so the combination is refused up front.
+  it('rejects offset together with calculate', () => {
+    const result = QuerySchema.safeParse({
+      query: { table: 'transactions', calculate: { $count: 'id' }, offset: 1 },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error.issues[0].path).toEqual(['query', 'offset']);
+  });
+
+  it('accepts limit together with calculate', () => {
+    expect(QuerySchema.safeParse({
+      query: { table: 'transactions', calculate: { $count: 'id' }, limit: 5 },
+    }).success).toBe(true);
+  });
 });
