@@ -24,7 +24,7 @@ import {
 } from './scopes.js';
 import { getRow } from '../../db/authDb.js';
 import { JWT_REFRESH_SECRET } from '../../config/index.js';
-import { throwBadRequest, throwInternalError, throwUnauthorized } from '../../middleware/responseHelpers.js';
+import { throwBadRequest, throwUnauthorized } from '../../middleware/responseHelpers.js';
 import logger, { logAuthEvent } from '../../logging/logger.js';
 
 const DEFAULT_ROLE = 'user';
@@ -63,10 +63,14 @@ export const exchangeAuthorizationCode = async ({ client, clientId, code, redire
 
   logger.debug('[OAuth2] Authorization code validated', { clientId, userId, scope });
 
-  const user = await getRow('SELECT username, role, scopes FROM users WHERE id = ?', [userId]);
+  const user = await getRow(
+    'SELECT username, role, scopes FROM users WHERE id = ? AND is_active = TRUE',
+    [userId]
+  );
   if (!user) {
-    logger.error('[OAuth2] User not found after code validation', { userId, clientId });
-    throwInternalError('User not found');
+    // The code may have been minted moments before the account was deactivated.
+    logAuthEvent('OAUTH_CODE_EXCHANGE_FAILED', userId, { reason: 'user_inactive', clientId }, false);
+    throwUnauthorized('User is not active');
   }
 
   // Re-checked here, not only at authorize time: the user's scopes may have
@@ -95,10 +99,15 @@ const resolveRefreshSubject = async (refreshToken, clientId) => {
     throwUnauthorized('Refresh token revoked');
   }
 
-  const user = await getRow('SELECT username, role, scopes FROM users WHERE id = ?', [decoded.user_id]);
+  const user = await getRow(
+    'SELECT username, role, scopes FROM users WHERE id = ? AND is_active = TRUE',
+    [decoded.user_id]
+  );
   if (!user) {
-    logger.error('[OAuth2] User not found for refresh token', { userId: decoded.user_id, clientId });
-    throwInternalError('User not found');
+    // A refresh token can outlive the account by up to JWT_REFRESH_TTL; a
+    // deleted or deactivated user must not be able to mint new access tokens.
+    logAuthEvent('REFRESH_FAILED', decoded.user_id, { reason: 'user_inactive', clientId }, false);
+    throwUnauthorized('User is not active');
   }
 
   return { decoded, user };

@@ -33,6 +33,7 @@ import { getRow } from '../db/authDb.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { throwBadRequest } from '../middleware/responseHelpers.js';
 import logger from '../logging/logger.js';
+import { standardBodyParser, standardUrlParser } from '../middleware/bodyParser.js';
 
 const router = express.Router();
 
@@ -223,7 +224,7 @@ const extractClientCredentials = (req) => {
  * - HTTP Basic Authentication (Authorization: Basic <base64(client_id:client_secret)>) - Recommended
  * - Request body (client_id, client_secret) - form-encoded or JSON
  */
-router.post('/token', express.json(), express.urlencoded({ extended: true }), asyncHandler(async (req, res) => {
+router.post('/token', standardBodyParser, standardUrlParser, asyncHandler(async (req, res) => {
   const { grant_type, code, redirect_uri, refresh_token } = req.body;
 
   logger.debug('[OAuth2] Token exchange request', {

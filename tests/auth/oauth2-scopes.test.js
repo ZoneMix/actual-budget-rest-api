@@ -21,7 +21,7 @@ import bcrypt from 'bcrypt';
 import { buildTestApp } from '../helpers/app.js';
 import { ensureAdminUserHash } from '../../src/auth/user.js';
 import { createClient } from '../../src/auth/oauth2/client.js';
-import { executeQuery } from '../../src/db/authDb.js';
+import { executeQuery, getRow } from '../../src/db/authDb.js';
 
 const REDIRECT_URI = 'http://localhost:5678/rest/oauth2-credential/callback';
 // Not a credential: generated per run, only ever lives in the test sqlite file.
@@ -227,6 +227,42 @@ describe('POST /oauth/token — granted scope and role', () => {
     expect(decoded.scope).toBe('api');
     expect(decoded.scope).not.toContain('admin');
     expect(decoded.role).toBe('admin');
+  });
+
+  it('refuses to refresh for a deactivated user', async () => {
+    // A refresh token outlives the account by up to JWT_REFRESH_TTL; the grant
+    // must re-check the user row, exactly like /v2/auth/login's refresh does.
+    const clientId = await registerClient('api');
+    const user = await loginAsUser('api');
+    const res = await authorizeAs(user, clientId, { scope: 'api' });
+    const code = locationOf(res).searchParams.get('code');
+    const { body: tokens } = await exchangeCode(clientId, code);
+    const userId = jwt.decode(tokens.access_token).user_id;
+    await executeQuery('UPDATE users SET is_active = FALSE WHERE id = ?', [userId]);
+
+    const refreshed = await request(app).post('/oauth/token').type('form').send({
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refresh_token,
+      client_id: clientId,
+      client_secret: TEST_CLIENT_SECRET,
+    });
+
+    expect(refreshed.status).toBe(401);
+    expect(refreshed.body.access_token).toBeUndefined();
+  });
+
+  it('refuses to exchange a code for a user deactivated after authorizing', async () => {
+    const clientId = await registerClient('api');
+    const user = await loginAsUser('api');
+    const res = await authorizeAs(user, clientId, { scope: 'api' });
+    const code = locationOf(res).searchParams.get('code');
+    const { userId } = await getRow('SELECT user_id AS userId FROM auth_codes WHERE code = ?', [code]);
+    await executeQuery('UPDATE users SET is_active = FALSE WHERE id = ?', [userId]);
+
+    const exchanged = await exchangeCode(clientId, code);
+
+    expect(exchanged.status).toBe(401);
+    expect(exchanged.body.access_token).toBeUndefined();
   });
 });
 
