@@ -14,6 +14,7 @@
 
 import actualApi, { __reset } from '../mocks/actual-api.js';
 import { buildQuery, runActualQuery } from '../../src/services/actual/query.js';
+import { ACTUAL_QUERY_MAX_RESULTS } from '../../src/config/index.js';
 
 const envelope = (data) => ({ data, dependencies: ['transactions'] });
 
@@ -89,6 +90,38 @@ describe('buildQuery', () => {
 
     expect(built.limit).toBeNull();
     expect(built.offset).toBeNull();
+  });
+
+  // SQLite rejects OFFSET without LIMIT, and the engine emits the two clauses
+  // independently (dist/index.js:14011-14012, :14857-14858, :14879), so an
+  // offset on its own has to imply a limit or the query is a syntax error.
+  describe('offset without limit', () => {
+    it('implies the configured result cap as the limit', () => {
+      const built = buildQuery({ table: 'transactions', offset: 5 }).serialize();
+
+      expect(built.offset).toBe(5);
+      expect(built.limit).toBe(ACTUAL_QUERY_MAX_RESULTS);
+    });
+
+    it('leaves an explicit limit alone when an offset is also given', () => {
+      const built = buildQuery({ table: 'transactions', limit: 10, offset: 5 }).serialize();
+
+      expect(built.limit).toBe(10);
+      expect(built.offset).toBe(5);
+    });
+
+    it('invents no limit when there is no offset either', () => {
+      const built = buildQuery({ table: 'transactions' }).serialize();
+
+      expect(built.limit).toBeNull();
+    });
+
+    it('treats offset 0 as present, since 0 is a real offset', () => {
+      const built = buildQuery({ table: 'transactions', offset: 0 }).serialize();
+
+      expect(built.offset).toBe(0);
+      expect(built.limit).toBe(ACTUAL_QUERY_MAX_RESULTS);
+    });
   });
 });
 

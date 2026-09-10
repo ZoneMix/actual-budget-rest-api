@@ -56,6 +56,22 @@ describe('POST /v2/query', () => {
     expect(res.body.data).toHaveLength(ACTUAL_QUERY_MAX_RESULTS);
   });
 
+  it('accepts an offset with no limit and caps it so the engine gets valid SQL', async () => {
+    actualApi.aqlQuery.mockResolvedValueOnce(envelope([]));
+
+    const res = await request(app)
+      .post('/v2/query')
+      .set(bearer(token))
+      .send({ query: { table: 'transactions', offset: 5 } });
+
+    expect(res.status).toBe(200);
+
+    const [built] = actualApi.aqlQuery.mock.calls[0];
+    const state = built.serialize();
+    expect(state.offset).toBe(5);
+    expect(state.limit).toBe(ACTUAL_QUERY_MAX_RESULTS);
+  });
+
   it('rejects a table outside the allow-list before reaching the engine', async () => {
     const res = await request(app)
       .post('/v2/query')
