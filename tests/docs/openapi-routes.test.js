@@ -141,22 +141,42 @@ const jsonRequestSchema = (operation) =>
   operation?.requestBody?.content?.['application/json']?.schema ?? null;
 
 /**
- * Create endpoints whose documented request body must match the schema that
- * actually validates it. `schedules.yml` documented a body (`recur`,
- * `frequency`) that `CreateScheduleSchema` had never accepted, which is the
- * drift this pairing catches.
+ * Endpoints whose documented request body must match the schema that actually
+ * validates it — creates and updates alike. Update bodies drift the same way
+ * creates do and had never been checked: `payees.yml` documented
+ * `transfer_acct` on both, and the transaction update body listed five of the
+ * thirteen fields it accepts.
+ *
+ * `schedules.yml` documented a body (`recur`, `frequency`) that
+ * `CreateScheduleSchema` had never accepted, which is the drift that motivated
+ * this pairing.
  */
-const CREATE_BODY_CONTRACTS = [
+const BODY_CONTRACTS = [
+  // creates
   { operation: 'POST /v2/accounts', schema: 'CreateAccountSchema' },
   { operation: 'POST /v2/accounts/{accountId}/transactions', schema: 'TransactionsAddSchema' },
   { operation: 'POST /v2/accounts/{accountId}/transactions/import', schema: 'TransactionsImportSchema' },
   { operation: 'POST /v2/categories', schema: 'CreateCategorySchema' },
   { operation: 'POST /v2/category-groups', schema: 'CreateCategoryGroupSchema' },
   { operation: 'POST /v2/payees', schema: 'CreatePayeeSchema' },
+  { operation: 'POST /v2/payees/merge', schema: 'MergePayeesSchema' },
   { operation: 'POST /v2/tags', schema: 'CreateTagSchema' },
   { operation: 'POST /v2/account-groups', schema: 'CreateAccountGroupSchema' },
   { operation: 'POST /v2/rules', schema: 'CreateRuleSchema' },
   { operation: 'POST /v2/schedules', schema: 'CreateScheduleSchema' },
+  { operation: 'POST /v2/accounts/{id}/close', schema: 'CloseAccountSchema' },
+  { operation: 'POST /v2/budget/load', schema: 'LoadBudgetSchema' },
+  // updates
+  { operation: 'PUT /v2/accounts/{id}', schema: 'UpdateAccountSchema' },
+  { operation: 'PUT /v2/transactions/{id}', schema: 'UpdateTransactionSchema' },
+  { operation: 'PUT /v2/categories/{id}', schema: 'UpdateCategorySchema' },
+  { operation: 'PUT /v2/category-groups/{id}', schema: 'UpdateCategoryGroupSchema' },
+  { operation: 'PUT /v2/payees/{id}', schema: 'UpdatePayeeSchema' },
+  { operation: 'PUT /v2/tags/{id}', schema: 'UpdateTagSchema' },
+  { operation: 'PUT /v2/account-groups/{id}', schema: 'UpdateAccountGroupSchema' },
+  { operation: 'PUT /v2/rules/{id}', schema: 'UpdateRuleSchema' },
+  { operation: 'PUT /v2/schedules/{id}', schema: 'UpdateScheduleSchema' },
+  { operation: 'PUT /v2/notes/{id}', schema: 'UpdateNoteSchema' },
 ];
 
 describe('OpenAPI drift guard', () => {
@@ -195,7 +215,7 @@ describe('OpenAPI drift guard', () => {
     expect(unimplemented).toEqual([]);
   });
 
-  describe.each(CREATE_BODY_CONTRACTS)('$operation request body', ({ operation, schema }) => {
+  describe.each(BODY_CONTRACTS)('$operation request body', ({ operation, schema }) => {
     const [method, routePath] = operation.split(' ');
 
     const documentedProperties = (specSchema) => {

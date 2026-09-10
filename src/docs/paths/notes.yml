@@ -10,14 +10,19 @@ noteByEntityId:
         type: string
   get:
     summary: Get the note on an entity
+    description: >-
+      `note` is the engine's NoteEntity — an OBJECT `{ id, note }` — or null.
+      It is not the note text. PUT takes the text as a bare string, so the two
+      directions are not symmetric: feeding this response body straight back
+      into PUT sends an object where a string is required and gets a 400.
     tags: [Notes]
     security:
       - bearerAuth: []
     responses:
       200:
         description: >-
-          The note, or null when the entity has no note. An entity without a
-          note is not a 404.
+          The note entity, or null when the entity has no note. An entity
+          without a note is not a 404.
         content:
           application/json:
             schema:
@@ -42,6 +47,9 @@ noteByEntityId:
                   note: null
   put:
     summary: Write or clear the note on an entity
+    description: >-
+      Takes the note TEXT as a bare string, not the NoteEntity that GET
+      returns. Pass null to clear it.
     tags: [Notes]
     security:
       - bearerAuth: []
