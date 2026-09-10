@@ -4,7 +4,7 @@
  * The engine owns this key space and adds to it between releases, so the
  * object is passed through unchanged rather than projected onto a fixed shape.
  * There is no write counterpart: `@actual-app/api` 26.9.0 exposes no
- * setPreferences (methods.d.ts).
+ * setPreference (methods.d.ts).
  */
 import express from 'express';
 import { authenticateJWT } from '../auth/jwt.js';

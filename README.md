@@ -67,7 +67,7 @@ is the minimum a token must carry; see [Scopes](#scopes) below.
 | `/v2/category-groups` | `GET ?hidden=`, `POST`, `PUT /:id`, `DELETE /:id?transferCategoryId=` | read / write |
 | `/v2/payees` | `GET`, `GET /common`, `POST`, `PUT /:id`, `DELETE /:id`, `POST /merge` | read / write |
 | `/v2/tags` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | read / write |
-| `/v2/notes` | `GET /:entityId`, `PUT /:entityId` | read / write |
+| `/v2/notes` | `GET /:id`, `PUT /:id` | read / write |
 | `/v2/preferences` | `GET` (read-only; the SDK exposes no writer) | read |
 | `/v2/account-groups` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | read / write |
 | `/v2/budgets` | `GET /months`, `GET /:month`, `POST /batch`, `POST /:month/categories/:categoryId/budget`, `POST /:month/categories/:categoryId/carryover`, `POST /:month/hold`, `POST /:month/reset-hold` | read / write |

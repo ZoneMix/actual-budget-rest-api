@@ -56,7 +56,7 @@ Every call into the embedded engine is serialised through one FIFO queue.
 
 ### Added — endpoints
 
-`/v2/tags`, `/v2/notes/:entityId`, `/v2/preferences` (read-only),
+`/v2/tags`, `/v2/notes/:id`, `/v2/preferences` (read-only),
 `/v2/account-groups`, `/v2/payees/common`, `/v2/budget/files`,
 `/v2/budget/load`, `/v2/budget/export`, `/v2/sync`, `/v2/server/version`,
 `/v2/lookup/:type/:name`, `/v2/accounts/:id/bank-sync`, `/v2/budgets/batch`,
