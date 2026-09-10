@@ -13,7 +13,7 @@
 
 import express from 'express';
 import { getRow } from '../db/authDb.js';
-import { getActualApi } from '../services/actualApi.js';
+import { getActualApi, getQueueDepth, syncPolicy } from '../services/actualApi.js';
 import { NODE_ENV } from '../config/index.js';
 import logger from '../logging/logger.js';
 
@@ -43,17 +43,25 @@ const checkDatabase = async () => {
  * Check Actual API connectivity.
  */
 const checkActualApi = async () => {
+  // Engine state is operational, not sensitive: reported in every environment.
+  const engine = {
+    queueDepth: getQueueDepth(),
+    lastSyncAt: syncPolicy.lastSyncAt(),
+    lastSyncError: syncPolicy.lastSyncError(),
+  };
+
   try {
     const api = await getActualApi();
     // Try to get accounts as a connectivity test
     await api.getAccounts();
-    return { status: 'ok', message: 'Actual API connection healthy' };
+    return { status: 'ok', message: 'Actual API connection healthy', ...engine };
   } catch (error) {
     logger.error('Actual API health check failed', { error: error.message });
     // In production, don't expose error details
-    return { 
-      status: 'error', 
+    return {
+      status: 'error',
       message: 'Actual API connection failed',
+      ...engine,
       ...(isProduction ? {} : { error: error.message })
     };
   }
@@ -120,6 +128,10 @@ router.get('/', async (req, res) => {
       actualApi: {
         status: actualApiCheck.status,
         message: actualApiCheck.message,
+        // Engine queue and sync state (safe in production)
+        queueDepth: actualApiCheck.queueDepth,
+        lastSyncAt: actualApiCheck.lastSyncAt,
+        lastSyncError: actualApiCheck.lastSyncError,
         // Only include error details in development
         ...(isProduction ? {} : { error: actualApiCheck.error }),
       },

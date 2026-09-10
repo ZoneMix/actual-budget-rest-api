@@ -57,6 +57,26 @@ health:
                         message:
                           type: string
                           example: 'Actual API connection healthy'
+                        queueDepth:
+                          type: integer
+                          description: Engine operations currently queued or running
+                          example: 0
+                        lastSyncAt:
+                          type: integer
+                          nullable: true
+                          description: Epoch milliseconds of the last successful sync, null if none yet
+                          example: 1766000000000
+                        lastSyncError:
+                          type: object
+                          nullable: true
+                          description: Last sync failure, null while syncs are succeeding
+                          properties:
+                            message:
+                              type: string
+                              example: 'Failed to sync with Actual Budget server'
+                            at:
+                              type: string
+                              format: date-time
                         error:
                           type: string
                           description: Error details (development only)
