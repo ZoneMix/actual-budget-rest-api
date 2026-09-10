@@ -45,6 +45,25 @@ export class ValidationError extends HttpError {
 }
 
 /**
+ * Engine rejection (400 Bad Request).
+ *
+ * The Actual engine validates its own arguments and rejects a bad call by
+ * throwing `APIError(msg, meta)` — closing a funded account with no
+ * `transferAccountId`, an ActualQL `calculate` naming something that is not a
+ * column, a month with no budget. Those are client mistakes the wrapper's Zod
+ * layer cannot catch, because only the engine knows the ledger's contents.
+ *
+ * Distinct from ValidationError so the two are not confused in logs or by
+ * callers: VALIDATION_ERROR means the request never reached the engine,
+ * ENGINE_ERROR means it did and the engine refused it.
+ */
+export class EngineError extends HttpError {
+  constructor(message = 'The budget engine rejected the request', details = null) {
+    super(message, 400, 'ENGINE_ERROR', details);
+  }
+}
+
+/**
  * Authentication error (401 Unauthorized).
  * Used when authentication fails or credentials are missing.
  */
@@ -153,6 +172,14 @@ export const createHttpError = (error, _defaultStatus = 500) => {
   // ZodError#issues — formatZodError reads the right property.
   if (error instanceof z.ZodError) {
     return new ValidationError('Validation failed', null, formatZodError(error));
+  }
+
+  // The engine's own argument rejection. APIError(msg, meta) returns a plain
+  // OBJECT, not an Error subclass, and runHandler re-throws it untouched — so
+  // it has no `instanceof Error`, no `status` and no `stack`, and every check
+  // below would miss it. Left unmapped it became a 500 for what is a 400.
+  if (error?.type === 'APIError') {
+    return new EngineError(error.message || undefined, error.meta ?? null);
   }
 
   // Handle errors with a 'status' property (e.g., from 'http-errors' or similar)

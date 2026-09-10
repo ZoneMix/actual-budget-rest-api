@@ -24,6 +24,20 @@ schedules were non-functional, not merely inaccurate.
   because the engine's create ignores it.
 - Read-modify-write paths sync first, so a merge is not built on stale data.
 
+### Fixed — engine rejections were 500s
+
+The engine rejects a bad call by throwing `APIError(msg, meta)`, which is a
+plain **object**, not an `Error`. It matched no branch of `createHttpError`, so
+closing a funded account without `transferAccountId`, or an ActualQL
+`calculate` naming something that is not a column, came back as
+`500 INTERNAL_ERROR` — and in production the message was redacted, leaving the
+caller with nothing to act on.
+
+Those now render as **400 with `code: ENGINE_ERROR`**, carrying the engine's own
+wording and its `meta` as `details`. `VALIDATION_ERROR` still means this
+wrapper's schemas rejected the request before the engine saw it; `ENGINE_ERROR`
+means the engine saw it and refused. Genuine faults are still 500s.
+
 ### Added — engine queue and sync policy
 
 Every call into the embedded engine is serialised through one FIFO queue.

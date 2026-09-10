@@ -11,7 +11,29 @@ Error:
       example: '550e8400-e29b-41d4-a716-446655440000'
     code:
       type: string
-      description: Error code for programmatic handling
+      description: |
+        Error code for programmatic handling.
+
+        `VALIDATION_ERROR` and `ENGINE_ERROR` are both 400s and both mean the
+        request was wrong, but they say where it was caught. `VALIDATION_ERROR`
+        comes from this wrapper's schemas and the request never reached the
+        budget engine; `details` then lists the offending fields.
+        `ENGINE_ERROR` means the engine itself refused the call — closing a
+        funded account with no `transferAccountId`, an ActualQL `calculate`
+        naming something that is not a column, a month with no budget. Only the
+        engine can know those, so `error` carries its wording verbatim.
+      enum:
+        - VALIDATION_ERROR
+        - ENGINE_ERROR
+        - AUTHENTICATION_ERROR
+        - AUTHORIZATION_ERROR
+        - NOT_FOUND
+        - CONFLICT
+        - RATE_LIMIT_EXCEEDED
+        - INTERNAL_ERROR
+        - SERVICE_UNAVAILABLE
+        - BAD_GATEWAY
+        - GATEWAY_TIMEOUT
       example: 'VALIDATION_ERROR'
     details:
       type: object
@@ -40,6 +62,13 @@ Account:
       description: Tracked outside the budget (investments, loans).
     closed:
       type: boolean
+    balance_current:
+      type: integer
+      nullable: true
+      description: >-
+        Current balance in minor units (cents), as the engine computes it.
+        Read-only — write a balance with `initialBalance` on create or with
+        transactions, never by sending this field.
     account_group_id:
       type: string
       nullable: true
