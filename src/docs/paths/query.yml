@@ -53,8 +53,10 @@ query:
                     example: transactions
                   filter:
                     description: >-
-                      One filter expression, or an array of them applied in
-                      order. Nesting is capped by ACTUAL_QUERY_MAX_FILTER_DEPTH.
+                      One filter expression, or an array of up to 50 of them
+                      applied in order. Array entries are siblings, not nesting,
+                      and may not themselves be arrays. Nesting via $and/$or is
+                      capped by ACTUAL_QUERY_MAX_FILTER_DEPTH.
                     oneOf:
                       - type: object
                       - type: array

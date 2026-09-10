@@ -72,6 +72,23 @@ describe('POST /v2/query', () => {
     expect(state.limit).toBe(ACTUAL_QUERY_MAX_RESULTS);
   });
 
+  it('accepts an array filter and gives the builder one filter call per entry', async () => {
+    actualApi.aqlQuery.mockResolvedValueOnce(envelope([]));
+
+    const res = await request(app)
+      .post('/v2/query')
+      .set(bearer(token))
+      .send({ query: { table: 'transactions', filter: [{ cleared: true }, { amount: { $lt: 0 } }] } });
+
+    expect(res.status).toBe(200);
+
+    const [built] = actualApi.aqlQuery.mock.calls[0];
+    expect(built.serialize().filterExpressions).toEqual([
+      { cleared: true },
+      { amount: { $lt: 0 } },
+    ]);
+  });
+
   it('rejects a table outside the allow-list before reaching the engine', async () => {
     const res = await request(app)
       .post('/v2/query')

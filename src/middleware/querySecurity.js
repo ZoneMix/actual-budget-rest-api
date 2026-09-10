@@ -88,6 +88,19 @@ export const validateQuery = (queryObj) => {
 };
 
 /**
+ * Field names touched by a filter, for the audit log.
+ *
+ * A filter may be one expression or an array of them; `Object.keys` on the
+ * array form would log positional indices, so array entries are flattened to
+ * the keys they actually filter on.
+ */
+const auditFilterKeys = (filter) => {
+  if (!filter) return [];
+  if (!Array.isArray(filter)) return Object.keys(filter);
+  return filter.flatMap((entry) => (entry && typeof entry === 'object' ? Object.keys(entry) : []));
+};
+
+/**
  * Middleware to validate and secure ActualQL queries.
  * Logs all queries for audit purposes.
  */
@@ -104,7 +117,7 @@ export const secureQueryMiddleware = (req, res, next) => {
       userId: req.user?.user_id,
       table: query.table,
       hasFilter: !!query.filter,
-      filterKeys: query.filter ? Object.keys(query.filter) : [],
+      filterKeys: auditFilterKeys(query.filter),
       hasSelect: !!query.select,
       selectType: Array.isArray(query.select) ? 'array' : typeof query.select,
       selectCount: Array.isArray(query.select) ? query.select.length : null,
