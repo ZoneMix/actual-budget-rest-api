@@ -40,9 +40,14 @@ const logger = winston.createLogger({
   ],
 });
 
-// Security audit logger
+// Security audit logger.
+//
+// Both helpers MUST pass a message string as the first argument: Winston treats
+// a lone object as the `info` payload and renders `message` as `[object
+// Object]`, which made the entire auth audit trail unreadable. The metadata
+// shape is unchanged — only a greppable message is added in front of it.
 export const logAuthEvent = (event, userId, details, success) => {
-  logger.info({
+  logger.info(`auth:${event}`, {
     type: 'AUTH_EVENT',
     event,
     userId,
@@ -52,7 +57,7 @@ export const logAuthEvent = (event, userId, details, success) => {
 };
 
 export const logSuspiciousActivity = (type, userId, details) => {
-  logger.error({
+  logger.error(`security:${type}`, {
     type: 'SECURITY_ALERT',
     category: type,
     userId,
