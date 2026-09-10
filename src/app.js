@@ -17,7 +17,6 @@ import oauthRoutes from './routes/oauth2.js';
 import adminRoutes from './routes/admin.js';
 import accountsRoutes from './routes/accounts.js';
 import transactionsGlobalRoutes from './routes/transactions-global.js';
-import transactionsNestedRoutes from './routes/transactions-nested.js';
 import categoriesRoutes from './routes/categories.js';
 import categoryGroupsRoutes from './routes/category-groups.js';
 import payeesRoutes from './routes/payees.js';
@@ -156,9 +155,8 @@ export const createApp = () => {
   app.use('/v2/metrics', metricsRoutes); // Metrics endpoints (protected in production)
   app.use('/v2/accounts', accountsRoutes);
   app.use('/v2/transactions', transactionsGlobalRoutes); // Global update/delete by ID
-
-  // Nested per-account transactions (mounted under accounts)
-  accountsRoutes.use('/:accountId/transactions', transactionsNestedRoutes);
+  // Nested per-account transactions (/:accountId/transactions) are mounted
+  // once at module load inside src/routes/accounts.js, not here.
 
   app.use('/v2/categories', categoriesRoutes);
   app.use('/v2/category-groups', categoryGroupsRoutes);
