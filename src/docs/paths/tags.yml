@@ -1,23 +1,12 @@
-categories:
+tags:
   get:
-    summary: List categories
-    tags: [Categories]
+    summary: List tags
+    tags: [Tags]
     security:
       - bearerAuth: []
-    parameters:
-      - in: query
-        name: hidden
-        required: false
-        description: >-
-          Include (true) or exclude (false) hidden categories. Omit the
-          parameter to let the engine apply its own default — the wrapper then
-          calls getCategories() with no argument at all.
-        schema:
-          type: boolean
-        example: true
     responses:
       200:
-        description: Categories list
+        description: Tags list
         content:
           application/json:
             schema:
@@ -25,24 +14,26 @@ categories:
               properties:
                 success:
                   type: boolean
-                categories:
+                tags:
                   type: array
                   items:
-                    $ref: '../components/schemas.yml#/Category'
+                    $ref: '../components/schemas.yml#/Tag'
             examples:
               sample:
                 value:
                   success: true
-                  categories:
-                    - id: cat-1
-                      name: Groceries
-                      group_id: grp-living
-                    - id: cat-2
-                      name: Gas
-                      group_id: grp-transport
+                  tags:
+                    - id: 3f2c1b9a-1111-4a2b-8c3d-4e5f60718293
+                      tag: vacation
+                      color: "#ff7043"
+                      description: Trips and travel
+                    - id: 8d7e6f50-2222-4b3c-9d4e-5f6071829304
+                      tag: reimbursable
+                      color: "#42a5f5"
+                      description: null
   post:
-    summary: Create category
-    tags: [Categories]
+    summary: Create tag
+    tags: [Tags]
     security:
       - bearerAuth: []
     requestBody:
@@ -51,19 +42,31 @@ categories:
         application/json:
           schema:
             type: object
-            required: [category]
+            required: [tag]
             properties:
-              category:
+              tag:
                 type: object
-                required: [name]
+                required: [tag]
                 properties:
-                  name:
+                  tag:
                     type: string
-                  group_id:
+                    maxLength: 255
+                  color:
                     type: string
+                    nullable: true
+                  description:
+                    type: string
+                    nullable: true
+          examples:
+            create:
+              value:
+                tag:
+                  tag: vacation
+                  color: "#ff7043"
+                  description: Trips and travel
     responses:
       201:
-        description: Category created
+        description: Tag created
         content:
           application/json:
             schema:
@@ -77,22 +80,24 @@ categories:
               created:
                 value:
                   success: true
-                  id: cat-xyz
+                  id: 3f2c1b9a-1111-4a2b-8c3d-4e5f60718293
 
-categoryById:
+tagById:
   parameters:
     - in: path
       name: id
       required: true
+      description: Tag id
       schema:
         type: string
   put:
-    summary: Update category
-    tags: [Categories]
+    summary: Update tag
+    tags: [Tags]
     security:
       - bearerAuth: []
     requestBody:
       required: true
+      description: At least one field must be present.
       content:
         application/json:
           schema:
@@ -101,14 +106,24 @@ categoryById:
             properties:
               fields:
                 type: object
+                minProperties: 1
                 properties:
-                  name:
+                  tag:
                     type: string
-                  group_id:
+                  color:
                     type: string
+                    nullable: true
+                  description:
+                    type: string
+                    nullable: true
+          examples:
+            recolour:
+              value:
+                fields:
+                  color: "#66bb6a"
     responses:
       200:
-        description: Category updated
+        description: Tag updated
         content:
           application/json:
             schema:
@@ -118,23 +133,13 @@ categoryById:
                 value:
                   success: true
   delete:
-    summary: Delete category
-    tags: [Categories]
+    summary: Delete tag
+    tags: [Tags]
     security:
       - bearerAuth: []
-    parameters:
-      - in: query
-        name: transferCategoryId
-        required: false
-        description: >-
-          Move this category's transactions to the given category instead of
-          leaving them uncategorised.
-        schema:
-          type: string
-        example: 6f5e4d3c-5555-4d6e-8f70-8192a3b4c5d6
     responses:
       200:
-        description: Category deleted
+        description: Tag deleted
         content:
           application/json:
             schema:

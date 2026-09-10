@@ -5,11 +5,24 @@
 import logger from '../../logging/logger.js';
 import { runWithApi } from './runner.js';
 
-export const categoriesList = async () => {
+/**
+ * Lists categories, optionally including or excluding hidden ones.
+ *
+ * `getCategories(options?)` (methods.d.ts:92) takes an OPTIONAL options object.
+ * With no `hidden` filter the argument is omitted entirely rather than passed
+ * as `undefined`, so the call shape stays exactly what it was before the
+ * filter existed.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.hidden] - include (true) or exclude (false) hidden
+ */
+export const categoriesList = async ({ hidden } = {}) => {
   return runWithApi('categoriesList', async (apiInstance) => {
-    logger.debug('[Actual] Getting categories list');
-    const categories = await apiInstance.getCategories();
-    logger.info('[Actual] categoriesList result', { count: categories.length });
+    logger.debug('[Actual] Getting categories list', { hidden });
+    const categories = hidden === undefined
+      ? await apiInstance.getCategories()
+      : await apiInstance.getCategories({ hidden });
+    logger.info('[Actual] categoriesList result', { count: categories.length, hidden });
     return categories;
   });
 };
@@ -40,13 +53,25 @@ export const categoryUpdate = async (id, fields) => {
   );
 };
 
-export const categoryDelete = async (id) => {
+/**
+ * Deletes a category, optionally moving its transactions to another one.
+ *
+ * `deleteCategory(id, transferCategoryId?)` (methods.d.ts:97): without the
+ * second argument the engine leaves the transactions uncategorised, so it is
+ * omitted rather than passed as `undefined`.
+ *
+ * @param {string} id - category to delete
+ * @param {string} [transferCategoryId] - category to reassign transactions to
+ */
+export const categoryDelete = async (id, transferCategoryId) => {
   return runWithApi(
     'categoryDelete',
     async (apiInstance) => {
-      logger.debug('[Actual] Deleting category', { categoryId: id });
-      const result = await apiInstance.deleteCategory(id);
-      logger.info('[Actual] categoryDelete completed', { categoryId: id, result });
+      logger.debug('[Actual] Deleting category', { categoryId: id, transferCategoryId });
+      const result = transferCategoryId === undefined
+        ? await apiInstance.deleteCategory(id)
+        : await apiInstance.deleteCategory(id, transferCategoryId);
+      logger.info('[Actual] categoryDelete completed', { categoryId: id, transferCategoryId, result });
       return result;
     },
     { mode: 'write' }

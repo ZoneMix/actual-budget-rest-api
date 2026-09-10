@@ -1,0 +1,78 @@
+noteByEntityId:
+  parameters:
+    - in: path
+      name: id
+      required: true
+      description: >-
+        Id of the entity the note is attached to (account, category, payee or
+        schedule). There is no separate note id.
+      schema:
+        type: string
+  get:
+    summary: Get the note on an entity
+    tags: [Notes]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: >-
+          The note, or null when the entity has no note. An entity without a
+          note is not a 404.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                note:
+                  allOf:
+                    - $ref: '../components/schemas.yml#/Note'
+                  nullable: true
+            examples:
+              present:
+                value:
+                  success: true
+                  note:
+                    id: 9a8b7c6d-2222-4e3f-9a1b-2c3d4e5f6071
+                    note: Reconciled through 2026-08-31
+              absent:
+                value:
+                  success: true
+                  note: null
+  put:
+    summary: Write or clear the note on an entity
+    tags: [Notes]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [note]
+            properties:
+              note:
+                type: string
+                maxLength: 5000
+                nullable: true
+                description: Pass null to clear the note.
+          examples:
+            write:
+              value:
+                note: Reconciled through 2026-08-31
+            clear:
+              value:
+                note: null
+    responses:
+      200:
+        description: Note updated
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Success'
+            examples:
+              ok:
+                value:
+                  success: true

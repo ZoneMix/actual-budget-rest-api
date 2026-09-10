@@ -4,6 +4,17 @@ categoryGroups:
     tags: [Category Groups]
     security:
       - bearerAuth: []
+    parameters:
+      - in: query
+        name: hidden
+        required: false
+        description: >-
+          Include (true) or exclude (false) hidden groups. Omit the parameter
+          to let the engine apply its own default — the wrapper then calls
+          getCategoryGroups() with no argument at all.
+        schema:
+          type: boolean
+        example: true
     responses:
       200:
         description: Category groups list
@@ -117,6 +128,16 @@ categoryGroupById:
     tags: [Category Groups]
     security:
       - bearerAuth: []
+    parameters:
+      - in: query
+        name: transferCategoryId
+        required: false
+        description: >-
+          Move the transactions of this group's categories to the given
+          category instead of leaving them uncategorised.
+        schema:
+          type: string
+        example: 7a6b5c4d-7777-4f80-91a2-b3c4d5e6f708
     responses:
       200:
         description: Category group deleted

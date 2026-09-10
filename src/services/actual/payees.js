@@ -14,6 +14,19 @@ export const payeesList = async () => {
   });
 };
 
+/**
+ * The payees Actual considers frequently used — `getCommonPayees()`
+ * (methods.d.ts:100). A strict subset of `payeesList()`, ranked by the engine.
+ */
+export const payeesCommonList = async () => {
+  return runWithApi('payeesCommonList', async (apiInstance) => {
+    logger.debug('[Actual] Getting common payees list');
+    const payees = await apiInstance.getCommonPayees();
+    logger.info('[Actual] payeesCommonList result', { count: payees.length });
+    return payees;
+  });
+};
+
 export const payeeCreate = async (payee) => {
   return runWithApi(
     'payeeCreate',

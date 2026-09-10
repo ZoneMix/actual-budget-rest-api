@@ -145,3 +145,36 @@ payeesMerge:
               ok:
                 value:
                   success: true
+
+payeesCommon:
+  get:
+    summary: List common payees
+    description: >-
+      The payees Actual ranks as frequently used — a strict subset of
+      GET /v2/payees, ordered by the engine.
+    tags: [Payees]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Common payees list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                payees:
+                  type: array
+                  items:
+                    $ref: '../components/schemas.yml#/Payee'
+            examples:
+              sample:
+                value:
+                  success: true
+                  payees:
+                    - id: 4d5e6f70-8888-4091-a2b3-c4d5e6f70819
+                      name: Hy-Vee
+                    - id: 5e6f7081-9999-41a2-b3c4-d5e6f7081920
+                      name: Casey's
