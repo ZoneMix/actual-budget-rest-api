@@ -106,8 +106,9 @@ lint-staged pattern back to `.env*`; that glob untracks `.env.example`.
 
 - Immutable data: schemas and helpers return new objects. `withOffbudgetAlias`
   and `withDateAlias` fold legacy keys without mutating the input.
-- Files 200–400 lines. `src/app.js` and `src/routes/health-checks.js` are at the
-  ceiling — split before adding to either.
+- Files stay ≤ 200 lines (this repo's convention, stricter than the global
+  200–400 guideline). `src/app.js` (200) and `src/routes/health-checks.js` (192)
+  sit at that cap — split before adding to either.
 - Errors are explicit: throw a typed error from `src/errors/`, let
   `asyncHandler` and `errorHandler` render it. Never swallow.
 - Handlers read `req.validatedBody` / `req.validatedParams` /

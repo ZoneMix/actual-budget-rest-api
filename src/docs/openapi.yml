@@ -1,11 +1,11 @@
 openapi: 3.0.0
 info:
   title: Actual Budget REST API
-  # No `version` here on purpose. It is injected from package.json by
-  # src/config/swagger.js (which serves /docs) and by
-  # scripts/validate-openapi.mjs, so the release version is maintained in
-  # exactly one place. A copy here would drift the first time one is bumped
-  # without the other.
+  # Placeholder only, so the raw file stays a standalone-valid OpenAPI document.
+  # The real value is injected from package.json by src/config/swagger.js
+  # (which serves /docs) and by scripts/validate-openapi.mjs, so the release
+  # version is maintained in exactly one place. Never bump this line.
+  version: 0.0.0
   description: |
     REST API wrapper for Actual Budget with OAuth2 integration for n8n.
     

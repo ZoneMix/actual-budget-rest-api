@@ -230,6 +230,9 @@ describe('OpenAPI drift guard', () => {
     it('is documented with the properties the validator accepts', () => {
       const specSchema = jsonRequestSchema(spec.paths?.[routePath]?.[method.toLowerCase()]);
       expect(specSchema).not.toBeNull();
+      // A documented body with no `properties` block at all would otherwise
+      // compare as "nothing documented, nothing missing" and pass silently.
+      expect(specSchema.properties).toBeDefined();
 
       const shape = zodObjectShape(schemas[schema]);
       expect(shape).not.toBeNull();

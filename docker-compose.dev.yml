@@ -47,7 +47,7 @@ services:
         compress: "true"
 
   redis-dev:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     container_name: actual-rest-api-redis-dev
     ports:
       - "6379:6379"
@@ -161,7 +161,7 @@ services:
     restart: unless-stopped
 
   postgres-dev:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine
     container_name: postgres-dev
     ports:
       - "5432:5432"
