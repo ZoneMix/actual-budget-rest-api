@@ -47,59 +47,90 @@ This REST API wraps the Actual Budget SDK (`@actual-app/api`) to provide a secur
 
 ```
 src/
+├── app.js             # Builds the Express app (middleware + mounts), no listener
+├── server.js          # Process bootstrap: listen, startup, graceful shutdown
 ├── auth/              # Authentication & authorization
-│   ├── jwt.js        # JWT token management
-│   ├── user.js       # User authentication
-│   ├── admin.js      # Admin dashboard HTML
-│   ├── adminApi.js   # Admin API authentication middleware
-│   ├── permissions.js # Role and scope checking utilities
-│   ├── oauth2/       # OAuth2 implementation
-│   └── docsAuth.js   # Documentation access control
+│   ├── jwt.js               # Sign, verify, revoke; issuer/audience pinning
+│   ├── user.js              # User authentication
+│   ├── scopes.js            # The scope lattice: read ⊂ write ⊂ admin, `api` expansion
+│   ├── permissions.js       # requireScope / requireScopeByMethod / requireAdminRole
+│   ├── adminApi.js          # Admin API authentication (JWT or session)
+│   ├── adminDashboard.js    # Admin dashboard session auth
+│   ├── docsAuth.js          # /docs access control
+│   └── oauth2/              # OAuth2: client, code, grants, scope intersection
 ├── config/            # Configuration management
 │   ├── index.js      # Main config exports
-│   ├── env.js        # Environment variable validation
-│   ├── swagger.js    # OpenAPI/Swagger setup
+│   ├── env.js        # Environment variable validation (Zod, fails fast)
+│   ├── swagger.js    # OpenAPI loader; injects info.version from package.json
 │   └── redis.js      # Redis connection management
 ├── db/                # Database layer
 │   └── authDb.js     # PostgreSQL/SQLite authentication database
 ├── docs/              # OpenAPI documentation
-│   ├── openapi.yml   # Main OpenAPI spec
-│   └── paths/        # Route definitions
+│   ├── openapi.yml   # Root spec: path table + component registry
+│   ├── paths/        # One file per resource
+│   └── components/   # Shared schemas and securitySchemes
 ├── errors/            # Custom error classes
 │   └── index.js      # Error type definitions
 ├── logging/           # Logging infrastructure
 │   └── logger.js     # Winston logger configuration
 ├── middleware/        # Express middleware
 │   ├── asyncHandler.js      # Async error handling
-│   ├── bodyParser.js        # Body size limits
+│   ├── bodyParser.js        # Per-route body size limits (bulk larger, query smaller)
 │   ├── errorHandler.js      # Global error handler
 │   ├── metrics.js           # Metrics collection
-│   ├── querySecurity.js     # ActualQL query validation
+│   ├── queryExpressions.js  # ActualQL expression mapping
+│   ├── querySecurity.js     # Table whitelist, filter depth, result cap
 │   ├── rateLimiters.js      # Rate limiting configs
 │   ├── requestId.js         # Request ID tracking
-│   ├── responseHelpers.js   # Response utilities
-│   └── validation-schemas.js # Zod validation schemas
+│   ├── responseHelpers.js   # sendSuccess / sendCreated
+│   └── validation-schemas.js # Re-export shim for validation/ (removed in 3.0.0)
+├── validation/        # Zod schemas, one file per domain
+│   ├── index.js      # Barrel + validateBody / validateParams / validateQuery
+│   ├── common.js     # Shared pieces: IDSchema, UuidSchema, atLeastOneKey, ...
+│   ├── constants.js  # Every enum literal, pinned against the SDK by tests
+│   ├── errors.js     # Zod error → API error-detail formatting
+│   └── ... (accounts, transactions, rules, schedules, budgets, query, ...)
 ├── public/            # Static files
-│   └── static/        # CSS, HTML for login page
-├── routes/            # Express route handlers
-│   ├── accounts.js
-│   ├── auth.js
-│   ├── admin.js      # Admin API routes (OAuth client management)
-│   ├── budgets.js
-│   ├── metrics.js    # Metrics endpoints
-│   ├── query.js      # ActualQL query endpoint
-│   └── ... (other routes)
-├── services/          # Business logic layer
-│   ├── actualApi.js  # Re-exports actual/ (the import path routes use)
-│   └── actual/       # Actual Budget API wrapper, split by domain
-│       ├── client.js      # init / get / shutdown / budget recovery
-│       ├── queue.js       # FIFO engine queue (backpressure, timeout, reentrancy)
-│       ├── syncPolicy.js  # interval gate deciding when a read must sync
-│       ├── runner.js      # runWithApi(label, fn, { mode, force }) + metrics
-│       ├── index.js       # barrel
-│       └── ... (accounts, transactions, categories, payees, budgets, ...)
-└── server.js         # Application entry point
+│   └── static/        # CSS, HTML for login and admin pages
+├── routes/            # Express route handlers — thin: validate, call, respond
+│   ├── accounts.js          # Also mounts transactions-nested at :accountId
+│   ├── health.js            # Thin assembler over health-checks.js
+│   ├── health-checks.js     # The probes themselves
+│   ├── query.js             # ActualQL endpoint (read scope, over POST)
+│   └── ... (one router per resource)
+└── services/          # Business logic layer
+    ├── actualApi.js  # Re-exports actual/ (the import path routes use)
+    └── actual/       # Actual Budget API wrapper, split by domain
+        ├── client.js      # init / get / shutdown / budget recovery
+        ├── queue.js       # FIFO engine queue (backpressure, timeout, reentrancy)
+        ├── syncPolicy.js  # interval gate deciding when a read must sync
+        ├── runner.js      # runWithApi(label, fn, { mode, force }) + metrics
+        ├── index.js       # barrel
+        └── ... (accounts, transactions, categories, payees, budgets, ...)
 ```
+
+The engine wrapper is the part worth understanding. `@actual-app/api` is a
+stateful singleton that owns an on-disk cache, so it cannot be called
+concurrently. Everything funnels through `runner.js`:
+
+- **`queue.js`** serialises every call. Beyond `ACTUAL_QUEUE_MAX_DEPTH` pending
+  operations it rejects with 503 rather than growing without bound; past
+  `ACTUAL_OP_TIMEOUT_MS` the caller gets 504 while the operation keeps its slot,
+  since the SDK call cannot be cancelled.
+- **`syncPolicy.js`** decides whether a read syncs first. A read syncs only if
+  the last successful sync is older than `ACTUAL_SYNC_MIN_INTERVAL_MS`; writes
+  always sync afterwards and mark the policy fresh. `forceStale()` exists for
+  the one case that invalidates freshness without a write — loading a different
+  budget file, where the recorded freshness was measured against a file that is
+  no longer open.
+- **`runner.js`** ties them together: `runWithApi(label, fn, { mode, force })`
+  takes the queue slot, applies the sync policy for the mode, and records
+  timing metrics under the label.
+
+Health probes deliberately bypass all of this. `/v2/health` is unauthenticated,
+so routing it through the queue would let an anonymous caller drive outbound
+sync traffic and make health latency a function of queue depth. It calls the
+engine instance directly instead.
 
 ## Request Flow
 
@@ -164,32 +195,46 @@ authenticateAdminAPI middleware
     ↓
 Try JWT authentication OR session authentication
     ↓
-Check user has admin role OR admin scope
+Require BOTH: user role is admin AND the token's expanded scopes include admin
     ↓
-If not admin: 403 Forbidden
+If not: 403 Forbidden — in every AUTH_SCOPE_ENFORCEMENT mode
     ↓
 If admin: Continue to route handler
     ↓
 Admin route handler (OAuth client management)
 ```
 
+The scope half of that check matters: an admin user can deliberately mint a
+narrow token through an api-only OAuth client, and that token must not open the
+admin surface. `isAdmin` therefore reads the expanded grant, not the role alone.
+Session paths are unaffected — `authenticateAdminAPI` builds its user from the
+database row, where an admin carries `api,admin`.
+
 ### 3. Route Handler Flow
 
 ```
 Route Handler
     ↓
-Rate Limiter (if applicable)
+Rate Limiter (per route class)
     ↓
-Validation Middleware (Zod schemas)
+authenticateJWT  →  requireScopeByMethod() / requireScope(SCOPES.READ)
+    ↓                (GET/HEAD/OPTIONS → read, everything else → write;
+    ↓                 /v2/query names read explicitly, being a read over POST)
+Validation Middleware (validateParams / validateQuery / validateBody, Zod)
     ↓
-Business Logic (Service Layer)
+Service Layer (src/services/actual/*)
     ↓
-Actual API Call (with sync if needed)
+runWithApi → queue slot → sync policy → @actual-app/api call
     ↓
-Response Helper (format response)
+Response Helper (sendSuccess / sendCreated)
     ↓
 Client Response
 ```
+
+Handlers read `req.validatedBody`, `req.validatedParams` and
+`req.validatedQuery` — never `req.body` directly. The validated objects are new
+objects produced by Zod, so a schema's coercions and alias folding (`offBudget`
+→ `offbudget`, `_date` → `date`) apply without mutating the request.
 
 ### 4. Error Handling Flow
 
@@ -267,12 +312,25 @@ Actual Budget SDK
 2. **JWT-based**: For API access (access + refresh tokens with role/scopes)
 3. **OAuth2**: For third-party integrations (n8n)
 
-### Authorization (Role-Based Access Control)
-- **Roles**: User roles stored in database (`admin`, `user`)
-- **Scopes**: Fine-grained permissions (comma-separated, e.g., `api`, `admin`)
-- **Token Claims**: JWT tokens include `role` and `scopes` for authorization
-- **Admin API**: Requires `admin` role or `admin` scope
-- **Permission Checks**: Middleware utilities (`isAdmin`, `hasScope`, `requireScope`)
+### Authorization (scope-based)
+- **Lattice** (`src/auth/scopes.js`): `read` ⊂ `write` ⊂ `admin`. The legacy
+  scope `api` expands to `read` + `write`. Expansion happens once, at check time.
+- **Roles**: still stored in the database (`admin`, `user`) and still carried in
+  the token, but they gate nothing on their own.
+- **Token Claims**: JWTs carry `role` and `scopes`, plus pinned `iss`/`aud`.
+- **Admin operations**: require an admin role **and** the `admin` scope.
+- **Rollout**: `AUTH_SCOPE_ENFORCEMENT` is `off` / `warn` / `enforce`. The
+  shipped default `warn` logs `auth:SCOPE_WOULD_DENY` and lets the request
+  through, so no existing caller starts getting 403s mid-upgrade.
+- **Outside the rollout**: `requireAdminRole()` — used by the admin routes,
+  budget load/export and metrics reset — always enforces. Under `warn` a scope
+  gate on those would log a denial and then permit the very operation it was
+  protecting.
+- **Permission Checks**: `requireScope`, `requireScopeByMethod`,
+  `requireAdminRole`, `isAdmin`, `hasScope` in `src/auth/permissions.js`.
+- **OAuth2 grants**: intersected with both the client's `allowed_scopes` and the
+  authorizing user's own scopes; a refresh keeps the granted scope and cannot
+  widen it.
 
 ### Security Measures
 - **Rate Limiting**: Per-route, with Redis support for distributed systems
@@ -307,9 +365,21 @@ Actual Budget SDK
 ## Actual Budget Integration
 
 ### Sync Strategy
-- **Read Operations**: No sync (faster, eventual consistency)
-- **Write Operations**: Sync before and after (data consistency)
-- **Initialization**: Download budget on startup
+
+Governed by `src/services/actual/syncPolicy.js`, not by each call site.
+
+- **Reads**: sync only when the last successful sync is older than
+  `ACTUAL_SYNC_MIN_INTERVAL_MS` (default 5000). A read may therefore return data
+  up to that interval stale. `0` restores sync-before-every-read.
+- **Writes**: always sync afterwards, and mark the policy fresh — so a write
+  followed by a read is consistent regardless of the interval.
+- **Forced stale**: `POST /v2/budget/load` calls `forceStale()`, because the
+  recorded freshness was measured against a budget file that is no longer open.
+- **On demand**: `POST /v2/sync` syncs immediately, ignoring the interval.
+- **Initialization**: the budget is downloaded on startup.
+- **Failures**: a sync error is recorded as `lastSyncError` and surfaced by
+  `/v2/health`. Health probes do not sync, so polling health cannot erase the
+  diagnostic it exists to report.
 
 ### API Wrapper Pattern
 ```javascript
@@ -390,7 +460,7 @@ Grafana is pre-configured in the development Docker Compose stack for real-time 
 - **Auto-refresh**: Dashboard updates every 10 seconds
 - **Configuration**: Provisioned via `grafana/provisioning/` directory
 
-See [grafana/README.md](../grafana/README.md) for setup and customization details.
+See [monitoring/README.md](monitoring/README.md) for setup and customization details.
 
 ## Scalability Considerations
 
