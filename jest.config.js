@@ -20,12 +20,14 @@ export default {
     '!src/public/**',
     '!src/server.js',
   ],
+  // Ratchet: the largest multiple of 5 currently met by each metric.
+  // Raise these as coverage grows; never lower them to make a run pass.
   coverageThreshold: {
     global: {
-      branches: 20,
-      functions: 20,
-      lines: 20,
-      statements: 20,
+      branches: 25,
+      functions: 35,
+      lines: 40,
+      statements: 40,
     },
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
