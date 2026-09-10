@@ -16,6 +16,7 @@ import { issueTokens, isTokenRevoked, revokeToken, JWT_VERIFY_OPTIONS } from '..
 import { validateAuthCode } from './code.js';
 import {
   clientAllowedScopes,
+  clientDefaultScopes,
   formatScopes,
   intersectScopes,
   parseRequestedScopes,
@@ -35,7 +36,9 @@ const DEFAULT_ROLE = 'user';
  */
 const grantScopes = (client, user, requestedRaw) => {
   const granted = intersectScopes(
-    parseRequestedScopes(requestedRaw),
+    // No `scope` in the request means the client's own registration, not a
+    // global default it may not even be allowed (RFC 6749 §3.3).
+    parseRequestedScopes(requestedRaw, clientDefaultScopes(client)),
     clientAllowedScopes(client),
     userHeldScopes(user)
   );

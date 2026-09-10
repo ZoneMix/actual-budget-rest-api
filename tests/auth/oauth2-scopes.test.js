@@ -270,3 +270,50 @@ describe('a grant is bounded by the signed-in user, not only by the client', () 
     expect(jwt.decode(tokenRes.body.access_token).scope).toBe('admin');
   });
 });
+
+/**
+ * RFC 6749 §3.3: when the request omits `scope`, the server uses "a
+ * pre-defined default value" — which for a registered client is its own
+ * `allowed_scopes`, not a global constant.
+ *
+ * The default was hard-coded to the legacy `api` scope, so a client registered
+ * `allowed_scopes=read` was refused with invalid_scope unless it remembered to
+ * send `scope=read` on every request — for the one scope it is registered to
+ * hold.
+ */
+describe('a request with no scope falls back to the client registration', () => {
+  it('issues the client its own scope instead of refusing it', async () => {
+    const clientId = await registerClient('read');
+
+    const res = await authorize(clientId);
+    const location = locationOf(res);
+
+    expect(location.searchParams.get('error')).toBeNull();
+    const code = location.searchParams.get('code');
+    expect(code).not.toBeNull();
+
+    const tokenRes = await exchangeCode(clientId, code);
+
+    expect(tokenRes.status).toBe(200);
+    expect(jwt.decode(tokenRes.body.access_token).scope).toBe('read');
+  });
+
+  it('leaves a client registered for the legacy api scope unchanged', async () => {
+    const clientId = await registerClient('api');
+
+    const res = await authorize(clientId);
+    const code = locationOf(res).searchParams.get('code');
+    const tokenRes = await exchangeCode(clientId, code);
+
+    expect(jwt.decode(tokenRes.body.access_token).scope).toBe('api');
+  });
+
+  it('is still bounded by what the signed-in user holds', async () => {
+    const clientId = await registerClient('admin');
+
+    const res = await authorizeAs(userAgent, clientId);
+
+    expect(locationOf(res).searchParams.get('error')).toBe('invalid_scope');
+    expect(locationOf(res).searchParams.get('code')).toBeNull();
+  });
+});
