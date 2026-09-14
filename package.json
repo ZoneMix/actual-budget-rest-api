@@ -5,7 +5,7 @@
   "main": "server.js",
   "dependencies": {
     "@actual-app/api": "26.9.0",
-    "@apidevtools/swagger-parser": "^12.1.0",
+    "@apidevtools/swagger-parser": "^13.0.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.5.0",
     "cors": "^2.8.5",
