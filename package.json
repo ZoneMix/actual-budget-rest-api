@@ -7,7 +7,7 @@
     "@actual-app/api": "26.9.0",
     "@apidevtools/swagger-parser": "^12.1.0",
     "bcrypt": "^6.0.0",
-    "better-sqlite3": "^12.5.0",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
