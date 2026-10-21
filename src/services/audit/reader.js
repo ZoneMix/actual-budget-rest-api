@@ -19,10 +19,18 @@ const DB_FILE = 'db.sqlite';
 const METADATA_FILE = 'metadata.json';
 const BUSY_TIMEOUT_MS = 5000;
 
-// The window query walks the UNIQUE(timestamp) index; the prior-value lookup
-// walks messages_crdt_search (dataset, row, column, timestamp).
-const WINDOW_SQL = `SELECT timestamp, dataset, row, "column" AS col, value
-  FROM messages_crdt WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp`;
+// Window queries walk the UNIQUE(timestamp) index; the prior-value lookup
+// walks messages_crdt_search (dataset, row, column, timestamp). Only the page
+// is materialised: totals come from aggregates, so memory and per-row lookups
+// are bounded by `limit` however busy the day was.
+const IN_WINDOW = 'FROM messages_crdt WHERE timestamp >= ? AND timestamp < ?';
+const PAGE_SQL = `SELECT timestamp, dataset, row, "column" AS col, value
+  ${IN_WINDOW} ORDER BY timestamp LIMIT ? OFFSET ?`;
+const TOTAL_SQL = `SELECT COUNT(*) AS n ${IN_WINDOW}`;
+const TABLES_SQL = `SELECT dataset, COUNT(*) AS n ${IN_WINDOW} GROUP BY dataset ORDER BY n DESC, dataset`;
+const CLIENTS_SQL = `SELECT lower(substr(timestamp, -16)) AS clientId, COUNT(*) AS n,
+  MIN(timestamp) AS first, MAX(timestamp) AS last
+  ${IN_WINDOW} GROUP BY clientId ORDER BY n DESC, clientId`;
 const PRIOR_SQL = `SELECT value FROM messages_crdt
   WHERE dataset = ? AND row = ? AND "column" = ? AND timestamp < ?
   ORDER BY timestamp DESC LIMIT 1`;
@@ -92,17 +100,23 @@ const readOwnClientId = (db) => {
 };
 
 /**
- * Every message in [window.start, window.end), oldest first, each paired with
- * the message it superseded: the latest earlier write to the same cell.
+ * One page of the messages in [window.start, window.end), oldest first, each
+ * paired with the message it superseded (the latest earlier write to the same
+ * cell, inside the window or before it), plus whole-window aggregates.
  *
- * @returns {{ messages: object[], ownClientId: string|null }}
+ * @param {string} dbPath
+ * @param {{ start: string, end: string }} window
+ * @param {{ limit: number, offset: number }} page
+ * @returns {{ messages: object[], total: number, tables: object[], clients: object[], ownClientId: string|null }}
  *   message: { timestamp, dataset, row, column, raw, previous: { raw }|null }
+ *   tables: [{ dataset, n }], clients: [{ clientId, n, first, last }]
  */
-export const readWindow = (dbPath, window) => {
+export const readWindow = (dbPath, window, { limit, offset }) => {
   const db = new Database(dbPath, { readonly: true, fileMustExist: true, timeout: BUSY_TIMEOUT_MS });
   try {
     db.pragma('query_only = ON');
-    const rows = db.prepare(WINDOW_SQL).all(window.start, window.end);
+    const bounds = [window.start, window.end];
+    const rows = db.prepare(PAGE_SQL).all(...bounds, limit, offset);
     const prior = db.prepare(PRIOR_SQL);
     const lastWrite = new Map();
 
@@ -122,7 +136,13 @@ export const readWindow = (dbPath, window) => {
       };
     });
 
-    return { messages, ownClientId: readOwnClientId(db) };
+    return {
+      messages,
+      total: db.prepare(TOTAL_SQL).get(...bounds).n,
+      tables: db.prepare(TABLES_SQL).all(...bounds),
+      clients: db.prepare(CLIENTS_SQL).all(...bounds),
+      ownClientId: readOwnClientId(db),
+    };
   } finally {
     db.close();
   }

@@ -16,6 +16,11 @@ All notable changes to this project are documented in this file.
   with 503). JWTs are refused there and the token opens nothing else. Values
   that could be credentials, tokens or env values are returned as
   `[redacted]`.
+- Work per request is bounded by the page: paging runs in SQL (`limit` at most
+  20000) and the summary comes from aggregates. The route has its own limiter,
+  30 requests a minute. `date` must fall between 2000 and 2100.
+- Engine or SQLite failures on this route answer a generic 503 instead of the
+  underlying message, and the sync-recovery error no longer quotes the sync id.
 - New env: `LEDGER_AUDIT_TOKEN`, `AUDIT_TIMEZONE`, `AUDIT_CLIENT_LABELS`.
 - The OpenAPI drift guard now covers `/v1` as well as `/v2`. CORS setup moved
   out of `src/app.js` into `src/middleware/cors.js`, unchanged.

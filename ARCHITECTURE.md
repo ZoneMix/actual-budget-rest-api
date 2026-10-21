@@ -80,6 +80,7 @@ src/
 │   ├── accessLog.js         # One structured line per request, path only
 │   ├── asyncHandler.js      # Async error handling
 │   ├── bodyParser.js        # Per-router body size limits (bulk larger, query smaller)
+│   ├── auditLimiter.js      # GET /v1/audit/changes limiter, its own counter
 │   ├── cors.js              # ALLOWED_ORIGINS policy
 │   ├── errorHandler.js      # Global error handler
 │   ├── metrics.js           # Metrics collection

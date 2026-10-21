@@ -7,7 +7,7 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { locateBudgetDb, readWindow } from '../../src/services/audit/reader.js';
-import { toChange, buildReport } from '../../src/services/audit/report.js';
+import { toChange, toClientSummary, buildReport } from '../../src/services/audit/report.js';
 import { createRedactor } from '../../src/services/audit/redact.js';
 import { createBudgetFixture, hlc } from '../helpers/auditFixture.js';
 
@@ -17,6 +17,7 @@ const PHONE = '2c3d4e5f60718293';
 const SYNC = '0a1b2c3d4e5f6071';
 const WINDOW = { start: '2026-10-19T05:00:00.000Z', end: '2026-10-20T05:00:00.000Z' };
 const PLANTED = 'leaked-secret-value-0123';
+const PAGE_ALL = { limit: 100, offset: 0 };
 
 const MESSAGES = [
   [hlc('2026-10-18T20:00:00.000Z', SYNC), 'transactions', 'txn-1', 'amount', -1000],
@@ -76,7 +77,7 @@ describe('audit reader', () => {
   });
 
   it('returns the window only, oldest first, with each superseded value', () => {
-    const { messages, ownClientId } = readWindow(dbPath, WINDOW);
+    const { messages, ownClientId } = readWindow(dbPath, WINDOW, PAGE_ALL);
 
     expect(ownClientId).toBe(OWN);
     expect(messages.map((m) => m.timestamp.slice(0, 24))).toEqual([
@@ -96,13 +97,13 @@ describe('audit reader', () => {
 
   it('never writes to the budget file', () => {
     const before = sha256(dbPath);
-    readWindow(dbPath, WINDOW);
+    readWindow(dbPath, WINDOW, PAGE_ALL);
     expect(sha256(dbPath)).toBe(before);
     expect(fs.existsSync(`${dbPath}-journal`)).toBe(false);
   });
 
   it('builds changes with decoded values, sources and redaction', () => {
-    const { messages, ownClientId } = readWindow(dbPath, WINDOW);
+    const { messages, ownClientId } = readWindow(dbPath, WINDOW, PAGE_ALL);
     const context = {
       clientLabels: new Map([[SYNC, 'strike-sync']]),
       ownClientId,
@@ -131,24 +132,40 @@ describe('audit reader', () => {
     expect(JSON.stringify(changes)).not.toContain(PLANTED);
   });
 
-  it('summarises the whole day and pages the change list', () => {
-    const { messages, ownClientId } = readWindow(dbPath, WINDOW);
-    const context = { clientLabels: new Map(), ownClientId, isSecret: () => false };
+  it('pages in SQL while totals and summaries cover the whole day', () => {
+    const full = readWindow(dbPath, WINDOW, PAGE_ALL);
+    const page = readWindow(dbPath, WINDOW, { limit: 2, offset: 2 });
+
+    expect(page.messages).toEqual(full.messages.slice(2, 4));
+    // The superseded value still resolves when it sits outside the page.
+    expect(page.messages[0].previous).toEqual({ raw: 'N:-1250' });
+    expect(page.total).toBe(6);
+    expect(page.tables).toEqual([{ dataset: 'transactions', n: 5 }, { dataset: 'categories', n: 1 }]);
+    expect(page.clients[0]).toEqual({
+      clientId: PHONE,
+      n: 3,
+      first: hlc(WINDOW.start, PHONE),
+      last: hlc('2026-10-19T14:00:00.000Z', PHONE),
+    });
+  });
+
+  it('builds the report from a page and the day aggregates', () => {
+    const { messages, total, tables, clients, ownClientId } = readWindow(dbPath, WINDOW, { limit: 2, offset: 1 });
+    const context = { clientLabels: new Map([[SYNC, 'strike-sync']]), ownClientId, isSecret: () => false };
     const changes = messages.map((m) => toChange(m, context));
+    const byClient = clients.map((row) => toClientSummary(row, context));
     const meta = { date: '2026-10-19', timeZone: 'America/Chicago', window: WINDOW, limit: 2, offset: 1 };
 
-    const report = buildReport(changes, meta);
+    const report = buildReport({ changes, total, tables, clients: byClient }, meta);
 
     expect(report).toMatchObject({ total: 6, returned: 2, offset: 1, limit: 2, truncated: true });
-    expect(report.changes).toEqual(changes.slice(1, 3));
     expect(report.summary.byTable).toEqual({ transactions: 5, categories: 1 });
-    expect(report.summary.byClient[0]).toEqual({
-      clientId: PHONE,
-      source: null,
-      changes: 3,
-      first: WINDOW.start,
-      last: '2026-10-19T14:00:00.000Z',
-    });
-    expect(buildReport(changes, { ...meta, limit: 10, offset: 0 }).truncated).toBe(false);
+    expect(report.summary.byClient).toEqual([
+      { clientId: PHONE, source: null, changes: 3, first: WINDOW.start, last: '2026-10-19T14:00:00.000Z' },
+      { clientId: SYNC, source: 'strike-sync', changes: 2, first: '2026-10-19T15:00:00.000Z', last: '2026-10-19T16:00:00.000Z' },
+      { clientId: OWN, source: 'actual-rest-api', changes: 1, first: '2026-10-19T13:00:00.000Z', last: '2026-10-19T13:00:00.000Z' },
+    ]);
+    const lastPage = buildReport({ changes, total, tables, clients: byClient }, { ...meta, offset: 4 });
+    expect(lastPage.truncated).toBe(false);
   });
 });

@@ -13,7 +13,7 @@ import { auditChangesGet } from '../services/actualApi.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { sendSuccess } from '../middleware/responseHelpers.js';
 import { validateQuery, AuditChangesQuerySchema } from '../middleware/validation-schemas.js';
-import { highFrequencyLimiter } from '../middleware/rateLimiters.js';
+import { auditLimiter } from '../middleware/auditLimiter.js';
 import { MethodNotAllowedError } from '../errors/index.js';
 
 const ALLOWED_METHODS = 'GET, HEAD';
@@ -23,7 +23,7 @@ const requireAuditToken = createAuditTokenAuth(auditConfig.token);
 
 router.get(
   '/changes',
-  highFrequencyLimiter,
+  auditLimiter,
   requireAuditToken,
   validateQuery(AuditChangesQuerySchema),
   asyncHandler(async (req, res) => {

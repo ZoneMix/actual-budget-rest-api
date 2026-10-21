@@ -125,13 +125,34 @@ describe('GET /v1/audit/changes', () => {
     'date=2026-02-30',
     'date=2026-1-9',
     'date=today',
+    'date=9999-12-31',
+    'date=0099-01-01',
     'limit=0',
+    'limit=20001',
     'limit=999999',
     'offset=-1',
     'table=transactions',
   ])('rejects ?%s with 400', async (query) => {
     const res = await request(app).get(`/v1/audit/changes?${query}`).set(bearer(AUDIT_TOKEN));
     expect(res.status).toBe(400);
+  });
+
+  it('answers an unreadable budget with a generic 503 that quotes no config', async () => {
+    // A newer copy of the same budget that is not a database: SQLite throws a
+    // plain error, which must not reach the caller verbatim.
+    const corrupt = `${process.env.DATA_DIR}/Audit-Corrupt-Copy`;
+    fs.mkdirSync(corrupt, { recursive: true });
+    fs.writeFileSync(`${corrupt}/metadata.json`, JSON.stringify({ groupId: process.env.ACTUAL_SYNC_ID }));
+    fs.writeFileSync(`${corrupt}/db.sqlite`, `not a database ${process.env.ACTUAL_SYNC_ID}`);
+    try {
+      const res = await request(app).get('/v1/audit/changes?date=2026-10-19').set(bearer(AUDIT_TOKEN));
+
+      expect(res.status).toBe(503);
+      expect(res.body.error).toBe('The audit feed could not read the budget right now');
+      expect(JSON.stringify(res.body)).not.toContain(process.env.ACTUAL_SYNC_ID);
+    } finally {
+      fs.rmSync(corrupt, { recursive: true, force: true });
+    }
   });
 
   it.each(['post', 'put', 'patch', 'delete'])('answers %s with 405 and no write', async (method) => {

@@ -40,7 +40,7 @@ auditChanges:
         schema:
           type: integer
           minimum: 1
-          maximum: 50000
+          maximum: 20000
           default: 10000
       - name: offset
         in: query

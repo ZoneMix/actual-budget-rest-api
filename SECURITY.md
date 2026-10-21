@@ -81,8 +81,8 @@ gate a future route; it is not read by anything today.
 
 Per route class, per minute unless noted: login 5 per 15 minutes, deletes 10,
 category groups 20, ActualQL queries 20, admin operations 20, ordinary writes
-30, bulk transaction operations 50, budget edits 60, transaction updates and
-the audit feed 100.
+30, the audit feed 30 (its own in-process counter), bulk transaction operations 50, budget
+edits 60, transaction updates 100.
 With Redis configured the counters are shared across instances; without it they
 are per-process, which is wrong as soon as more than one instance runs.
 

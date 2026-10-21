@@ -95,22 +95,22 @@ describe('redaction', () => {
   const isSecret = createRedactor([planted]);
 
   it('withholds secret-named columns whatever the value', () => {
-    expect(isSecret('access_token', 'x')).toBe(true);
-    expect(isSecret('api_key', 42)).toBe(true);
-    expect(isSecret('password', null)).toBe(true);
+    expect(isSecret(['access_token', 'row-1'], 'x')).toBe(true);
+    expect(isSecret(['api_key', 'row-1'], 42)).toBe(true);
+    expect(isSecret(['password', 'row-1'], null)).toBe(true);
   });
 
   it('withholds values that contain a known secret or look like one', () => {
-    expect(isSecret('notes', `pasted ${planted} by mistake`)).toBe(true);
-    expect(isSecret('notes', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl')).toBe(true);
-    expect(isSecret('notes', 'Bearer abcdefghijklmnopqrstuvwx')).toBe(true);
-    expect(isSecret('notes', '-----BEGIN RSA PRIVATE KEY-----')).toBe(true);
+    expect(isSecret(['notes', 'row-1'], `pasted ${planted} by mistake`)).toBe(true);
+    expect(isSecret(['notes', 'row-1'], 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl')).toBe(true);
+    expect(isSecret(['notes', 'row-1'], 'Bearer abcdefghijklmnopqrstuvwx')).toBe(true);
+    expect(isSecret(['notes', 'row-1'], '-----BEGIN RSA PRIVATE KEY-----')).toBe(true);
   });
 
   it('leaves ordinary ledger data alone', () => {
-    expect(isSecret('notes', 'Costco run')).toBe(false);
-    expect(isSecret('amount', -4599)).toBe(false);
-    expect(isSecret('category', null)).toBe(false);
+    expect(isSecret(['notes', 'row-1'], 'Costco run')).toBe(false);
+    expect(isSecret(['amount', 'row-1'], -4599)).toBe(false);
+    expect(isSecret(['category', 'row-1'], null)).toBe(false);
   });
 
   it('collects only secret-bearing env values of a useful length', () => {
@@ -126,7 +126,24 @@ describe('redaction', () => {
       PORT: '3000',
     });
     expect(values).toEqual(expect.arrayContaining([longValue, bearerValue, serverUrl]));
-    expect(values).not.toContain('short');
+    expect(values).toContain('short');
     expect(values).not.toContain('production');
+  });
+
+  it('withholds a value whose row id names a secret (key/value tables)', () => {
+    expect(isSecret(['value', 'sync.api_token'], 'anything')).toBe(true);
+  });
+
+  it('extracts the password embedded in a connection URL', () => {
+    const embedded = 'pg-pass%40word';
+    const values = secretEnvValues({ POSTGRES_URL: `postgresql://ledger:${embedded}@db:5432/auth` });
+    expect(values).toEqual(expect.arrayContaining([embedded, 'pg-pass@word']));
+    expect(createRedactor(values)(['notes'], 'see pg-pass@word')).toBe(true);
+  });
+
+  it('matches a short secret only as the whole value', () => {
+    const redact = createRedactor(['abc12']);
+    expect(redact(['notes'], 'abc12')).toBe(true);
+    expect(redact(['notes'], 'abc123 groceries')).toBe(false);
   });
 });

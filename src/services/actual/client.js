@@ -118,6 +118,6 @@ export const recoverBudget = async (instance, originalError) => {
     logger.error('[Actual] Retry failed after re-download', {
       error: retryError.message,
     });
-    throw new Error(`Budget synchronization failed. The budget may not be properly initialized. Please verify ACTUAL_SYNC_ID (${ACTUAL_SYNC_ID}) is correct and the Actual Budget server is accessible. Original error: ${originalError.message}`);
+    throw new Error(`Budget synchronization failed. The budget may not be properly initialized. Please verify ACTUAL_SYNC_ID is correct and the Actual Budget server is accessible. Original error: ${originalError.message}`);
   }
 };

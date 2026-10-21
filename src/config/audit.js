@@ -11,7 +11,11 @@ import { z } from 'zod';
 export const AUDIT_TOKEN_MIN_LENGTH = 32;
 export const AUDIT_DEFAULT_TIMEZONE = 'America/Chicago';
 export const AUDIT_DEFAULT_LIMIT = 10000;
-export const AUDIT_MAX_LIMIT = 50000;
+// Each returned change costs one indexed prior-value lookup, run synchronously
+// while the request holds the engine queue slot; this caps that work.
+export const AUDIT_MAX_LIMIT = 20000;
+export const AUDIT_MIN_YEAR = 2000;
+export const AUDIT_MAX_YEAR = 2100;
 /** Source label for changes stamped with this API's own CRDT client id. */
 export const AUDIT_SELF_LABEL = 'actual-rest-api';
 

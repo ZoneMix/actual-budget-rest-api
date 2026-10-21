@@ -16,14 +16,15 @@ const sourceOf = (clientId, { clientLabels, ownClientId }) => {
 
 /**
  * @param {object} message - from readWindow()
- * @param {object} context - { clientLabels: Map, ownClientId, isSecret(column, value) }
+ * @param {object} context - { clientLabels: Map, ownClientId, isSecret(names, value) }
  */
 export const toChange = (message, context) => {
   const stamp = parseTimestamp(message.timestamp);
   const next = decodeValue(message.raw);
   const prev = message.previous ? decodeValue(message.previous.raw) : null;
-  const redacted = context.isSecret(message.column, next.value)
-    || (prev !== null && context.isSecret(message.column, prev.value));
+  const names = [message.column, message.row];
+  const redacted = context.isSecret(names, next.value)
+    || (prev !== null && context.isSecret(names, prev.value));
 
   return {
     timestamp: message.timestamp,
@@ -40,43 +41,32 @@ export const toChange = (message, context) => {
   };
 };
 
-const countBy = (items, keyOf) =>
-  items.reduce((counts, item) => {
-    const key = keyOf(item);
-    return new Map(counts).set(key, (counts.get(key) ?? 0) + 1);
-  }, new Map());
-
-const clientSummary = (changes) => {
-  const byClient = changes.reduce((clients, change) => {
-    const seen = clients.get(change.clientId);
-    const entry = seen
-      ? { ...seen, changes: seen.changes + 1, last: change.at }
-      : { clientId: change.clientId, source: change.source, changes: 1, first: change.at, last: change.at };
-    return new Map(clients).set(change.clientId, entry);
-  }, new Map());
-  return [...byClient.values()].sort((a, b) => b.changes - a.changes);
-};
+/** A CLIENTS_SQL row as the payload's summary.byClient entry. */
+export const toClientSummary = (row, context) => ({
+  clientId: row.clientId,
+  source: sourceOf(row.clientId, context),
+  changes: row.n,
+  first: parseTimestamp(row.first)?.at ?? null,
+  last: parseTimestamp(row.last)?.at ?? null,
+});
 
 /**
- * @param {object[]} changes - every change of the day, oldest first
+ * @param {{ changes: object[], total: number, tables: object[], clients: object[] }} page
+ *   changes is the requested page; total, tables and clients cover the whole day
  * @param {{ date, timeZone, window, limit, offset }} meta
  */
-export const buildReport = (changes, { date, timeZone, window, limit, offset }) => {
-  const page = changes.slice(offset, offset + limit);
-  const byTable = [...countBy(changes, (change) => change.table)].sort((a, b) => b[1] - a[1]);
-  return {
-    date,
-    timeZone,
-    window,
-    total: changes.length,
-    offset,
-    limit,
-    returned: page.length,
-    truncated: offset + page.length < changes.length,
-    summary: {
-      byTable: Object.fromEntries(byTable),
-      byClient: clientSummary(changes),
-    },
-    changes: page,
-  };
-};
+export const buildReport = ({ changes, total, tables, clients }, { date, timeZone, window, limit, offset }) => ({
+  date,
+  timeZone,
+  window,
+  total,
+  offset,
+  limit,
+  returned: changes.length,
+  truncated: offset + changes.length < total,
+  summary: {
+    byTable: Object.fromEntries(tables.map((row) => [row.dataset, row.n])),
+    byClient: clients,
+  },
+  changes,
+});
