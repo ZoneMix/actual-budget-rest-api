@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## 2.4.1
+
+- Image distrusts the compromised eMudhra roots (emSign ECC Root CA - G3; AAA
+  Certificate Services is already absent on Alpine). The build fails if either
+  root is still in the system bundle, and Node uses that store
+  (`NODE_OPTIONS=--use-openssl-ca`).
+- Picks up the npm audit fixes from PR #51.
+
 ## 2.4.0
 
 - **`GET /v1/audit/changes?date=YYYY-MM-DD`**: the day's Actual sync changes as

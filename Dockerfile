@@ -30,6 +30,21 @@ RUN apk upgrade --no-cache && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 -G nodejs
 
+# eMudhra intermediate CA compromise (2026-10-20, https://emudhra.we-have-a-problem.com/):
+# distrust emSign ECC Root CA - G3 in the Alpine system store (Alpine no longer ships
+# AAA Certificate Services). Node carries its own roots, so NODE_OPTIONS below points it at
+# this store too. The last test fails the build if either root is still in the bundle.
+# Same step as homelab umbrel-services/*/Dockerfile (homelab 82e3fc1).
+RUN apk add --no-cache ca-certificates \
+ && sed -i -e "s|^mozilla/emSign_ECC_Root_CA_-_G3.crt|!&|" /etc/ca-certificates.conf \
+ && update-ca-certificates \
+ && for f in /usr/share/ca-certificates/mozilla/emSign_ECC_Root_CA_-_G3.crt \
+             /usr/share/ca-certificates/mozilla/Comodo_AAA_Services_root.crt; do \
+      [ ! -f "$f" ] || ! grep -qxF "$(sed -n 3p "$f")" /etc/ssl/certs/ca-certificates.crt || exit 1; \
+    done
+
+ENV NODE_OPTIONS=--use-openssl-ca
+
 WORKDIR /app
 
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
