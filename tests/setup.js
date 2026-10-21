@@ -25,6 +25,8 @@ process.env.DATA_DIR = './tests/data';
 process.env.SESSION_SECRET = 'test-session-secret-32-characters-long';
 process.env.DB_TYPE = 'sqlite'; // Use SQLite for tests
 process.env.DATABASE_URL = './tests/data/auth.db';
+// Optional in the app (unset disables GET /v1/audit/changes); set so its suite can authenticate.
+process.env.LEDGER_AUDIT_TOKEN = 'test-audit-token-32-characters-long';
 
 // tests/data is gitignored (runtime state) and won't exist on a fresh checkout;
 // better-sqlite3 opens a missing db FILE but not a missing parent directory.

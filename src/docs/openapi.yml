@@ -44,8 +44,13 @@ tags:
   - name: System
   - name: Health
   - name: Metrics
+  - name: Audit
 
 paths:
+  # API v1: read-only audit feed (own bearer token, not a JWT)
+  /v1/audit/changes:
+    $ref: './paths/audit.yml#/auditChanges'
+
   # API v2 endpoints (prefixed with /v2)
   /v2/health:
     $ref: './paths/health.yml#/health'
@@ -165,6 +170,8 @@ components:
   securitySchemes:
     bearerAuth:
       $ref: './components/securitySchemes.yml#/bearerAuth'
+    auditBearer:
+      $ref: './components/securitySchemes.yml#/auditBearer'
   schemas:
     Error:
       $ref: './components/schemas.yml#/Error'

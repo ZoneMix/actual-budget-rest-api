@@ -106,6 +106,16 @@ export class ConflictError extends HttpError {
 }
 
 /**
+ * Method not allowed (405). `allow` lists the methods the path does accept;
+ * the route sets the matching `Allow` header before throwing.
+ */
+export class MethodNotAllowedError extends HttpError {
+  constructor(allow, message = 'Method not allowed') {
+    super(message, 405, 'METHOD_NOT_ALLOWED', { allow });
+  }
+}
+
+/**
  * Rate limit error (429 Too Many Requests).
  * Used when rate limit is exceeded.
  */

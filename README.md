@@ -85,6 +85,36 @@ is the minimum a token must carry; see [Scopes](#scopes) below.
 | `/admin` | dashboard `GET /`, `GET|POST /oauth-clients`, `GET|PUT|DELETE /oauth-clients/:clientId` | **admin** |
 | `/oauth` | `GET /authorize`, `POST /token` | n/a |
 | root | `GET /login`, `POST /login`, `POST /logout`, `GET /docs` | session |
+| `/v1/audit` | `GET /changes?date=YYYY-MM-DD&limit=&offset=`, read-only | `LEDGER_AUDIT_TOKEN` (not a JWT) |
+
+### Audit feed: `GET /v1/audit/changes`
+
+The day's Actual sync changes as JSON, read straight from the budget's CRDT
+log (`messages_crdt`) over a read-only SQLite connection, after the usual
+pre-read sync. `date` is a calendar day in `AUDIT_TIMEZONE` (default
+`America/Chicago`) and defaults to today there.
+
+Each change carries `timestamp` (the CRDT clock), `at`, `table`, `rowId`,
+`column`, `oldValue`, `newValue`, `oldValueAvailable`, `clientId` and
+`source`. Amounts are integers in cents, as Actual stores them. `oldValue` is
+the cell's previous write in the log; `oldValueAvailable: false` means the log
+has none (a new row, or history older than the log). `source` is
+`actual-rest-api` for this server's own writes, a name from
+`AUDIT_CLIENT_LABELS`, or null. A `summary` counts the whole day by table and
+by client, and `limit`/`offset` page the list.
+
+It authenticates with its own static bearer token, `LEDGER_AUDIT_TOKEN`, which
+opens this route and nothing else; JWTs are refused here. Unset, the route
+answers 503. Anything that could be a credential, token or env value is
+returned as `[redacted]` with `redacted: true`. GET and HEAD only; other
+methods are 405. It is under `/v1` so the edge Caddy, which lets Bearer
+requests on `/v2/*` skip Authentik, keeps forward-auth in front of it.
+
+```bash
+curl -s -H "Authorization: Bearer $LEDGER_AUDIT_TOKEN" \
+  "http://actual-rest-api:3000/v1/audit/changes?date=2026-10-19" \
+  | jq '{total, summary, first: .changes[0]}'
+```
 
 ## Scopes
 
@@ -454,6 +484,14 @@ variables abort startup with a message naming the variable.
 | `MAX_REQUEST_SIZE` | `10kb` | Body limit for ordinary routes. There is no app-wide parser: each router mounts exactly one, so the bulk routes (transaction add/import, `POST /v2/budgets/batch`) keep their own 1 mb limit and `POST /v2/query` its own 10 kb one, independent of this value. |
 | `ACTUAL_QUERY_MAX_RESULTS` | `10000` | Rows `POST /v2/query` returns before truncating (`truncated: true`). |
 | `ACTUAL_QUERY_MAX_FILTER_DEPTH` | `5` | Maximum `$and`/`$or` nesting before a query is rejected with 400. |
+
+### Audit feed
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LEDGER_AUDIT_TOKEN` | unset | Bearer token for `GET /v1/audit/changes`, 32+ token68 characters. Unset disables the route (503). |
+| `AUDIT_TIMEZONE` | `America/Chicago` | IANA zone that defines a day for `?date=` and its default. |
+| `AUDIT_CLIENT_LABELS` | unset | `<client id>:<label>,...` names for CRDT client ids, shown as `source`. |
 
 **Development mode**: with `NODE_ENV=development` the three secrets are
 auto-generated at startup with a warning, so tokens and sessions do not survive

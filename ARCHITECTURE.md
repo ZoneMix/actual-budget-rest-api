@@ -57,10 +57,12 @@ src/
 │   ├── adminApi.js          # Admin API authentication (JWT or session)
 │   ├── adminDashboard.js    # Admin dashboard session auth
 │   ├── docsAuth.js          # /docs access control
+│   ├── auditToken.js        # LEDGER_AUDIT_TOKEN bearer check for /v1/audit
 │   └── oauth2/              # OAuth2: client, code, grants, scope intersection
 ├── config/            # Configuration management
 │   ├── index.js      # Main config exports
 │   ├── env.js        # Environment variable validation (Zod, fails fast)
+│   ├── audit.js      # Audit feed settings (token, time zone, client labels)
 │   ├── swagger.js    # OpenAPI loader; injects info.version from package.json
 │   └── redis.js      # Redis connection management
 ├── db/                # Database layer
@@ -78,6 +80,7 @@ src/
 │   ├── accessLog.js         # One structured line per request, path only
 │   ├── asyncHandler.js      # Async error handling
 │   ├── bodyParser.js        # Per-router body size limits (bulk larger, query smaller)
+│   ├── cors.js              # ALLOWED_ORIGINS policy
 │   ├── errorHandler.js      # Global error handler
 │   ├── metrics.js           # Metrics collection
 │   ├── queryExpressions.js  # ActualQL expression mapping
@@ -103,14 +106,27 @@ src/
 │   └── ... (one router per resource)
 └── services/          # Business logic layer
     ├── actualApi.js  # Re-exports actual/ (the import path routes use)
-    └── actual/       # Actual Budget API wrapper, split by domain
-        ├── client.js      # init / get / shutdown / budget recovery
-        ├── queue.js       # FIFO engine queue (backpressure, timeout, reentrancy)
-        ├── syncPolicy.js  # interval gate deciding when a read must sync
-        ├── runner.js      # runWithApi(label, fn, { mode, force }) + metrics
-        ├── index.js       # barrel
-        └── ... (accounts, transactions, categories, payees, budgets, ...)
+    ├── actual/       # Actual Budget API wrapper, split by domain
+    │   ├── client.js      # init / get / shutdown / budget recovery
+    │   ├── queue.js       # FIFO engine queue (backpressure, timeout, reentrancy)
+    │   ├── syncPolicy.js  # interval gate deciding when a read must sync
+    │   ├── runner.js      # runWithApi(label, fn, { mode, force }) + metrics
+    │   ├── index.js       # barrel
+    │   ├── audit.js       # GET /v1/audit/changes, a read through runWithApi
+    │   └── ... (accounts, transactions, categories, payees, budgets, ...)
+    └── audit/        # CRDT change log, read-only and pure helpers
+        ├── reader.js      # locate db.sqlite by groupId; readonly + query_only scan
+        ├── crdt.js        # HLC timestamp and value-tag decoding
+        ├── window.js      # calendar day in a time zone to a UTC range
+        ├── redact.js      # credential, token and env-value redaction
+        └── report.js      # changes, summary and paging
 ```
+
+The audit feed is the one reader that does not go through the SDK, because no
+SDK method exposes the change log. It still runs inside `runWithApi` as a read,
+so the local copy is synced first and no engine write interleaves, then opens
+the budget's `db.sqlite` on a second connection that SQLite will not write
+through.
 
 The engine wrapper is the part worth understanding. `@actual-app/api` is a
 stateful singleton that owns an on-disk cache, so it cannot be called

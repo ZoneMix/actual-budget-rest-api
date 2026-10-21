@@ -9,7 +9,6 @@
 
 import express from 'express';
 import session from 'express-session';
-import cors from 'cors';
 import helmet from 'helmet';
 import crypto from 'crypto';
 import authRoutes from './routes/auth.js';
@@ -34,6 +33,8 @@ import schedulesRoutes from './routes/schedules.js';
 import queryRoutes from './routes/query.js';
 import healthRoutes from './routes/health.js';
 import loginRoutes from './routes/login.js';
+import auditRoutes from './routes/audit.js';
+import { createCorsMiddleware } from './middleware/cors.js';
 import { NODE_ENV, TRUST_PROXY, ALLOWED_ORIGINS } from './config/index.js';
 import env from './config/env.js';
 import { swaggerUi, setupDynamicSwaggerUi } from './config/swagger.js';
@@ -78,34 +79,8 @@ export const createApp = () => {
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   }));
 
-  // CORS configuration
-  const allowedOrigins = ALLOWED_ORIGINS;
-
-  // Log configured origins on startup
-  logger.info('CORS configuration', {
-    allowedOrigins,
-    originCount: allowedOrigins.length,
-  });
-
-  app.use(cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        logger.warn('CORS blocked request from origin', {
-          origin,
-          allowedOrigins,
-          hint: 'Add the origin to ALLOWED_ORIGINS environment variable'
-        });
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
-    maxAge: 86400, // 24 hours
-  }));
+  // CORS (src/middleware/cors.js)
+  app.use(createCorsMiddleware(ALLOWED_ORIGINS));
 
   // Structured access log (path only — see src/middleware/accessLog.js)
   app.use(accessLogMiddleware);
@@ -168,6 +143,10 @@ export const createApp = () => {
   app.use('/v2/rules', rulesRoutes);
   app.use('/v2/schedules', schedulesRoutes);
   app.use('/v2/query', queryRoutes);
+
+  // API v1: the read-only audit feed. Its own bearer token, not a JWT, and
+  // outside the edge's /v2 Bearer bypass so Authentik stays in front of it.
+  app.use('/v1/audit', auditRoutes);
 
   // Non-versioned routes (no /v2 prefix)
   app.use(loginRoutes); // Root /login GET/POST

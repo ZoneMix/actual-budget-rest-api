@@ -33,6 +33,16 @@ Three credential types, deliberately separate:
 | JWT access + refresh token | `POST /v2/auth/login`, or the OAuth2 token endpoint | Every `/v2` route |
 | Browser session cookie | `POST /login` | `/admin` dashboard and `/docs` only |
 | OAuth2 client credential | Created through the admin API | Third-party integrations such as n8n |
+| Audit token (`LEDGER_AUDIT_TOKEN`) | The operator, in the deployment env | `GET /v1/audit/changes` only |
+
+The audit token is a static read-only bearer token, compared in constant time
+against a SHA-256 digest and never logged. It is not a JWT, so every other
+route rejects it, and the audit route rejects JWTs. The route has no write
+path: it reads the budget's CRDT log over a SQLite connection opened
+`readonly` with `PRAGMA query_only`, and redacts any value that could be a
+credential, a token or one of this process's secret env values. At the edge,
+`/v1` sits outside the Caddy Bearer bypass (which covers `/v2/*` and
+`/admin/*`), so Authentik forward-auth still runs in front of it.
 
 Scopes nest: `read` ⊂ `write` ⊂ `admin`. The legacy scope `api` expands to
 `read` + `write`. Tokens for an admin user carry `api,admin`.
@@ -71,7 +81,8 @@ gate a future route; it is not read by anything today.
 
 Per route class, per minute unless noted: login 5 per 15 minutes, deletes 10,
 category groups 20, ActualQL queries 20, admin operations 20, ordinary writes
-30, bulk transaction operations 50, budget edits 60, transaction updates 100.
+30, bulk transaction operations 50, budget edits 60, transaction updates and
+the audit feed 100.
 With Redis configured the counters are shared across instances; without it they
 are per-process, which is wrong as soon as more than one instance runs.
 

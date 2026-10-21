@@ -23,3 +23,10 @@ bearerAuth:
     `enforce` it is a 403, and under `off` the check is skipped. Operations
     marked **admin only** below do not take part in that rollout — they check
     the admin scope directly and answer 403 in every mode.
+auditBearer:
+  type: http
+  scheme: bearer
+  description: |
+    The static `LEDGER_AUDIT_TOKEN`, sent as `Authorization: Bearer <token>`.
+    It is not a JWT and opens `GET /v1/audit/changes` only; every other route
+    rejects it. Unset, the audit route answers 503.

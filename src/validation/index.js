@@ -23,6 +23,7 @@ export * from './accountGroups.js';
 export * from './query.js';
 export * from './auth.js';
 export * from './admin.js';
+export * from './audit.js';
 
 const parseOrThrow = (schema, data) => {
   const result = schema.safeParse(data);

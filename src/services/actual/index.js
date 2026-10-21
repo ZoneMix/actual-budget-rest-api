@@ -28,3 +28,4 @@ export * from './rules.js';
 export * from './schedules.js';
 export * from './query.js';
 export * from './misc.js';
+export * from './audit.js';

@@ -36,12 +36,14 @@ export default {
   // service suites: 73.45 stmts / 59.94 branches / 75.82 funcs / 73.04 lines.
   // Phase G fix round 1 (health probe, export guard, batch dispatch, dead-code
   // removal) took branches past 60: 73.78 / 60.71 / 76.04 / 73.41.
+  // v2.4.0 (GET /v1/audit/changes and its reader, config and route suites):
+  // 76.74 / 64.86 / 79.19 / 76.32, so statements and lines move to 75.
   coverageThreshold: {
     global: {
       branches: 60,
       functions: 75,
-      lines: 70,
-      statements: 70,
+      lines: 75,
+      statements: 75,
     },
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],

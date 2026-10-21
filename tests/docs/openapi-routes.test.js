@@ -29,10 +29,11 @@ const SPEC_PATH = path.join(__dirname, '../../src/docs/openapi.yml');
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options']);
 
-/** The guard's remit: the versioned API surface. */
-const isV2 = (entry) => {
+/** The guard's remit: the versioned API surface, /v1 (audit) and /v2. */
+const VERSION_PREFIXES = ['/v1', '/v2'];
+const isVersioned = (entry) => {
   const routePath = entry.slice(entry.indexOf(' ') + 1);
-  return routePath === '/v2' || routePath.startsWith('/v2/');
+  return VERSION_PREFIXES.some((prefix) => routePath === prefix || routePath.startsWith(`${prefix}/`));
 };
 
 /** `/v2/accounts` + `/:id/close` → `/v2/accounts/:id/close`, `'' + '/'` → `/`. */
@@ -193,22 +194,22 @@ describe('OpenAPI drift guard', () => {
   });
 
   it('finds routes and spec operations to compare', () => {
-    expect([...appRoutes].filter(isV2).length).toBeGreaterThan(50);
-    expect([...specOperations].filter(isV2).length).toBeGreaterThan(50);
+    expect([...appRoutes].filter(isVersioned).length).toBeGreaterThan(50);
+    expect([...specOperations].filter(isVersioned).length).toBeGreaterThan(50);
   });
 
-  it('documents every /v2 route the app serves', () => {
+  it('documents every /v1 and /v2 route the app serves', () => {
     const undocumented = [...appRoutes]
-      .filter(isV2)
+      .filter(isVersioned)
       .filter((entry) => !specOperations.has(entry))
       .sort();
 
     expect(undocumented).toEqual([]);
   });
 
-  it('serves every /v2 operation the spec documents', () => {
+  it('serves every /v1 and /v2 operation the spec documents', () => {
     const unimplemented = [...specOperations]
-      .filter(isV2)
+      .filter(isVersioned)
       .filter((entry) => !appRoutes.has(entry))
       .sort();
 

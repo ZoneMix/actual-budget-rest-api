@@ -1,6 +1,6 @@
 # actual-budget-rest-api
 
-`actual-rest-api` **v2.3.0** — an Express 5 REST wrapper around the Actual Budget
+`actual-rest-api` **v2.4.0**, an Express 5 REST wrapper around the Actual Budget
 SDK. Production: this is the API behind the Belisario Ledger.
 
 Independent repo (`github.com/ZoneMix/actual-budget-rest-api`), deliberately kept
@@ -32,7 +32,7 @@ data bug rather than a version problem. Both are 26.9.0 today:
 ## Commands
 
 ```
-npm test                   # jest, 68 suites
+npm test                   # jest, 77 suites
 npm test -- tests/routes   # one directory
 npm run test:coverage      # enforces jest.config.js coverageThreshold
 npm run lint               # eslint src --max-warnings 0
@@ -83,7 +83,7 @@ the fix is usually the source of truth it names, not the test.
 
 | Test | Pins |
 |---|---|
-| `tests/docs/openapi-routes.test.js` | Every `/v2` route is documented and every documented `/v2` path exists; create-endpoint request bodies match their Zod schemas |
+| `tests/docs/openapi-routes.test.js` | Every `/v1` and `/v2` route is documented and every documented `/v1` and `/v2` path exists; create-endpoint request bodies match their Zod schemas |
 | `tests/validation/constants.test.js` | Rule field/op enums against the installed SDK's own source |
 | `npm run validate:openapi` | The spec parses, resolves and validates |
 
@@ -107,8 +107,13 @@ lint-staged pattern back to `.env*`; that glob untracks `.env.example`.
 - Immutable data: schemas and helpers return new objects. `withOffbudgetAlias`
   and `withDateAlias` fold legacy keys without mutating the input.
 - Files stay ≤ 200 lines (this repo's convention, stricter than the global
-  200–400 guideline). `src/app.js` (200) sits at that cap — split before adding
-  to it.
+  200 to 400 guideline). `src/app.js` is 165 lines after CORS moved to
+  `src/middleware/cors.js`; split again before it reaches the cap.
+- `GET /v1/audit/changes` is the one route that is not JWT-authenticated and
+  not under `/v2`. It takes `LEDGER_AUDIT_TOKEN` and stays under `/v1` because
+  the edge Caddy lets Bearer requests on `/v2/*` skip Authentik. It reads
+  `messages_crdt` over a read-only SQLite connection; keep it free of any
+  write path.
 - Errors are explicit: throw a typed error from `src/errors/`, let
   `asyncHandler` and `errorHandler` render it. Never swallow.
 - Handlers read `req.validatedBody` / `req.validatedParams` /

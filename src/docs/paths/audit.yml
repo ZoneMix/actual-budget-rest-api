@@ -1,0 +1,227 @@
+auditChanges:
+  get:
+    summary: List the day's Actual sync changes (read-only)
+    description: |
+      Every cell write recorded in the budget's CRDT log (`messages_crdt`) for
+      one calendar day in `AUDIT_TIMEZONE` (default America/Chicago), oldest
+      first. Each change names the table, row id and column, the new value and
+      the value it superseded when the log still holds it.
+
+      - **Amounts are integers in cents**, exactly as Actual stores them.
+      - `oldValueAvailable: false` means no earlier write to that cell is in
+        the log: the row was created by this change, or its history predates
+        the log.
+      - `clientId` is the CRDT client id embedded in the timestamp; `source`
+        names it when known (this API itself, or `AUDIT_CLIENT_LABELS`).
+      - Values that could be credentials, tokens or env values are replaced by
+        `[redacted]` and the change is flagged `redacted: true`.
+
+      **Auth:** the static `LEDGER_AUDIT_TOKEN` bearer token, not a JWT. The
+      route answers 503 while no token is configured. Behind the edge, `/v1`
+      is outside the Bearer bypass, so Authentik forward-auth runs first.
+
+      GET and HEAD only; every other method is 405. Nothing here writes.
+    tags: [Audit]
+    security:
+      - auditBearer: []
+    parameters:
+      - name: date
+        in: query
+        required: false
+        description: Calendar day, YYYY-MM-DD. Defaults to today in AUDIT_TIMEZONE.
+        schema:
+          type: string
+          format: date
+          example: '2026-10-19'
+      - name: limit
+        in: query
+        required: false
+        description: Page size. The summary always covers the whole day.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50000
+          default: 10000
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+    responses:
+      200:
+        description: The day's changes
+        headers:
+          Cache-Control:
+            schema:
+              type: string
+              example: no-store
+        content:
+          application/json:
+            schema:
+              $ref: '#/AuditChangesResponse'
+            examples:
+              sample:
+                value:
+                  success: true
+                  date: '2026-10-19'
+                  timeZone: America/Chicago
+                  window:
+                    start: '2026-10-19T05:00:00.000Z'
+                    end: '2026-10-20T05:00:00.000Z'
+                  total: 1
+                  offset: 0
+                  limit: 10000
+                  returned: 1
+                  truncated: false
+                  summary:
+                    byTable:
+                      transactions: 1
+                    byClient:
+                      - clientId: 2c3d4e5f60718293
+                        source: null
+                        changes: 1
+                        first: '2026-10-19T12:06:03.461Z'
+                        last: '2026-10-19T12:06:03.461Z'
+                  changes:
+                    - timestamp: 2026-10-19T12:06:03.461Z-0000-2c3d4e5f60718293
+                      at: '2026-10-19T12:06:03.461Z'
+                      table: transactions
+                      rowId: 3f1c2a9e-0000-4000-8000-000000000001
+                      column: amount
+                      oldValue: -1000
+                      newValue: -1250
+                      oldValueAvailable: true
+                      clientId: 2c3d4e5f60718293
+                      source: null
+                      redacted: false
+      400:
+        description: Invalid date, limit or offset, or an unknown query parameter
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      401:
+        description: Missing or wrong audit token
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      405:
+        description: Any method other than GET or HEAD
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+      503:
+        description: LEDGER_AUDIT_TOKEN is not set, or the budget is not downloaded yet
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas.yml#/Error'
+
+AuditCellValue:
+  description: A decoded CRDT value. Numbers are stored as Actual stores them (amounts in integer cents).
+  nullable: true
+  oneOf:
+    - type: string
+    - type: number
+
+AuditChange:
+  type: object
+  required: [timestamp, at, table, rowId, column, oldValue, newValue, oldValueAvailable, clientId, source, redacted]
+  properties:
+    timestamp:
+      type: string
+      description: Hybrid logical clock, <ISO time>-<counter>-<client id>
+    at:
+      type: string
+      format: date-time
+      nullable: true
+    table:
+      type: string
+      description: Actual dataset (internal table name), e.g. transactions, zero_budgets
+    rowId:
+      type: string
+    column:
+      type: string
+    oldValue:
+      $ref: '#/AuditCellValue'
+    newValue:
+      $ref: '#/AuditCellValue'
+    oldValueAvailable:
+      type: boolean
+      description: False when the log holds no earlier write to this cell
+    clientId:
+      type: string
+      nullable: true
+      description: CRDT client id of the device or SDK instance that made the change
+    source:
+      type: string
+      nullable: true
+      description: Known name for clientId, or null
+    redacted:
+      type: boolean
+
+AuditChangesResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+    date:
+      type: string
+      format: date
+    timeZone:
+      type: string
+    window:
+      type: object
+      description: The UTC range [start, end) the day covers
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+    total:
+      type: integer
+    offset:
+      type: integer
+    limit:
+      type: integer
+    returned:
+      type: integer
+    truncated:
+      type: boolean
+      description: True when more changes follow this page
+    summary:
+      type: object
+      properties:
+        byTable:
+          type: object
+          additionalProperties:
+            type: integer
+        byClient:
+          type: array
+          items:
+            type: object
+            properties:
+              clientId:
+                type: string
+                nullable: true
+              source:
+                type: string
+                nullable: true
+              changes:
+                type: integer
+              first:
+                type: string
+                format: date-time
+              last:
+                type: string
+                format: date-time
+    changes:
+      type: array
+      items:
+        $ref: '#/AuditChange'
