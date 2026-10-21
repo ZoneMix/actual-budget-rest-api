@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## 2.4.0
+
+- **`GET /v1/audit/changes?date=YYYY-MM-DD`**: the day's Actual sync changes as
+  JSON (timestamp, table, row id, column, old and new value, client id and
+  source), with a whole-day summary by table and client and `limit`/`offset`
+  paging. `date` defaults to today in `AUDIT_TIMEZONE` (America/Chicago).
+  Amounts are integers in cents, as Actual stores them.
+- Read-only by construction: the route is GET/HEAD only (405 otherwise) and
+  reads `messages_crdt` over a SQLite connection opened `readonly` with
+  `PRAGMA query_only`, inside the engine queue after the usual pre-read sync.
+- Its own static bearer token, `LEDGER_AUDIT_TOKEN` (unset disables the route
+  with 503). JWTs are refused there and the token opens nothing else. Values
+  that could be credentials, tokens or env values are returned as
+  `[redacted]`.
+- New env: `LEDGER_AUDIT_TOKEN`, `AUDIT_TIMEZONE`, `AUDIT_CLIENT_LABELS`.
+- The OpenAPI drift guard now covers `/v1` as well as `/v2`. CORS setup moved
+  out of `src/app.js` into `src/middleware/cors.js`, unchanged.
+
 ## 2.3.1
 
 - **`POST /oauth/token` refresh refuses a deactivated or deleted user** (401) instead of
