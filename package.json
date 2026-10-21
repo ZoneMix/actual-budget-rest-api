@@ -24,7 +24,11 @@
     "zod": "^4.2.1"
   },
   "overrides": {
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "brace-expansion@1": "^1.1.21",
+    "js-yaml@3": {
+      "argparse": "^2.0.1"
+    }
   },
   "devDependencies": {
     "eslint": "^9.16.0",
