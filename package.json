@@ -1,6 +1,6 @@
 {
   "name": "actual-rest-api",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "type": "module",
   "main": "server.js",
   "dependencies": {
@@ -24,11 +24,12 @@
     "zod": "^4.2.1"
   },
   "overrides": {
-    "qs": "^6.16.0",
+    "qs": "6.16.1",
     "brace-expansion@1": "^1.1.21",
     "js-yaml@3": {
       "argparse": "^2.0.1"
-    }
+    },
+    "body-parser": "2.4.0"
   },
   "devDependencies": {
     "eslint": "^9.16.0",

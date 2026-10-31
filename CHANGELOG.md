@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 2.4.2
+
+- Rebuild of 2.4.1 with `body-parser` exact-pinned to **2.4.0** (fixes
+  CVE-2026-111181, HIGH, in 2.3.0) through `overrides`. Its new floor
+  `qs ^6.16.1` is met by pinning `qs` exactly to **6.16.1** (also clears
+  CVE-2026-110816, moderate). No code or API change.
+
 ## 2.4.1
 
 - Image distrusts the compromised eMudhra roots (emSign ECC Root CA - G3; AAA
